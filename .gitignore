@@ -1,2 +1,7 @@
 .claude
 CLAUDE.md
+PPO_labs
+scripts/sql
+plantuml.jar
+diagrams/*.png
+diagrams/*.pdf
