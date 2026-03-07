@@ -1,0 +1,116 @@
+package repository
+
+import (
+	"context"
+	"fmt"
+
+	sq "github.com/Masterminds/squirrel"
+	m "github.com/beastixq/marketplace/internal/model"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+type OrderItemRepoImpl struct {
+	pool *pgxpool.Pool
+}
+
+func NewOrderItemRepo(pool *pgxpool.Pool) OrderItemRepoImpl {
+	return OrderItemRepoImpl{pool: pool}
+}
+
+func (oir OrderItemRepoImpl) GetOrderItemByID(ctx context.Context, id int64) (oi m.OrderItem, err error) {
+	oisql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := oisql.Select("id", "order_id", "product_id", "quantity", "price_at_purchase").From("order_items").Where(sq.Eq{"id": id}).ToSql()
+	if err != nil {
+		return m.OrderItem{}, fmt.Errorf("%v: %v", ErrToSql, err)
+	}
+	row := oir.pool.QueryRow(ctx, sql, args...)
+	var ordItem orderItemRow
+	if err = row.Scan(&ordItem.ID, &ordItem.OrderID, &ordItem.ProductID, &ordItem.Quantity, &ordItem.PriceAtPurchase); err != nil {
+		return m.OrderItem{}, fmt.Errorf("%v: %v", ErrToScan, err)
+	}
+	return ordItem.toModel(), nil
+}
+
+func (oir OrderItemRepoImpl) GetOrderItemsByOrderID(ctx context.Context, orderID int64) (ois []m.OrderItem, err error) {
+	oisql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := oisql.Select("id", "order_id", "product_id", "quantity", "price_at_purchase").From("order_items").Where(sq.Eq{"order_id": orderID}).ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("%v: %v", ErrToSql, err)
+	}
+	rows, err := oir.pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%v: %v", ErrQuery, err)
+	}
+	defer rows.Close()
+	ois = make([]m.OrderItem, 0)
+	var prow orderItemRow
+	for rows.Next() {
+		err = rows.Scan(&prow.ID, &prow.OrderID, &prow.ProductID, &prow.Quantity, &prow.PriceAtPurchase)
+		if err != nil {
+			return nil, fmt.Errorf("%v: %v", ErrToScan, err)
+		}
+		ois = append(ois, prow.toModel())
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("%v: %v", ErrRowsIteration, err)
+	}
+	return ois, nil
+}
+
+func (oir OrderItemRepoImpl) CreateOrderItem(ctx context.Context, oic m.OrderItemCreate) (id int64, err error) {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.Insert("order_items").Columns("order_id", "product_id", "quantity", "price_at_purchase").Values(oic.OrderID, oic.ProductID, oic.Quantity, oic.PriceAtPurchase).Suffix("RETURNING id").ToSql()
+	if err != nil {
+		return 0, fmt.Errorf("%v: %v", ErrToSql, err)
+	}
+	row := oir.pool.QueryRow(ctx, sql, args...)
+	if err = row.Scan(&id); err != nil {
+		return 0, fmt.Errorf("%v: %v", ErrToScan, err)
+	}
+	return id, nil
+}
+
+func (oir OrderItemRepoImpl) UpdateOrderItem(ctx context.Context, id int64, oiu m.OrderItemUpdate) (oi m.OrderItem, err error) {
+	if oiu.OrderID == nil && oiu.ProductID == nil && oiu.Quantity == nil && oiu.PriceAtPurchase == nil {
+		return m.OrderItem{}, ErrNoChangesInUpdate
+	}
+
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	ub := psql.Update("order_items").Where(sq.Eq{"id": id})
+	if oiu.OrderID != nil {
+		ub = ub.Set("order_id", *oiu.OrderID)
+	}
+	if oiu.ProductID != nil {
+		ub = ub.Set("product_id", *oiu.ProductID)
+	}
+	if oiu.Quantity != nil {
+		ub = ub.Set("quantity", *oiu.Quantity)
+	}
+	if oiu.PriceAtPurchase != nil {
+		ub = ub.Set("price_at_purchase", *oiu.PriceAtPurchase)
+	}
+	ub = ub.Suffix("RETURNING id, order_id, product_id, quantity, price_at_purchase")
+	sql, args, err := ub.ToSql()
+	if err != nil {
+		return m.OrderItem{}, fmt.Errorf("%v: %v", ErrToSql, err)
+	}
+	row := oir.pool.QueryRow(ctx, sql, args...)
+	var ordItem orderItemRow
+	if err = row.Scan(&ordItem.ID, &ordItem.OrderID, &ordItem.ProductID, &ordItem.Quantity, &ordItem.PriceAtPurchase); err != nil {
+		return m.OrderItem{}, fmt.Errorf("%v: %v", ErrToScan, err)
+	}
+	return ordItem.toModel(), nil
+}
+
+func (oir OrderItemRepoImpl) DeleteOrderItemByID(ctx context.Context, id int64) (err error) {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.Delete("order_items").Where(sq.Eq{"id": id}).ToSql()
+	if err != nil {
+		return fmt.Errorf("%v: %v", ErrToSql, err)
+	}
+	if _, err = oir.pool.Exec(ctx, sql, args...); err != nil {
+		return fmt.Errorf("%v: %v", ErrExec, err)
+	}
+	return nil
+}

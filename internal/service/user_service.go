@@ -32,3 +32,5 @@ type AddressRepo interface {
 	UpdateAddress(ctx context.Context, id int64, au m.AddressUpdate) (a m.Address, err error)
 	DeleteAddressByID(ctx context.Context, id int64) (err error)
 }
+
+

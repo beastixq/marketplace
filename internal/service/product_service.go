@@ -8,7 +8,7 @@ import (
 )
 
 type ProductRepo interface {
-	GetProducts(ctx context.Context, options m.CatalogOptions) (p []m.Product, err error)
+	GetProducts(ctx context.Context, options m.CatalogOptions) (ps []m.Product, err error)
 	GetProductByID(ctx context.Context, id int64) (p m.Product, err error)
 	GetProductPriceHistory(ctx context.Context, pid int64, dateFrom time.Time, dateTo time.Time) (ph []m.ProductPriceHistory, err error)
 	CreateProduct(ctx context.Context, pc m.ProductCreate) (id int64, err error)

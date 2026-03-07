@@ -21,6 +21,7 @@ type SellerCreate struct {
 	Description *string
 	Rating      *float32
 }
+
 type SellerUpdate struct {
 	UserID      *int64
 	CompanyName *string
