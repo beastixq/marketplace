@@ -2,12 +2,15 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
 	m "github.com/beastixq/marketplace/internal/model"
+	"github.com/beastixq/marketplace/internal/service"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -51,11 +54,11 @@ func (pr ProductRepoImpl) GetProducts(ctx context.Context, options m.CatalogOpti
 	}
 	sql, args, err := products.ToSql()
 	if err != nil {
-		return nil, fmt.Errorf("%v: %v", ErrToSql, err)
+		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	rows, err := pr.pool.Query(ctx, sql, args...)
 	if err != nil {
-		return nil, fmt.Errorf("%v: %v", ErrQuery, err)
+		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
 	}
 	defer rows.Close()
 	ps = make([]m.Product, 0)
@@ -63,12 +66,12 @@ func (pr ProductRepoImpl) GetProducts(ctx context.Context, options m.CatalogOpti
 	for rows.Next() {
 		err = rows.Scan(&prow.ID, &prow.SellerID, &prow.Name, &prow.Description, &prow.Price, &prow.StockQuantity, &prow.CreatedAt, &prow.DeletedAt)
 		if err != nil {
-			return nil, fmt.Errorf("%v: %v", ErrToScan, err)
+			return nil, fmt.Errorf("%w: %v", ErrToScan, err)
 		}
 		ps = append(ps, prow.toModel())
 	}
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("%v: %v", ErrRowsIteration, err)
+		return nil, fmt.Errorf("%w: %v", ErrRowsIteration, err)
 	}
 	return ps, nil
 }
@@ -77,12 +80,15 @@ func (pr ProductRepoImpl) GetProductByID(ctx context.Context, id int64) (p m.Pro
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Select("id", "seller_id", "name", "description", "price", "stock_quantity", "created_at", "deleted_at").From("products").Where(sq.Eq{"id": id}).ToSql()
 	if err != nil {
-		return m.Product{}, fmt.Errorf("%v: %v", ErrToSql, err)
+		return m.Product{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := pr.pool.QueryRow(ctx, sql, args...)
 	var product productRow
 	if err = row.Scan(&product.ID, &product.SellerID, &product.Name, &product.Description, &product.Price, &product.StockQuantity, &product.CreatedAt, &product.DeletedAt); err != nil {
-		return m.Product{}, fmt.Errorf("%v: %v", ErrToScan, err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return m.Product{}, service.ErrNotFound
+		}
+		return m.Product{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return product.toModel(), nil
 }
@@ -93,11 +99,11 @@ func (pr ProductRepoImpl) GetProductPriceHistory(ctx context.Context, pid int64,
 	sb = sb.Where(sq.And{sq.GtOrEq{"product_price_history.changed_at": dateFrom}, sq.LtOrEq{"product_price_history.changed_at": dateTo}})
 	sql, args, err := sb.ToSql()
 	if err != nil {
-		return nil, fmt.Errorf("%v: %v", ErrToSql, err)
+		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	rows, err := pr.pool.Query(ctx, sql, args...)
 	if err != nil {
-		return nil, fmt.Errorf("%v: %v", ErrQuery, err)
+		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
 	}
 	defer rows.Close()
 
@@ -105,12 +111,12 @@ func (pr ProductRepoImpl) GetProductPriceHistory(ctx context.Context, pid int64,
 	var hr productPriceHistoryRow
 	for rows.Next() {
 		if err = rows.Scan(&hr.ID, &hr.ProductID, &hr.OldPrice, &hr.NewPrice, &hr.ChangedAt, &hr.ChangedBy); err != nil {
-			return nil, fmt.Errorf("%v: %v", ErrToScan, err)
+			return nil, fmt.Errorf("%w: %v", ErrToScan, err)
 		}
 		ph = append(ph, hr.toModel())
 	}
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("%v: %v", ErrRowsIteration, err)
+		return nil, fmt.Errorf("%w: %v", ErrRowsIteration, err)
 	}
 	return ph, nil
 }
@@ -119,18 +125,18 @@ func (pr ProductRepoImpl) CreateProduct(ctx context.Context, pc m.ProductCreate)
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Insert("products").Columns("seller_id", "name", "description", "price", "stock_quantity").Values(pc.SellerID, pc.Name, pc.Description, pc.Price, pc.StockQuantity).Suffix("RETURNING id").ToSql()
 	if err != nil {
-		return 0, fmt.Errorf("%v: %v", ErrToSql, err)
+		return 0, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := pr.pool.QueryRow(ctx, sql, args...)
 	if err = row.Scan(&id); err != nil {
-		return 0, fmt.Errorf("%v: %v", ErrToScan, err)
+		return 0, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return id, nil
 }
 
 func (pr ProductRepoImpl) UpdateProduct(ctx context.Context, id int64, pu m.ProductUpdate) (p m.Product, err error) {
 	if pu.SellerID == nil && pu.Name == nil && pu.Description == nil && pu.Price == nil && pu.StockQuantity == nil {
-		return m.Product{}, ErrNoChangesInUpdate
+		return m.Product{}, service.ErrNoChangesInUpdate
 	}
 
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
@@ -153,12 +159,12 @@ func (pr ProductRepoImpl) UpdateProduct(ctx context.Context, id int64, pu m.Prod
 	ub = ub.Suffix("RETURNING id, seller_id, name, description, price, stock_quantity, created_at, deleted_at")
 	sql, args, err := ub.ToSql()
 	if err != nil {
-		return m.Product{}, fmt.Errorf("%v: %v", ErrToSql, err)
+		return m.Product{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := pr.pool.QueryRow(ctx, sql, args...)
 	var product productRow
 	if err = row.Scan(&product.ID, &product.SellerID, &product.Name, &product.Description, &product.Price, &product.StockQuantity, &product.CreatedAt, &product.DeletedAt); err != nil {
-		return m.Product{}, fmt.Errorf("%v: %v", ErrToScan, err)
+		return m.Product{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return product.toModel(), nil
 }
@@ -167,10 +173,10 @@ func (pr ProductRepoImpl) DeleteProductByID(ctx context.Context, id int64) (err 
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Update("products").Where(sq.Eq{"id": id}).Set("deleted_at", sq.Expr("NOW()")).ToSql()
 	if err != nil {
-		return fmt.Errorf("%v: %v", ErrToSql, err)
+		return fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	if _, err = pr.pool.Exec(ctx, sql, args...); err != nil {
-		return fmt.Errorf("%v: %v", ErrExec, err)
+		return fmt.Errorf("%w: %v", ErrExec, err)
 	}
 	return nil
 }

@@ -2,12 +2,15 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
 	m "github.com/beastixq/marketplace/internal/model"
+	"github.com/beastixq/marketplace/internal/service"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -23,12 +26,15 @@ func (sr SellerRepoImpl) GetSellerByID(ctx context.Context, id int64) (s m.Selle
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Select("id", "user_id", "company_name", "description", "rating", "created_at").From("sellers").Where(sq.Eq{"id": id}).ToSql()
 	if err != nil {
-		return m.Seller{}, fmt.Errorf("%v: %v", ErrToSql, err)
+		return m.Seller{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := sr.pool.QueryRow(ctx, sql, args...)
 	var seller sellerRow
 	if err = row.Scan(&seller.ID, &seller.UserID, &seller.CompanyName, &seller.Description, &seller.Rating, &seller.CreatedAt); err != nil {
-		return m.Seller{}, fmt.Errorf("%v: %v", ErrToScan, err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return m.Seller{}, service.ErrNotFound
+		}
+		return m.Seller{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return seller.toModel(), nil
 }
@@ -37,12 +43,15 @@ func (sr SellerRepoImpl) GetSellerByUserID(ctx context.Context, userID int64) (s
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Select("id", "user_id", "company_name", "description", "rating", "created_at").From("sellers").Where(sq.Eq{"user_id": userID}).ToSql()
 	if err != nil {
-		return m.Seller{}, fmt.Errorf("%v: %v", ErrToSql, err)
+		return m.Seller{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := sr.pool.QueryRow(ctx, sql, args...)
 	var seller sellerRow
 	if err = row.Scan(&seller.ID, &seller.UserID, &seller.CompanyName, &seller.Description, &seller.Rating, &seller.CreatedAt); err != nil {
-		return m.Seller{}, fmt.Errorf("%v: %v", ErrToScan, err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return m.Seller{}, service.ErrNotFound
+		}
+		return m.Seller{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return seller.toModel(), nil
 }
@@ -52,7 +61,10 @@ func (sr SellerRepoImpl) GetSellerStats(ctx context.Context, sellerID int64, dat
 	row := sr.pool.QueryRow(ctx, sql, sellerID, dateFrom, dateTo)
 	var ssrow sellerStatsRow
 	if err = row.Scan(&ssrow.TotalOrders, &ssrow.TotalRevenue, &ssrow.AvgOrderValue, &ssrow.TopProductName); err != nil {
-		return m.SellerStats{}, fmt.Errorf("%v: %v", ErrToScan, err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return m.SellerStats{}, service.ErrNotFound
+		}
+		return m.SellerStats{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return ssrow.toModel(), nil
 }
@@ -61,18 +73,18 @@ func (sr SellerRepoImpl) CreateSeller(ctx context.Context, sc m.SellerCreate) (i
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Insert("sellers").Columns("user_id", "company_name", "description", "rating").Values(sc.UserID, sc.CompanyName, sc.Description, sc.Rating).Suffix("RETURNING id").ToSql()
 	if err != nil {
-		return 0, fmt.Errorf("%v: %v", ErrToSql, err)
+		return 0, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := sr.pool.QueryRow(ctx, sql, args...)
 	if err = row.Scan(&id); err != nil {
-		return 0, fmt.Errorf("%v: %v", ErrToScan, err)
+		return 0, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return id, nil
 }
 
 func (sr SellerRepoImpl) UpdateSeller(ctx context.Context, id int64, su m.SellerUpdate) (s m.Seller, err error) {
 	if su.UserID == nil && su.CompanyName == nil && su.Description == nil && su.Rating == nil {
-		return m.Seller{}, ErrNoChangesInUpdate
+		return m.Seller{}, service.ErrNoChangesInUpdate
 	}
 
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
@@ -92,12 +104,12 @@ func (sr SellerRepoImpl) UpdateSeller(ctx context.Context, id int64, su m.Seller
 	ub = ub.Suffix("RETURNING id, user_id, company_name, description, rating, created_at")
 	sql, args, err := ub.ToSql()
 	if err != nil {
-		return m.Seller{}, fmt.Errorf("%v: %v", ErrToSql, err)
+		return m.Seller{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := sr.pool.QueryRow(ctx, sql, args...)
 	var seller sellerRow
 	if err = row.Scan(&seller.ID, &seller.UserID, &seller.CompanyName, &seller.Description, &seller.Rating, &seller.CreatedAt); err != nil {
-		return m.Seller{}, fmt.Errorf("%v: %v", ErrToScan, err)
+		return m.Seller{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return seller.toModel(), nil
 }
@@ -106,10 +118,10 @@ func (sr SellerRepoImpl) DeleteSellerByID(ctx context.Context, id int64) (err er
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Delete("sellers").Where(sq.Eq{"id": id}).ToSql()
 	if err != nil {
-		return fmt.Errorf("%v: %v", ErrToSql, err)
+		return fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	if _, err = sr.pool.Exec(ctx, sql, args...); err != nil {
-		return fmt.Errorf("%v: %v", ErrExec, err)
+		return fmt.Errorf("%w: %v", ErrExec, err)
 	}
 	return nil
 }

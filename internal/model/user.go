@@ -24,12 +24,13 @@ type User struct {
 }
 
 type UserCreate struct {
-	PasswordHash string
-	Email        string
-	FullName     string
-	Phone        *string
-	Role         UserRole
+	Password string
+	Email    string
+	FullName string
+	Phone    *string
+	Role     UserRole
 }
+
 type UserUpdate struct {
 	Email    *string
 	FullName *string

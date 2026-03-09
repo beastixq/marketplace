@@ -174,6 +174,7 @@ type orderRow struct {
 	ID          int64
 	UserID      int64
 	AddressID   *int64
+	SellerID    *int64
 	Status      string
 	TotalAmount decimal.Decimal
 	CreatedAt   time.Time
@@ -185,6 +186,7 @@ func (or orderRow) toModel() m.Order {
 		ID:          or.ID,
 		UserID:      or.UserID,
 		AddressID:   or.AddressID,
+		SellerID:    or.SellerID,
 		Status:      m.OrderStatus(or.Status),
 		TotalAmount: or.TotalAmount,
 		CreatedAt:   or.CreatedAt,

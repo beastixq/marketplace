@@ -13,3 +13,5 @@ type CategoryRepo interface {
 	UpdateCategory(ctx context.Context, id int64, cu m.CategoryUpdate) (c m.Category, err error)
 	DeleteCategoryByID(ctx context.Context, id int64) (err error)
 }
+
+type CategoryService

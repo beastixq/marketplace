@@ -2,10 +2,13 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	sq "github.com/Masterminds/squirrel"
 	m "github.com/beastixq/marketplace/internal/model"
+	"github.com/beastixq/marketplace/internal/service"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -21,12 +24,12 @@ func (ur UserRepoImpl) GetUserByID(ctx context.Context, id int64) (u m.User, err
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Select("id", "email", "password_hash", "full_name", "phone", "role", "created_at", "deleted_at").From("users").Where(sq.Eq{"id": id}).ToSql()
 	if err != nil {
-		return m.User{}, fmt.Errorf("%v: %v", ErrToSql, err)
+		return m.User{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := ur.pool.QueryRow(ctx, sql, args...)
 	var user userRow
 	if err = row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.FullName, &user.Phone, &user.Role, &user.CreatedAt, &user.DeletedAt); err != nil {
-		return m.User{}, fmt.Errorf("%v: %v", ErrToScan, err)
+		return m.User{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return user.toModel(), nil
 }
@@ -35,32 +38,35 @@ func (ur UserRepoImpl) GetUserByEmail(ctx context.Context, email string) (u m.Us
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Select("id", "email", "password_hash", "full_name", "phone", "role", "created_at", "deleted_at").From("users").Where(sq.Eq{"email": email}).ToSql()
 	if err != nil {
-		return m.User{}, fmt.Errorf("%v: %v", ErrToSql, err)
+		return m.User{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := ur.pool.QueryRow(ctx, sql, args...)
 	var user userRow
 	if err = row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.FullName, &user.Phone, &user.Role, &user.CreatedAt, &user.DeletedAt); err != nil {
-		return m.User{}, fmt.Errorf("%v: %v", ErrToScan, err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return m.User{}, fmt.Errorf("%w: %v", service.ErrNotFound, err)
+		}
+		return m.User{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return user.toModel(), nil
 }
 
 func (ur UserRepoImpl) CreateUser(ctx context.Context, uc m.UserCreate) (id int64, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sql, args, err := psql.Insert("users").Columns("email", "password_hash", "full_name", "phone", "role").Values(uc.Email, uc.PasswordHash, uc.FullName, uc.Phone, uc.Role).Suffix("RETURNING id").ToSql()
+	sql, args, err := psql.Insert("users").Columns("email", "password_hash", "full_name", "phone", "role").Values(uc.Email, uc.Password, uc.FullName, uc.Phone, uc.Role).Suffix("RETURNING id").ToSql()
 	if err != nil {
-		return 0, fmt.Errorf("%v: %v", ErrToSql, err)
+		return 0, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := ur.pool.QueryRow(ctx, sql, args...)
 	if err = row.Scan(&id); err != nil {
-		return 0, fmt.Errorf("%v: %v", ErrToScan, err)
+		return 0, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return id, nil
 }
 
 func (ur UserRepoImpl) UpdateUser(ctx context.Context, id int64, uu m.UserUpdate) (u m.User, err error) {
 	if uu.Email == nil && uu.FullName == nil && uu.Phone == nil && uu.Role == nil {
-		return m.User{}, ErrNoChangesInUpdate
+		return m.User{}, service.ErrNoChangesInUpdate
 	}
 
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
@@ -80,12 +86,12 @@ func (ur UserRepoImpl) UpdateUser(ctx context.Context, id int64, uu m.UserUpdate
 	ub = ub.Suffix("RETURNING id, email, password_hash, full_name, phone, role, created_at, deleted_at")
 	sql, args, err := ub.ToSql()
 	if err != nil {
-		return m.User{}, fmt.Errorf("%v: %v", ErrToSql, err)
+		return m.User{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := ur.pool.QueryRow(ctx, sql, args...)
 	var user userRow
 	if err = row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.FullName, &user.Phone, &user.Role, &user.CreatedAt, &user.DeletedAt); err != nil {
-		return m.User{}, fmt.Errorf("%v: %v", ErrToScan, err)
+		return m.User{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return user.toModel(), nil
 }
@@ -94,10 +100,10 @@ func (ur UserRepoImpl) ChangePasswordUser(ctx context.Context, id int64, newPass
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Update("users").Where(sq.Eq{"id": id}).Set("password_hash", newPassHash).ToSql()
 	if err != nil {
-		return fmt.Errorf("%v: %v", ErrToSql, err)
+		return fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	if _, err = ur.pool.Exec(ctx, sql, args...); err != nil {
-		return fmt.Errorf("%v: %v", ErrExec, err)
+		return fmt.Errorf("%w: %v", ErrExec, err)
 	}
 	return nil
 }
@@ -106,10 +112,10 @@ func (ur UserRepoImpl) DeleteUserByID(ctx context.Context, id int64) (err error)
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Update("users").Where(sq.Eq{"id": id}).Set("deleted_at", sq.Expr("NOW()")).ToSql()
 	if err != nil {
-		return fmt.Errorf("%v: %v", ErrToSql, err)
+		return fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	if _, err = ur.pool.Exec(ctx, sql, args...); err != nil {
-		return fmt.Errorf("%v: %v", ErrExec, err)
+		return fmt.Errorf("%w: %v", ErrExec, err)
 	}
 	return nil
 }

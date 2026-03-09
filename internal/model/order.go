@@ -9,12 +9,12 @@ import (
 type OrderStatus string
 
 const (
-	StatusDraft     = "draft"
-	StatusPending   = "pending"
-	StatusPaid      = "paid"
-	StatusShipped   = "shipped"
-	StatusDelivered = "delivered"
-	StatusCancelled = "cancelled"
+	StatusDraft     OrderStatus = "draft"
+	StatusPending   OrderStatus = "pending"
+	StatusPaid      OrderStatus = "paid"
+	StatusShipped   OrderStatus = "shipped"
+	StatusDelivered OrderStatus = "delivered"
+	StatusCancelled OrderStatus = "cancelled"
 )
 
 type OrderItem struct {
@@ -43,6 +43,7 @@ type Order struct {
 	ID        int64
 	UserID    int64
 	AddressID *int64
+	SellerID  *int64
 
 	Status      OrderStatus
 	TotalAmount decimal.Decimal
@@ -52,6 +53,7 @@ type Order struct {
 type OrderCreate struct {
 	UserID      int64
 	AddressID   *int64
+	SellerID    *int64
 	Status      OrderStatus
 	TotalAmount decimal.Decimal
 }

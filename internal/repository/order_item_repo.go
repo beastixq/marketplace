@@ -2,11 +2,14 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	sq "github.com/Masterminds/squirrel"
 	m "github.com/beastixq/marketplace/internal/model"
+	"github.com/beastixq/marketplace/internal/service"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -22,12 +25,15 @@ func (oir OrderItemRepoImpl) GetOrderItemByID(ctx context.Context, id int64) (oi
 	oisql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := oisql.Select("id", "order_id", "product_id", "quantity", "price_at_purchase").From("order_items").Where(sq.Eq{"id": id}).ToSql()
 	if err != nil {
-		return m.OrderItem{}, fmt.Errorf("%v: %v", ErrToSql, err)
+		return m.OrderItem{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := oir.pool.QueryRow(ctx, sql, args...)
 	var ordItem orderItemRow
 	if err = row.Scan(&ordItem.ID, &ordItem.OrderID, &ordItem.ProductID, &ordItem.Quantity, &ordItem.PriceAtPurchase); err != nil {
-		return m.OrderItem{}, fmt.Errorf("%v: %v", ErrToScan, err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return m.OrderItem{}, service.ErrNotFound
+		}
+		return m.OrderItem{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return ordItem.toModel(), nil
 }
@@ -36,11 +42,11 @@ func (oir OrderItemRepoImpl) GetOrderItemsByOrderID(ctx context.Context, orderID
 	oisql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := oisql.Select("id", "order_id", "product_id", "quantity", "price_at_purchase").From("order_items").Where(sq.Eq{"order_id": orderID}).ToSql()
 	if err != nil {
-		return nil, fmt.Errorf("%v: %v", ErrToSql, err)
+		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	rows, err := oir.pool.Query(ctx, sql, args...)
 	if err != nil {
-		return nil, fmt.Errorf("%v: %v", ErrQuery, err)
+		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
 	}
 	defer rows.Close()
 	ois = make([]m.OrderItem, 0)
@@ -48,12 +54,12 @@ func (oir OrderItemRepoImpl) GetOrderItemsByOrderID(ctx context.Context, orderID
 	for rows.Next() {
 		err = rows.Scan(&prow.ID, &prow.OrderID, &prow.ProductID, &prow.Quantity, &prow.PriceAtPurchase)
 		if err != nil {
-			return nil, fmt.Errorf("%v: %v", ErrToScan, err)
+			return nil, fmt.Errorf("%w: %v", ErrToScan, err)
 		}
 		ois = append(ois, prow.toModel())
 	}
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("%v: %v", ErrRowsIteration, err)
+		return nil, fmt.Errorf("%w: %v", ErrRowsIteration, err)
 	}
 	return ois, nil
 }
@@ -62,18 +68,18 @@ func (oir OrderItemRepoImpl) CreateOrderItem(ctx context.Context, oic m.OrderIte
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Insert("order_items").Columns("order_id", "product_id", "quantity", "price_at_purchase").Values(oic.OrderID, oic.ProductID, oic.Quantity, oic.PriceAtPurchase).Suffix("RETURNING id").ToSql()
 	if err != nil {
-		return 0, fmt.Errorf("%v: %v", ErrToSql, err)
+		return 0, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := oir.pool.QueryRow(ctx, sql, args...)
 	if err = row.Scan(&id); err != nil {
-		return 0, fmt.Errorf("%v: %v", ErrToScan, err)
+		return 0, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return id, nil
 }
 
 func (oir OrderItemRepoImpl) UpdateOrderItem(ctx context.Context, id int64, oiu m.OrderItemUpdate) (oi m.OrderItem, err error) {
 	if oiu.OrderID == nil && oiu.ProductID == nil && oiu.Quantity == nil && oiu.PriceAtPurchase == nil {
-		return m.OrderItem{}, ErrNoChangesInUpdate
+		return m.OrderItem{}, service.ErrNoChangesInUpdate
 	}
 
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
@@ -93,12 +99,12 @@ func (oir OrderItemRepoImpl) UpdateOrderItem(ctx context.Context, id int64, oiu 
 	ub = ub.Suffix("RETURNING id, order_id, product_id, quantity, price_at_purchase")
 	sql, args, err := ub.ToSql()
 	if err != nil {
-		return m.OrderItem{}, fmt.Errorf("%v: %v", ErrToSql, err)
+		return m.OrderItem{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := oir.pool.QueryRow(ctx, sql, args...)
 	var ordItem orderItemRow
 	if err = row.Scan(&ordItem.ID, &ordItem.OrderID, &ordItem.ProductID, &ordItem.Quantity, &ordItem.PriceAtPurchase); err != nil {
-		return m.OrderItem{}, fmt.Errorf("%v: %v", ErrToScan, err)
+		return m.OrderItem{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return ordItem.toModel(), nil
 }
@@ -107,10 +113,10 @@ func (oir OrderItemRepoImpl) DeleteOrderItemByID(ctx context.Context, id int64) 
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Delete("order_items").Where(sq.Eq{"id": id}).ToSql()
 	if err != nil {
-		return fmt.Errorf("%v: %v", ErrToSql, err)
+		return fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	if _, err = oir.pool.Exec(ctx, sql, args...); err != nil {
-		return fmt.Errorf("%v: %v", ErrExec, err)
+		return fmt.Errorf("%w: %v", ErrExec, err)
 	}
 	return nil
 }
