@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"errors"
-	"time"
+	"fmt"
 
 	m "github.com/beastixq/marketplace/internal/model"
 	"golang.org/x/crypto/bcrypt"
@@ -16,23 +16,6 @@ type UserRepo interface {
 	UpdateUser(ctx context.Context, id int64, uu m.UserUpdate) (u m.User, err error)
 	ChangePasswordUser(ctx context.Context, id int64, newPassHash string) (err error)
 	DeleteUserByID(ctx context.Context, id int64) (err error)
-}
-
-type SellerRepo interface {
-	GetSellerByID(ctx context.Context, id int64) (s m.Seller, err error)
-	GetSellerByUserID(ctx context.Context, userID int64) (s m.Seller, err error)
-	GetSellerStats(ctx context.Context, sellerID int64, dateFrom time.Time, dateTo time.Time) (ss m.SellerStats, err error)
-	CreateSeller(ctx context.Context, sc m.SellerCreate) (id int64, err error)
-	UpdateSeller(ctx context.Context, id int64, su m.SellerUpdate) (s m.Seller, err error)
-	DeleteSellerByID(ctx context.Context, id int64) (err error)
-}
-
-type AddressRepo interface {
-	GetAddressByID(ctx context.Context, id int64) (a m.Address, err error)
-	GetAddressesByUserID(ctx context.Context, userID int64) (ads []m.Address, err error)
-	CreateAddress(ctx context.Context, ac m.AddressCreate) (id int64, err error)
-	UpdateAddress(ctx context.Context, id int64, au m.AddressUpdate) (a m.Address, err error)
-	DeleteAddressByID(ctx context.Context, id int64) (err error)
 }
 
 type UserService struct {
@@ -52,13 +35,13 @@ func (us UserService) CreateUser(ctx context.Context, uc m.UserCreate) (id int64
 	}
 	hashPass, err := bcrypt.GenerateFromPassword([]byte(uc.Password), 4)
 	if err != nil {
-		return 0, ErrHashingPassword
+		return 0, fmt.Errorf("%w: %v", ErrHashingPassword, err)
 	}
 	uc.Password = string(hashPass)
 
 	id, err = us.repo.CreateUser(ctx, uc)
 	if err != nil {
-		return 0, ErrCreateUser
+		return 0, fmt.Errorf("%w: %v", ErrCreateUser, err)
 	}
 	return id, nil
 }
