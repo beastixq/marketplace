@@ -91,3 +91,19 @@ func (us UserService) ChangePasswordUser(ctx context.Context, id int64, newPass 
 	}
 	return nil
 }
+
+func (us UserService) Login(ctx context.Context, email, password string) (m.User, error) {
+	user, err := us.repo.GetUserByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return m.User{}, ErrUserNotFound
+		}
+		return m.User{}, fmt.Errorf("%w: %v", ErrGetUserByEmail, err)
+	}
+
+	if err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		return m.User{}, ErrWrongPassword
+	}
+
+	return user, nil
+}

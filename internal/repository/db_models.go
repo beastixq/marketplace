@@ -20,13 +20,14 @@ type userRow struct {
 
 func (ur userRow) toModel() m.User {
 	return m.User{
-		ID:        ur.ID,
-		Email:     ur.Email,
-		FullName:  ur.FullName,
-		Phone:     ur.Phone,
-		Role:      ur.Role,
-		CreatedAt: ur.CreatedAt,
-		DeletedAt: ur.DeletedAt,
+		ID:           ur.ID,
+		Email:        ur.Email,
+		PasswordHash: ur.PasswordHash,
+		FullName:     ur.FullName,
+		Phone:        ur.Phone,
+		Role:         ur.Role,
+		CreatedAt:    ur.CreatedAt,
+		DeletedAt:    ur.DeletedAt,
 	}
 }
 
@@ -129,6 +130,22 @@ func (hr productPriceHistoryRow) toModel() m.ProductPriceHistory {
 		NewPrice:  hr.NewPrice,
 		ChangedAt: hr.ChangedAt,
 		ChangedBy: hr.ChangedBy,
+	}
+}
+
+type categoryRow struct {
+	ID          int64
+	ParentID    *int64
+	Name        string
+	Description *string
+}
+
+func (cr categoryRow) toModel() m.Category {
+	return m.Category{
+		ID:          cr.ID,
+		ParentID:    cr.ParentID,
+		Name:        cr.Name,
+		Description: cr.Description,
 	}
 }
 

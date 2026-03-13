@@ -14,13 +14,14 @@ const (
 )
 
 type User struct {
-	ID        int64
-	Email     string
-	FullName  string
-	Phone     *string
-	Role      UserRole
-	CreatedAt time.Time
-	DeletedAt *time.Time
+	ID           int64
+	Email        string
+	PasswordHash string
+	FullName     string
+	Phone        *string
+	Role         UserRole
+	CreatedAt    time.Time
+	DeletedAt    *time.Time
 }
 
 type UserCreate struct {

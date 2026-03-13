@@ -6,6 +6,14 @@ import (
 
 // service layer errors
 var (
+	// auth
+	ErrSign               = errors.New("Failed to sign")
+	ErrLogin              = errors.New("Login failed")
+	ErrGenerateToken      = errors.New("Failed to generate token")
+	ErrParseToken         = errors.New("Failed to parse token")
+	ErrWrongSigningMethod = errors.New("Wrong signing method algorithm")
+	ErrRegistration       = errors.New("Failed to register user")
+
 	// users
 	ErrAccWithEmailCheck      = errors.New("Error occured when check account with such email")
 	ErrAccountWithEmailExists = errors.New("Account with this email already exists")
@@ -17,6 +25,7 @@ var (
 	ErrDeleteUser             = errors.New("Error occured when deleting user")
 	ErrChangePasswordUser     = errors.New("Error occured when changing user password")
 	ErrUserNotFound           = errors.New("User not found")
+	ErrWrongPassword          = errors.New("Wrong password")
 
 	// addresses
 	ErrGetAddressByID       = errors.New("Failed to get address by id")
