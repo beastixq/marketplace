@@ -7,3 +7,6 @@ diagrams
 Readme.md
 Makefile
 DBCourseWork
+.env
+todo.md
+requests.http
