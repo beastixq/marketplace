@@ -24,7 +24,11 @@ func NewProductRepo(pool *pgxpool.Pool) ProductRepoImpl {
 
 func (pr ProductRepoImpl) GetProducts(ctx context.Context, options m.CatalogOptions) (ps []m.Product, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	products := psql.Select("id", "seller_id", "name", "description", "price", "stock_quantity", "created_at", "deleted_at").Distinct().From("products").Where(sq.Eq{"deleted_at": nil})
+	products := psql.
+		Select("id", "seller_id", "name", "description", "price", "stock_quantity", "created_at", "deleted_at").
+		Distinct().
+		From("products").
+		Where(sq.Eq{"deleted_at": nil})
 	if options.MaxPrice != nil && options.MinPrice != nil {
 		products = products.Where(sq.And{sq.GtOrEq{"price": options.MinPrice}, sq.LtOrEq{"price": options.MaxPrice}})
 	} else if options.MinPrice != nil {
@@ -49,7 +53,7 @@ func (pr ProductRepoImpl) GetProducts(ctx context.Context, options m.CatalogOpti
 		}
 	}
 	if options.Pagination != nil {
-		products = products.Offset(uint64(options.Pagination.Limit * options.Pagination.Page))
+		products = products.Offset(uint64(options.Pagination.Limit * (options.Pagination.Page - 1)))
 		products = products.Limit(uint64(options.Pagination.Limit))
 	}
 	sql, args, err := products.ToSql()

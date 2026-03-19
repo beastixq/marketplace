@@ -29,14 +29,19 @@ type OrderProductRepo interface {
 	GetProductByID(ctx context.Context, id int64) (p m.Product, err error)
 }
 
+type OrderSellerRepo interface {
+	GetSellerByUserID(ctx context.Context, userID int64) (s m.Seller, err error)
+}
+
 type OrderService struct {
 	orderRepo     OrderRepo
 	orderItemRepo OrderItemRepo
 	productRepo   OrderProductRepo
+	sellerRepo    OrderSellerRepo
 }
 
-func NewOrderService(or OrderRepo, oir OrderItemRepo, pr OrderProductRepo) OrderService {
-	return OrderService{orderRepo: or, orderItemRepo: oir, productRepo: pr}
+func NewOrderService(or OrderRepo, oir OrderItemRepo, pr OrderProductRepo, sr OrderSellerRepo) OrderService {
+	return OrderService{orderRepo: or, orderItemRepo: oir, productRepo: pr, sellerRepo: sr}
 }
 
 func (os OrderService) GetOrderByID(ctx context.Context, orderID int64) (order m.Order, err error) {
@@ -277,7 +282,14 @@ func (os OrderService) CancelOrder(ctx context.Context, orderID int64, userID in
 	return nil
 }
 
-func (os OrderService) ShipOrder(ctx context.Context, orderID int64, sellerID int64) (err error) {
+func (os OrderService) ShipOrder(ctx context.Context, orderID int64, userID int64) (err error) {
+	seller, err := os.sellerRepo.GetSellerByUserID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return ErrSellerNotFound
+		}
+		return fmt.Errorf("%w: %v", ErrGetSellerByID, err)
+	}
 	order, err := os.orderRepo.GetOrderByID(ctx, orderID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -285,10 +297,7 @@ func (os OrderService) ShipOrder(ctx context.Context, orderID int64, sellerID in
 		}
 		return fmt.Errorf("%w: %v", ErrGetOrderByID, err)
 	}
-	if order.SellerID == nil {
-		return ErrSellerNotSet
-	}
-	if *order.SellerID != sellerID {
+	if order.SellerID == nil || *order.SellerID != seller.ID {
 		return ErrNotYourOrder
 	}
 	if order.Status != m.StatusPaid {
@@ -302,7 +311,14 @@ func (os OrderService) ShipOrder(ctx context.Context, orderID int64, sellerID in
 	return nil
 }
 
-func (os OrderService) DeliverOrder(ctx context.Context, orderID int64, sellerID int64) (err error) {
+func (os OrderService) DeliverOrder(ctx context.Context, orderID int64, userID int64) (err error) {
+	seller, err := os.sellerRepo.GetSellerByUserID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return ErrSellerNotFound
+		}
+		return fmt.Errorf("%w: %v", ErrGetSellerByID, err)
+	}
 	order, err := os.orderRepo.GetOrderByID(ctx, orderID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -310,10 +326,7 @@ func (os OrderService) DeliverOrder(ctx context.Context, orderID int64, sellerID
 		}
 		return fmt.Errorf("%w: %v", ErrGetOrderByID, err)
 	}
-	if order.SellerID == nil {
-		return ErrSellerNotSet
-	}
-	if *order.SellerID != sellerID {
+	if order.SellerID == nil || *order.SellerID != seller.ID {
 		return ErrNotYourOrder
 	}
 	if order.Status != m.StatusShipped {

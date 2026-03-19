@@ -50,6 +50,9 @@ func (as AuthService) generateToken(user m.User) (token string, err error) {
 func (as AuthService) Register(ctx context.Context, uc m.UserCreate) (token string, err error) {
 	userID, err := as.userService.CreateUser(ctx, uc)
 	if err != nil {
+		if errors.Is(err, ErrAccountWithEmailExists) {
+			return "", ErrAccountWithEmailExists
+		}
 		return "", fmt.Errorf("%w: %v", ErrCreateUser, err)
 	}
 
@@ -71,6 +74,12 @@ func (as AuthService) Register(ctx context.Context, uc m.UserCreate) (token stri
 func (as AuthService) Login(ctx context.Context, email, password string) (token string, err error) {
 	user, err := as.userService.Login(ctx, email, password)
 	if err != nil {
+		if errors.Is(err, ErrWrongPassword) {
+			return "", ErrWrongPassword
+		}
+		if errors.Is(err, ErrUserNotFound) {
+			return "", ErrUserNotFound
+		}
 		return "", fmt.Errorf("%w: %v", ErrLogin, err)
 	}
 

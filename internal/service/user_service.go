@@ -81,7 +81,18 @@ func (us UserService) DeleteUserByID(ctx context.Context, id int64) (err error) 
 	return nil
 }
 
-func (us UserService) ChangePasswordUser(ctx context.Context, id int64, newPass string) (err error) {
+func (us UserService) ChangePasswordUser(ctx context.Context, id int64, oldPass, newPass string) (err error) {
+	user, err := us.repo.GetUserByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return ErrUserNotFound
+		}
+		return fmt.Errorf("%w: %v", ErrGetUserByID, err)
+	}
+	if err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(oldPass)); err != nil {
+		return ErrWrongPassword
+	}
+
 	newPassHash, err := bcrypt.GenerateFromPassword([]byte(newPass), 4)
 	if err != nil {
 		return ErrHashingPassword

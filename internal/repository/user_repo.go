@@ -22,7 +22,11 @@ func NewUserRepo(pool *pgxpool.Pool) UserRepoImpl {
 
 func (ur UserRepoImpl) GetUserByID(ctx context.Context, id int64) (u m.User, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sql, args, err := psql.Select("id", "email", "password_hash", "full_name", "phone", "role", "created_at", "deleted_at").From("users").Where(sq.Eq{"id": id}).ToSql()
+	sql, args, err := psql.
+		Select("id", "email", "password_hash", "full_name", "phone", "role", "created_at", "deleted_at").
+		From("users").
+		Where(sq.Eq{"id": id}).
+		ToSql()
 	if err != nil {
 		return m.User{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}

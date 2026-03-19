@@ -54,12 +54,16 @@ func (ps ProductService) GetProductByID(ctx context.Context, id int64) (p m.Prod
 }
 
 func (ps ProductService) GetProductPriceHistory(ctx context.Context, pid int64, dateFrom time.Time, dateTo time.Time) (ph []m.ProductPriceHistory, err error) {
+	_, err = ps.productRepo.GetProductByID(ctx, pid)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, ErrProductNotFound
+		}
+		return nil, fmt.Errorf("%w: %v", ErrGetProductByID, err)
+	}
 	ph, err = ps.productRepo.GetProductPriceHistory(ctx, pid, dateFrom, dateTo)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrGetProductPriceHistory, err)
-	}
-	if len(ph) == 0 {
-		return nil, ErrNotFound
 	}
 	return ph, nil
 }
@@ -76,9 +80,6 @@ func (ps ProductService) GetReviewsByProductID(ctx context.Context, pid int64, o
 	rs, err = ps.reviewRepo.GetReviewsByProductID(ctx, pid, opts)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrGetReviewsByProductID, err)
-	}
-	if len(rs) == 0 {
-		return nil, ErrNotFound
 	}
 	return rs, nil
 }

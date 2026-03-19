@@ -37,6 +37,17 @@ func (ss SellerService) GetSellerByID(ctx context.Context, id int64) (s m.Seller
 	return s, nil
 }
 
+func (ss SellerService) GetSellerByUserID(ctx context.Context, userID int64) (s m.Seller, err error) {
+	s, err = ss.sellerRepo.GetSellerByUserID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return m.Seller{}, ErrSellerNotFound
+		}
+		return m.Seller{}, fmt.Errorf("%w: %v", ErrGetSellerByID, err)
+	}
+	return s, nil
+}
+
 func (ss SellerService) CreateSeller(ctx context.Context, sc m.SellerCreate) (id int64, err error) {
 	id, err = ss.sellerRepo.CreateSeller(ctx, sc)
 	if err != nil {

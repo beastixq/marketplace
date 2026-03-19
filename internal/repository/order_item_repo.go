@@ -22,8 +22,8 @@ func NewOrderItemRepo(pool *pgxpool.Pool) OrderItemRepoImpl {
 }
 
 func (oir OrderItemRepoImpl) GetOrderItemByID(ctx context.Context, id int64) (oi m.OrderItem, err error) {
-	oisql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sql, args, err := oisql.Select("id", "order_id", "product_id", "quantity", "price_at_purchase").From("order_items").Where(sq.Eq{"id": id}).ToSql()
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.Select("id", "order_id", "product_id", "quantity", "price_at_purchase").From("order_items").Where(sq.Eq{"id": id}).ToSql()
 	if err != nil {
 		return m.OrderItem{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
