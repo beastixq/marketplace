@@ -1,0 +1,80 @@
+{{define "title"}}{{.Product.Name}}{{end}}
+
+{{define "content"}}
+<div class="product-detail">
+    <div class="product-detail__name">{{.Product.Name}}</div>
+    <div class="product-detail__price">{{.Product.Price}} &#8381;</div>
+    <div class="product-detail__meta">
+        In stock: {{.Product.StockQuantity}} &bull;
+        Seller #{{.Product.SellerID}} &bull;
+        Added: {{.Product.CreatedAt.Format "02.01.2006"}}
+    </div>
+    {{if .Product.Description}}
+    <div class="product-detail__desc">{{.Product.Description}}</div>
+    {{end}}
+    {{if .User}}
+    <form method="POST" action="/cart/add" class="product-detail__cart-form">
+        <input type="hidden" name="product_id" value="{{.Product.ID}}">
+        <label for="quantity">Quantity:</label>
+        <input type="number" id="quantity" name="quantity" value="1" min="1" max="{{.Product.StockQuantity}}" style="width:60px">
+        <button type="submit" class="btn btn--primary">Add to Cart</button>
+    </form>
+    {{end}}
+</div>
+
+{{if .PriceHistory}}
+<div class="price-chart-section">
+    <h2>Price History</h2>
+    <canvas id="priceChart" height="80"></canvas>
+</div>
+<script>
+    const ctx = document.getElementById('priceChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [{{range .PriceHistory}}"{{.ChangedAt.Format "02.01.2006"}}",{{end}}],
+            datasets: [{
+                label: 'Price (RUB)',
+                data: [{{range .PriceHistory}}{{.NewPrice}},{{end}}],
+                borderColor: '#2563eb',
+                backgroundColor: 'rgba(37,99,235,0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: false, ticks: { callback: v => v + ' \u20bd' } },
+                x: { ticks: { maxRotation: 45 } }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+</script>
+{{end}}
+
+{{if .Reviews}}
+<div class="reviews-section">
+    <h2>Reviews ({{len .Reviews}})</h2>
+    {{range .Reviews}}
+    <div class="review-card">
+        <div class="review-card__rating">
+            {{range (starRange .Rating)}}&#9733;{{end}}{{range (emptyStarRange .Rating)}}&#9734;{{end}}
+            <span style="color:#666; font-weight:normal; margin-left:0.5rem;">User #{{.UserID}}</span>
+        </div>
+        {{if .Comment}}
+        <div class="review-card__comment">{{.Comment}}</div>
+        {{end}}
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="reviews-section">
+    <h2>Reviews</h2>
+    <div class="empty-state">No reviews yet</div>
+</div>
+{{end}}
+{{end}}

@@ -25,10 +25,10 @@ func NewProductRepo(pool *pgxpool.Pool) ProductRepoImpl {
 func (pr ProductRepoImpl) GetProducts(ctx context.Context, options m.CatalogOptions) (ps []m.Product, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	products := psql.
-		Select("id", "seller_id", "name", "description", "price", "stock_quantity", "created_at", "deleted_at").
+		Select("products.id", "products.seller_id", "products.name", "products.description", "products.price", "products.stock_quantity", "products.created_at", "products.deleted_at").
 		Distinct().
 		From("products").
-		Where(sq.Eq{"deleted_at": nil})
+		Where(sq.Eq{"products.deleted_at": nil})
 	if options.MaxPrice != nil && options.MinPrice != nil {
 		products = products.Where(sq.And{sq.GtOrEq{"price": options.MinPrice}, sq.LtOrEq{"price": options.MaxPrice}})
 	} else if options.MinPrice != nil {
@@ -37,7 +37,7 @@ func (pr ProductRepoImpl) GetProducts(ctx context.Context, options m.CatalogOpti
 		products = products.Where(sq.LtOrEq{"price": options.MaxPrice})
 	}
 	if options.FilterName != nil {
-		products = products.Where("name LIKE ?", fmt.Sprint("%", *options.FilterName, "%"))
+		products = products.Where(sq.Like{"products.name": fmt.Sprint("%", *options.FilterName, "%")})
 	}
 	if options.Categories != nil {
 		products = products.Join("product_categories ON products.id = product_categories.product_id")

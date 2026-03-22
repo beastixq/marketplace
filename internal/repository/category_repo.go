@@ -24,7 +24,7 @@ func (cr CategoryRepoImpl) GetCategories(ctx context.Context, opts m.PaginationO
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Select("id", "parent_id", "name", "description").
 		From("categories").
-		Offset(uint64(opts.Page * opts.Limit)).
+		Offset(uint64((opts.Page - 1) * opts.Limit)).
 		Limit(uint64(opts.Limit)).
 		ToSql()
 	if err != nil {

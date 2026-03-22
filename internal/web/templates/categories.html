@@ -1,0 +1,22 @@
+{{define "title"}}Categories{{end}}
+
+{{define "content"}}
+<h1 style="margin-bottom: 1.5rem;">Categories</h1>
+
+{{if .Categories}}
+<div class="product-grid">
+    {{range .Categories}}
+    <div class="product-card">
+        <div class="product-card__name">
+            <a href="/?category={{.Name}}">{{.Name}}</a>
+        </div>
+        {{if .Description}}
+        <div class="product-card__desc">{{.Description}}</div>
+        {{end}}
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="empty-state">No categories found</div>
+{{end}}
+{{end}}

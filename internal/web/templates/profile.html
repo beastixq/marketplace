@@ -1,0 +1,38 @@
+{{define "title"}}Profile{{end}}
+
+{{define "content"}}
+<h1 style="margin-bottom: 1.5rem;">My Profile</h1>
+
+{{if .Success}}
+<div class="alert alert--success">{{.Success}}</div>
+{{end}}
+{{if .Error}}
+<div class="alert alert--error">{{.Error}}</div>
+{{end}}
+
+<div class="form-card">
+    <form method="POST" action="/profile">
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" value="{{.Profile.Email}}">
+        </div>
+        <div class="form-group">
+            <label for="full_name">Full Name</label>
+            <input type="text" id="full_name" name="full_name" value="{{.Profile.FullName}}">
+        </div>
+        <div class="form-group">
+            <label for="phone">Phone</label>
+            <input type="text" id="phone" name="phone" value="{{if .Profile.Phone}}{{.Profile.Phone}}{{end}}" placeholder="+79991234567">
+        </div>
+        <div class="form-group">
+            <label>Role</label>
+            <input type="text" value="{{.Profile.Role}}" disabled>
+        </div>
+        <div class="form-group">
+            <label>Registered</label>
+            <input type="text" value="{{.Profile.CreatedAt.Format "02.01.2006 15:04"}}" disabled>
+        </div>
+        <button type="submit" class="btn btn--primary">Save Changes</button>
+    </form>
+</div>
+{{end}}

@@ -7,12 +7,12 @@ import (
 	"os"
 	"time"
 
-	_ "github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/beastixq/marketplace/internal/handler"
 	repo "github.com/beastixq/marketplace/internal/repository"
 	svc "github.com/beastixq/marketplace/internal/service"
+	"github.com/beastixq/marketplace/internal/web"
 )
 
 func main() {
@@ -55,7 +55,7 @@ func main() {
 	reviewHandler := handler.NewReviewHandler(reviewService)
 	adminHandler := handler.NewAdminHandler(userService, sellerService)
 
-	router := handler.NewRouter(
+	apiRouter := handler.NewRouter(
 		authService,
 		authHandler,
 		userHandler,
@@ -68,5 +68,16 @@ func main() {
 		adminHandler,
 	)
 
-	http.ListenAndServe(":8080", router)
+	webHandler := web.NewWebHandler(productService, categoryService, authService, userService, orderService, addressService)
+	webRouter := web.NewWebRouter(webHandler)
+
+	// API routes already include /api/v1/ prefix, so mount both at root.
+	// chi matches the most specific route, so no conflicts between
+	// /api/v1/* (API) and /* (web).
+	mux := http.NewServeMux()
+	mux.Handle("/api/", apiRouter)
+	mux.Handle("/", webRouter)
+
+	fmt.Println("Listening on :8080")
+	http.ListenAndServe(":8080", mux)
 }

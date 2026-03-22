@@ -41,7 +41,7 @@ func (rr ReviewRepoImpl) GetReviewByID(ctx context.Context, id int64) (r m.Revie
 func (rr ReviewRepoImpl) GetReviewsByProductID(ctx context.Context, pid int64, opts m.PaginationOpts) (rs []m.Review, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sb := psql.Select("id", "user_id", "product_id", "rating", "comment", "created_at").From("reviews").Where(sq.Eq{"product_id": pid})
-	sb = sb.Offset(uint64(opts.Page * opts.Limit)).Limit(uint64(opts.Limit))
+	sb = sb.Offset(uint64((opts.Page - 1) * opts.Limit)).Limit(uint64(opts.Limit))
 	sql, args, err := sb.ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrToSql, err)

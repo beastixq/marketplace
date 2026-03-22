@@ -1,0 +1,39 @@
+{{define "title"}}My Orders{{end}}
+
+{{define "content"}}
+<h1 style="margin-bottom: 1.5rem;">My Orders</h1>
+
+{{if .Orders}}
+<div class="orders-list">
+    {{range .Orders}}
+    <div class="order-card">
+        <div class="order-card__header">
+            <span class="order-card__id">Order #{{.ID}}</span>
+            <span class="order-card__status order-card__status--{{.Status}}">{{.Status}}</span>
+        </div>
+        <div class="order-card__details">
+            <span>Total: {{.TotalAmount}} &#8381;</span>
+            <span>Created: {{.CreatedAt.Format "02.01.2006 15:04"}}</span>
+        </div>
+        <div class="order-card__actions">
+            {{if eq (printf "%s" .Status) "pending"}}
+                <form method="POST" action="/orders/{{.ID}}/pay" style="display:inline">
+                    <button type="submit" class="btn btn--primary btn--sm">Pay</button>
+                </form>
+                <form method="POST" action="/orders/{{.ID}}/cancel" style="display:inline">
+                    <button type="submit" class="btn btn--danger btn--sm">Cancel</button>
+                </form>
+            {{end}}
+            {{if eq (printf "%s" .Status) "paid"}}
+                <form method="POST" action="/orders/{{.ID}}/cancel" style="display:inline">
+                    <button type="submit" class="btn btn--danger btn--sm">Cancel</button>
+                </form>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="empty-state">No orders yet. <a href="/">Browse the catalog</a></div>
+{{end}}
+{{end}}

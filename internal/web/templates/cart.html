@@ -1,0 +1,52 @@
+{{define "title"}}Cart{{end}}
+
+{{define "content"}}
+<h1 style="margin-bottom: 1.5rem;">Shopping Cart</h1>
+
+{{if .Error}}
+<div class="alert alert--error">{{.Error}}</div>
+{{end}}
+
+{{if and .HasCart .Items}}
+<div class="cart-items">
+    {{range .Items}}
+    <div class="cart-item">
+        <div class="cart-item__info">
+            <a href="/products/{{.ProductID}}" class="cart-item__name">{{.ProductName}}</a>
+            <span class="cart-item__qty">Qty: {{.Quantity}} &times; {{.PriceAtPurchase}} &#8381;</span>
+            <span class="cart-item__total">= {{.TotalPrice}} &#8381;</span>
+        </div>
+        <form method="POST" action="/cart/items/{{.ID}}/remove">
+            <button type="submit" class="btn btn--danger btn--sm">Remove</button>
+        </form>
+    </div>
+    {{end}}
+</div>
+
+<div class="cart-total">
+    <strong>Total: {{.Cart.TotalAmount}} &#8381;</strong>
+</div>
+
+{{if .Addresses}}
+<div class="cart-checkout">
+    <h2>Checkout</h2>
+    <form method="POST" action="/cart/checkout">
+        <div class="form-group">
+            <label for="address_id">Delivery Address</label>
+            <select id="address_id" name="address_id">
+                {{range .Addresses}}
+                <option value="{{.ID}}">{{.City}}, {{.Street}}, {{.ZipCode}}</option>
+                {{end}}
+            </select>
+        </div>
+        <button type="submit" class="btn btn--primary">Place Order</button>
+    </form>
+</div>
+{{else}}
+<div class="alert alert--error">You need to add a delivery address before checkout. Go to your <a href="/profile">profile</a>.</div>
+{{end}}
+
+{{else}}
+<div class="empty-state">Your cart is empty. <a href="/">Browse the catalog</a></div>
+{{end}}
+{{end}}
