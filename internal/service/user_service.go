@@ -9,6 +9,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_user_repo.go github.com/beastixq/marketplace/internal/service UserRepo
 type UserRepo interface {
 	GetUserByID(ctx context.Context, id int64) (u m.User, err error)
 	GetUserByEmail(ctx context.Context, email string) (u m.User, err error)
@@ -29,8 +30,9 @@ func NewUserService(ur UserRepo) UserService {
 func (us UserService) CreateUser(ctx context.Context, uc m.UserCreate) (id int64, err error) {
 	_, err = us.repo.GetUserByEmail(ctx, uc.Email)
 	if err == nil {
-		return 0, ErrAccountWithEmailExists
-	} else if !errors.Is(err, ErrNotFound) {
+		return 0, ErrAccountWithEmailAlreadyExists
+	}
+	if !errors.Is(err, ErrNotFound) {
 		return 0, ErrGetUserByEmail
 	}
 	hashPass, err := bcrypt.GenerateFromPassword([]byte(uc.Password), 4)
@@ -47,7 +49,14 @@ func (us UserService) CreateUser(ctx context.Context, uc m.UserCreate) (id int64
 }
 
 func (us UserService) UpdateUser(ctx context.Context, id int64, uu m.UserUpdate) (u m.User, err error) {
-	user, err := us.repo.UpdateUser(ctx, id, uu)
+	user, err := us.repo.GetUserByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return m.User{}, ErrUserNotFound
+		}
+		return m.User{}, ErrGetUserByID
+	}
+	user, err = us.repo.UpdateUser(ctx, id, uu)
 	if err != nil {
 		if errors.Is(err, ErrNoChangesInUpdate) {
 			return m.User{}, ErrNoChangesInUpdate
@@ -61,6 +70,9 @@ func (us UserService) UpdateUser(ctx context.Context, id int64, uu m.UserUpdate)
 func (us UserService) GetUserByID(ctx context.Context, id int64) (u m.User, err error) {
 	user, err := us.repo.GetUserByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return m.User{}, ErrUserNotFound
+		}
 		return m.User{}, ErrGetUserByID
 	}
 	return user, nil
@@ -69,6 +81,9 @@ func (us UserService) GetUserByID(ctx context.Context, id int64) (u m.User, err 
 func (us UserService) GetUserByEmail(ctx context.Context, email string) (u m.User, err error) {
 	user, err := us.repo.GetUserByEmail(ctx, email)
 	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return m.User{}, ErrUserNotFound
+		}
 		return m.User{}, ErrGetUserByEmail
 	}
 	return user, nil

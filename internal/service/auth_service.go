@@ -50,8 +50,8 @@ func (as AuthService) generateToken(user m.User) (token string, err error) {
 func (as AuthService) Register(ctx context.Context, uc m.UserCreate) (token string, err error) {
 	userID, err := as.userService.CreateUser(ctx, uc)
 	if err != nil {
-		if errors.Is(err, ErrAccountWithEmailExists) {
-			return "", ErrAccountWithEmailExists
+		if errors.Is(err, ErrAccountWithEmailAlreadyExists) {
+			return "", ErrAccountWithEmailAlreadyExists
 		}
 		return "", fmt.Errorf("%w: %v", ErrCreateUser, err)
 	}

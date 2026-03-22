@@ -10,3 +10,4 @@ DBCourseWork
 .env
 todo.md
 requests.http
+internal/mocks

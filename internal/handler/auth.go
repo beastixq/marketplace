@@ -73,8 +73,8 @@ func (ah AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Role:     req.Role,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrAccountWithEmailExists) {
-			writeError(w, http.StatusConflict, service.ErrAccountWithEmailExists.Error())
+		if errors.Is(err, service.ErrAccountWithEmailAlreadyExists) {
+			writeError(w, http.StatusConflict, service.ErrAccountWithEmailAlreadyExists.Error())
 			return
 		}
 		w.WriteHeader(http.StatusInternalServerError)

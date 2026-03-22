@@ -48,7 +48,7 @@ func (ur UserRepoImpl) GetUserByEmail(ctx context.Context, email string) (u m.Us
 	var user userRow
 	if err = row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.FullName, &user.Phone, &user.Role, &user.CreatedAt, &user.DeletedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return m.User{}, fmt.Errorf("%w: %v", service.ErrNotFound, err)
+			return m.User{}, service.ErrNotFound
 		}
 		return m.User{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}

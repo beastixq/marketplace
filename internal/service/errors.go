@@ -16,7 +16,7 @@ var (
 
 	// users
 	ErrAccWithEmailCheck      = errors.New("Error occured when check account with such email")
-	ErrAccountWithEmailExists = errors.New("Account with this email already exists")
+	ErrAccountWithEmailAlreadyExists = errors.New("Account with this email already exists")
 	ErrHashingPassword        = errors.New("Error occured when hashing passowrd")
 	ErrCreateUser             = errors.New("Error occured when creating user")
 	ErrUpdateUser             = errors.New("Error occured when updating user")
