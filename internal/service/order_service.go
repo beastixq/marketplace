@@ -9,6 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_order_item_repo.go github.com/beastixq/marketplace/internal/service OrderItemRepo
 type OrderItemRepo interface {
 	GetOrderItemByID(ctx context.Context, id int64) (oi m.OrderItem, err error)
 	GetOrderItemsByOrderID(ctx context.Context, orderID int64) (ois []m.OrderItem, err error)
@@ -17,6 +18,7 @@ type OrderItemRepo interface {
 	DeleteOrderItemByID(ctx context.Context, id int64) (err error)
 }
 
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_order_repo.go github.com/beastixq/marketplace/internal/service OrderRepo
 type OrderRepo interface {
 	GetOrderByID(ctx context.Context, id int64) (o m.Order, err error)
 	GetOrdersByUserID(ctx context.Context, userID int64) (orders []m.Order, err error)
@@ -25,10 +27,12 @@ type OrderRepo interface {
 	DeleteOrderByID(ctx context.Context, id int64) (err error)
 }
 
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_order_product_repo.go github.com/beastixq/marketplace/internal/service OrderProductRepo
 type OrderProductRepo interface {
 	GetProductByID(ctx context.Context, id int64) (p m.Product, err error)
 }
 
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_order_seller_repo.go github.com/beastixq/marketplace/internal/service OrderSellerRepo
 type OrderSellerRepo interface {
 	GetSellerByUserID(ctx context.Context, userID int64) (s m.Seller, err error)
 }
@@ -48,9 +52,9 @@ func (os OrderService) GetOrderByID(ctx context.Context, orderID int64) (order m
 	order, err = os.orderRepo.GetOrderByID(ctx, orderID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			return m.Order{}, ErrNotFound
+			return m.Order{}, ErrOrderNotFound
 		}
-		return m.Order{}, ErrGetOrderByID
+		return m.Order{}, fmt.Errorf("%w: %v", ErrGetOrderByID, err)
 	}
 	return order, nil
 }
@@ -58,7 +62,7 @@ func (os OrderService) GetOrderByID(ctx context.Context, orderID int64) (order m
 func (os OrderService) GetOrdersByUserID(ctx context.Context, userID int64) (orders []m.Order, err error) {
 	orders, err = os.orderRepo.GetOrdersByUserID(ctx, userID)
 	if err != nil {
-		return nil, ErrGetOrdersByUserID
+		return nil, fmt.Errorf("%w: %v", ErrGetOrdersByUserID, err)
 	}
 	return orders, nil
 }
@@ -66,7 +70,7 @@ func (os OrderService) GetOrdersByUserID(ctx context.Context, userID int64) (ord
 func (os OrderService) GetOrderItemsByOrderID(ctx context.Context, orderID int64) (ois []m.OrderItem, err error) {
 	ois, err = os.orderItemRepo.GetOrderItemsByOrderID(ctx, orderID)
 	if err != nil {
-		return nil, ErrGetOrderItemsByOrderID
+		return nil, fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
 	}
 	return ois, nil
 }
@@ -74,10 +78,10 @@ func (os OrderService) GetOrderItemsByOrderID(ctx context.Context, orderID int64
 func (os OrderService) GetCart(ctx context.Context, userID int64) (order m.Order, err error) {
 	orders, err := os.orderRepo.GetOrdersByUserID(ctx, userID)
 	if err != nil {
-		return m.Order{}, ErrGetOrdersByUserID
+		return m.Order{}, fmt.Errorf("%w: %v", ErrGetCart, err)
 	}
 	if len(orders) == 0 {
-		return m.Order{}, ErrNotFound
+		return m.Order{}, ErrCartNotFound
 	}
 	drafts := make([]int, 0)
 	for i, ord := range orders {
@@ -86,7 +90,7 @@ func (os OrderService) GetCart(ctx context.Context, userID int64) (order m.Order
 		}
 	}
 	if len(drafts) == 0 {
-		return m.Order{}, ErrNotFound
+		return m.Order{}, ErrCartNotFound
 	}
 	latest := drafts[0]
 	for _, idx := range drafts[1:] {
@@ -95,43 +99,47 @@ func (os OrderService) GetCart(ctx context.Context, userID int64) (order m.Order
 		}
 	}
 	return orders[latest], nil
-
 }
 
 func (os OrderService) AddItemToCart(ctx context.Context, userID int64, productID int64, quantity int) (err error) {
 	var cartOrderID int64
 	cartOrder, err := os.GetCart(ctx, userID)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			cartOrderID, err = os.orderRepo.CreateOrder(ctx, m.OrderCreate{UserID: userID, AddressID: nil, Status: m.StatusDraft, TotalAmount: decimal.Zero})
-			if err != nil {
-				return fmt.Errorf("Failed to create cart order: %w", err)
-			}
-		} else {
-			return ErrGetCart
+		if !errors.Is(err, ErrCartNotFound) {
+			return fmt.Errorf("%w: %v", ErrGetCart, err)
+		}
+		cartOrderID, err = os.orderRepo.CreateOrder(ctx, m.OrderCreate{
+			UserID:      userID,
+			Status:      m.StatusDraft,
+			TotalAmount: decimal.Zero,
+		})
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrCreateOrder, err)
 		}
 	}
 	if cartOrderID == 0 {
 		cartOrderID = cartOrder.ID
 	}
+
 	product, err := os.productRepo.GetProductByID(ctx, productID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			return fmt.Errorf("Product not found: %w", err)
+			return ErrProductNotFound
 		}
-		return ErrGetProductByID
+		return fmt.Errorf("%w: %v", ErrGetProductByID, err)
 	}
 	if product.StockQuantity < quantity {
 		return ErrQuantityTooBig
 	}
-	_, err = os.orderItemRepo.CreateOrderItem(ctx,
-		m.OrderItemCreate{
-			OrderID:         cartOrderID,
-			ProductID:       productID,
-			Quantity:        quantity,
-			PriceAtPurchase: product.Price})
+
+	_, err = os.orderItemRepo.CreateOrderItem(ctx, m.OrderItemCreate{
+		OrderID:         cartOrderID,
+		ProductID:       productID,
+		Quantity:        quantity,
+		PriceAtPurchase: product.Price,
+	})
 	if err != nil {
-		return ErrCreateOrderItem
+		return fmt.Errorf("%w: %v", ErrCreateOrderItem, err)
 	}
 	return nil
 }
@@ -140,23 +148,23 @@ func (os OrderService) ChangeQuantityCartItem(ctx context.Context, itemID int64,
 	orderItem, err := os.orderItemRepo.GetOrderItemByID(ctx, itemID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			return fmt.Errorf("Order item not found: %w", err)
+			return ErrOrderItemNotFound
 		}
-		return ErrGetOrderItemByID
+		return fmt.Errorf("%w: %v", ErrGetOrderItemByID, err)
 	}
 	product, err := os.productRepo.GetProductByID(ctx, orderItem.ProductID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			return fmt.Errorf("Found item with not existing product: %w", err)
+			return ErrProductNotFound
 		}
-		return ErrGetProductByID
+		return fmt.Errorf("%w: %v", ErrGetProductByID, err)
 	}
 	if quantity > product.StockQuantity {
 		return ErrQuantityTooBig
 	}
 	_, err = os.orderItemRepo.UpdateOrderItem(ctx, itemID, m.OrderItemUpdate{Quantity: &quantity})
 	if err != nil {
-		return ErrUpdateOrderItem
+		return fmt.Errorf("%w: %v", ErrUpdateOrderItem, err)
 	}
 	return nil
 }
@@ -164,7 +172,7 @@ func (os OrderService) ChangeQuantityCartItem(ctx context.Context, itemID int64,
 func (os OrderService) DeleteCartItem(ctx context.Context, itemID int64) (err error) {
 	err = os.orderItemRepo.DeleteOrderItemByID(ctx, itemID)
 	if err != nil {
-		return ErrDeleteOrderItemByID
+		return fmt.Errorf("%w: %v", ErrDeleteOrderItemByID, err)
 	}
 	return nil
 }
@@ -172,8 +180,8 @@ func (os OrderService) DeleteCartItem(ctx context.Context, itemID int64) (err er
 func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int64) (orderIDs []int64, err error) {
 	cart, err := os.GetCart(ctx, userID)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return nil, fmt.Errorf("%w: %v", ErrCartNotFound, err)
+		if errors.Is(err, ErrCartNotFound) {
+			return nil, ErrCartNotFound
 		}
 		return nil, fmt.Errorf("%w: %v", ErrGetCart, err)
 	}
@@ -186,24 +194,23 @@ func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int
 		return nil, ErrEmptyCart
 	}
 
-	itemsBySellerIDs := make(map[int64][]m.OrderItem, 0)
+	itemsBySellerIDs := make(map[int64][]m.OrderItem)
 	for _, item := range items {
 		product, err := os.productRepo.GetProductByID(ctx, item.ProductID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
-				return nil, fmt.Errorf("Product not found: %w", err)
+				return nil, ErrProductNotFound
 			}
 			return nil, fmt.Errorf("%w: %v", ErrGetProductByID, err)
 		}
 		itemsBySellerIDs[product.SellerID] = append(itemsBySellerIDs[product.SellerID], item)
 	}
 
-	createdOrdersIDs := make([]int64, 0)
-	for sellerID, itemsBySellerID := range itemsBySellerIDs {
+	createdOrdersIDs := make([]int64, 0, len(itemsBySellerIDs))
+	for sellerID, sellerItems := range itemsBySellerIDs {
 		totalAmount := decimal.Zero
-		for _, item := range itemsBySellerID {
-			quantity := decimal.NewFromInt(int64(item.Quantity))
-			totalAmount = totalAmount.Add(item.PriceAtPurchase.Mul(quantity))
+		for _, item := range sellerItems {
+			totalAmount = totalAmount.Add(item.PriceAtPurchase.Mul(decimal.NewFromInt(int64(item.Quantity))))
 		}
 
 		orderID, err := os.orderRepo.CreateOrder(ctx, m.OrderCreate{
@@ -211,12 +218,13 @@ func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int
 			AddressID:   &addressID,
 			SellerID:    &sellerID,
 			Status:      m.StatusPending,
-			TotalAmount: totalAmount})
+			TotalAmount: totalAmount,
+		})
 		if err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrCreateOrder, err)
 		}
 
-		for _, item := range itemsBySellerID {
+		for _, item := range sellerItems {
 			_, err = os.orderItemRepo.CreateOrderItem(ctx, m.OrderItemCreate{
 				OrderID:         orderID,
 				ProductID:       item.ProductID,

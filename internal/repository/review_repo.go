@@ -80,18 +80,12 @@ func (rr ReviewRepoImpl) CreateReview(ctx context.Context, rc m.ReviewCreate) (i
 }
 
 func (rr ReviewRepoImpl) UpdateReview(ctx context.Context, id int64, ru m.ReviewUpdate) (r m.Review, err error) {
-	if ru.UserID == nil && ru.ProductID == nil && ru.Rating == nil && ru.Comment == nil {
+	if ru.Rating == nil && ru.Comment == nil {
 		return m.Review{}, service.ErrNoChangesInUpdate
 	}
 
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	ub := psql.Update("reviews").Where(sq.Eq{"id": id})
-	if ru.UserID != nil {
-		ub = ub.Set("user_id", *ru.UserID)
-	}
-	if ru.ProductID != nil {
-		ub = ub.Set("product_id", *ru.ProductID)
-	}
 	if ru.Rating != nil {
 		ub = ub.Set("rating", *ru.Rating)
 	}

@@ -9,6 +9,7 @@ import (
 	m "github.com/beastixq/marketplace/internal/model"
 )
 
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_seller_repo.go github.com/beastixq/marketplace/internal/service SellerRepo
 type SellerRepo interface {
 	GetSellerByID(ctx context.Context, id int64) (s m.Seller, err error)
 	GetSellerByUserID(ctx context.Context, userID int64) (s m.Seller, err error)

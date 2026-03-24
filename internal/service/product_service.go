@@ -9,6 +9,7 @@ import (
 	m "github.com/beastixq/marketplace/internal/model"
 )
 
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_product_repo.go github.com/beastixq/marketplace/internal/service ProductRepo
 type ProductRepo interface {
 	GetProducts(ctx context.Context, options m.CatalogOptions) (ps []m.Product, err error)
 	GetProductByID(ctx context.Context, id int64) (p m.Product, err error)
@@ -37,7 +38,7 @@ func (psvc ProductService) GetProducts(ctx context.Context, options m.CatalogOpt
 		return nil, fmt.Errorf("%w: %v", ErrGetProducts, err)
 	}
 	if len(ps) == 0 {
-		return nil, ErrNotFound
+		return nil, ErrProductNotFound
 	}
 	return ps, nil
 }

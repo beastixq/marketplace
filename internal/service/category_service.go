@@ -8,6 +8,7 @@ import (
 	m "github.com/beastixq/marketplace/internal/model"
 )
 
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_category_repo.go github.com/beastixq/marketplace/internal/service CategoryRepo
 type CategoryRepo interface {
 	GetCategories(ctx context.Context, opts m.PaginationOpts) (cs []m.Category, err error)
 	GetCategoryByID(ctx context.Context, id int64) (c m.Category, err error)

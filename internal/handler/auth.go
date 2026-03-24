@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/beastixq/marketplace/internal/middleware"
 	"github.com/beastixq/marketplace/internal/model"
 	"github.com/beastixq/marketplace/internal/service"
 )
@@ -73,8 +74,8 @@ func (ah AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Role:     req.Role,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrAccountWithEmailExists) {
-			writeError(w, http.StatusConflict, service.ErrAccountWithEmailExists.Error())
+		if errors.Is(err, service.ErrAccountWithEmailAlreadyExists) {
+			writeError(w, http.StatusConflict, service.ErrAccountWithEmailAlreadyExists.Error())
 			return
 		}
 		w.WriteHeader(http.StatusInternalServerError)
@@ -123,5 +124,16 @@ func (ah AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ah AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	writeError(w, http.StatusNotImplemented, "")
+	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if err := ah.authService.Logout(r.Context(), claims); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
