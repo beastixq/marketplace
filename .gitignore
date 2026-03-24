@@ -10,4 +10,7 @@ DBCourseWork
 .env
 todo.md
 requests.http
+.playwright-mcp
+docs/
+
 internal/mocks

@@ -36,14 +36,15 @@ func main() {
 	orderItemRepo := repo.NewOrderItemRepo(pool)
 	categoryRepo := repo.NewCategoryRepo(pool)
 
-	userService := svc.NewUserService(userRepo)
+	userService := svc.NewUserService(userRepo, 10)
 	sellerService := svc.NewSellerService(sellerRepo)
 	addressService := svc.NewAddressService(addressRepo)
 	reviewService := svc.NewReviewService(reviewRepo)
 	productService := svc.NewProductService(productRepo, reviewRepo, sellerRepo)
 	orderService := svc.NewOrderService(orderRepo, orderItemRepo, productRepo, sellerRepo)
 	categoryService := svc.NewCategoryService(categoryRepo)
-	authService := svc.NewAuthService(userService, "TODO_SECRET", 24*time.Hour)
+	// TODO: replace with Redis TokenBlocklist implementation
+	authService := svc.NewAuthService(userService, nil, "TODO_SECRET", 24*time.Hour)
 
 	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler(userService)

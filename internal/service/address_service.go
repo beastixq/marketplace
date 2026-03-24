@@ -8,6 +8,7 @@ import (
 	m "github.com/beastixq/marketplace/internal/model"
 )
 
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_address_repo.go github.com/beastixq/marketplace/internal/service AddressRepo
 type AddressRepo interface {
 	GetAddressByID(ctx context.Context, id int64) (a m.Address, err error)
 	GetAddressesByUserID(ctx context.Context, userID int64) (ads []m.Address, err error)

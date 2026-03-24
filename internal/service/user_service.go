@@ -20,11 +20,12 @@ type UserRepo interface {
 }
 
 type UserService struct {
-	repo UserRepo
+	repo       UserRepo
+	bcryptCost int
 }
 
-func NewUserService(ur UserRepo) UserService {
-	return UserService{repo: ur}
+func NewUserService(ur UserRepo, bcryptCost int) UserService {
+	return UserService{repo: ur, bcryptCost: bcryptCost}
 }
 
 func (us UserService) CreateUser(ctx context.Context, uc m.UserCreate) (id int64, err error) {
@@ -33,9 +34,9 @@ func (us UserService) CreateUser(ctx context.Context, uc m.UserCreate) (id int64
 		return 0, ErrAccountWithEmailAlreadyExists
 	}
 	if !errors.Is(err, ErrNotFound) {
-		return 0, ErrGetUserByEmail
+		return 0, fmt.Errorf("%w: %v", ErrGetUserByEmail, err)
 	}
-	hashPass, err := bcrypt.GenerateFromPassword([]byte(uc.Password), 4)
+	hashPass, err := bcrypt.GenerateFromPassword([]byte(uc.Password), us.bcryptCost)
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrHashingPassword, err)
 	}
@@ -49,20 +50,19 @@ func (us UserService) CreateUser(ctx context.Context, uc m.UserCreate) (id int64
 }
 
 func (us UserService) UpdateUser(ctx context.Context, id int64, uu m.UserUpdate) (u m.User, err error) {
-	user, err := us.repo.GetUserByID(ctx, id)
+	_, err = us.repo.GetUserByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return m.User{}, ErrUserNotFound
 		}
-		return m.User{}, ErrGetUserByID
+		return m.User{}, fmt.Errorf("%w: %v", ErrGetUserByID, err)
 	}
-	user, err = us.repo.UpdateUser(ctx, id, uu)
+	user, err := us.repo.UpdateUser(ctx, id, uu)
 	if err != nil {
 		if errors.Is(err, ErrNoChangesInUpdate) {
 			return m.User{}, ErrNoChangesInUpdate
-		} else {
-			return m.User{}, ErrUpdateUser
 		}
+		return m.User{}, fmt.Errorf("%w: %v", ErrUpdateUser, err)
 	}
 	return user, nil
 }
@@ -73,7 +73,7 @@ func (us UserService) GetUserByID(ctx context.Context, id int64) (u m.User, err 
 		if errors.Is(err, ErrNotFound) {
 			return m.User{}, ErrUserNotFound
 		}
-		return m.User{}, ErrGetUserByID
+		return m.User{}, fmt.Errorf("%w: %v", ErrGetUserByID, err)
 	}
 	return user, nil
 }
@@ -84,14 +84,14 @@ func (us UserService) GetUserByEmail(ctx context.Context, email string) (u m.Use
 		if errors.Is(err, ErrNotFound) {
 			return m.User{}, ErrUserNotFound
 		}
-		return m.User{}, ErrGetUserByEmail
+		return m.User{}, fmt.Errorf("%w: %v", ErrGetUserByEmail, err)
 	}
 	return user, nil
 }
 
 func (us UserService) DeleteUserByID(ctx context.Context, id int64) (err error) {
 	if err := us.repo.DeleteUserByID(ctx, id); err != nil {
-		return ErrDeleteUser
+		return fmt.Errorf("%w: %v", ErrDeleteUser, err)
 	}
 	return nil
 }
@@ -108,28 +108,12 @@ func (us UserService) ChangePasswordUser(ctx context.Context, id int64, oldPass,
 		return ErrWrongPassword
 	}
 
-	newPassHash, err := bcrypt.GenerateFromPassword([]byte(newPass), 4)
+	newPassHash, err := bcrypt.GenerateFromPassword([]byte(newPass), us.bcryptCost)
 	if err != nil {
-		return ErrHashingPassword
+		return fmt.Errorf("%w: %v", ErrHashingPassword, err)
 	}
 	if err := us.repo.ChangePasswordUser(ctx, id, string(newPassHash)); err != nil {
-		return ErrChangePasswordUser
+		return fmt.Errorf("%w: %v", ErrChangePasswordUser, err)
 	}
 	return nil
-}
-
-func (us UserService) Login(ctx context.Context, email, password string) (m.User, error) {
-	user, err := us.repo.GetUserByEmail(ctx, email)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return m.User{}, ErrUserNotFound
-		}
-		return m.User{}, fmt.Errorf("%w: %v", ErrGetUserByEmail, err)
-	}
-
-	if err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return m.User{}, ErrWrongPassword
-	}
-
-	return user, nil
 }

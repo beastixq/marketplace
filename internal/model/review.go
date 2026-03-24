@@ -19,8 +19,6 @@ type ReviewCreate struct {
 }
 
 type ReviewUpdate struct {
-	UserID    *int64
-	ProductID *int64
-	Rating    *int8
-	Comment   *string
+	Rating  *int8
+	Comment *string
 }

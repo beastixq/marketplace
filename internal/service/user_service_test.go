@@ -1,4 +1,4 @@
-package service
+package service_test
 
 import (
 	"context"
@@ -9,7 +9,9 @@ import (
 
 	mock_service "github.com/beastixq/marketplace/internal/mocks/service"
 	m "github.com/beastixq/marketplace/internal/model"
+	"github.com/beastixq/marketplace/internal/service"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const someID int64 = 42
@@ -60,7 +62,7 @@ func assertUser(t *testing.T, got, want m.User) {
 
 func TestGetUserByID(t *testing.T) {
 	mock := mock_service.NewMockUserRepo(gomock.NewController(t))
-	svc := NewUserService(mock)
+	svc := service.NewUserService(mock, bcrypt.MinCost)
 	ctx := context.Background()
 
 	type testCase struct {
@@ -83,14 +85,14 @@ func TestGetUserByID(t *testing.T) {
 		{
 			Description: "User not found",
 			UserID:      123,
-			MockReturn:  MockUserReturn{Error: ErrNotFound},
-			ExpectedErr: ErrUserNotFound,
+			MockReturn:  MockUserReturn{Error: service.ErrNotFound},
+			ExpectedErr: service.ErrUserNotFound,
 		},
 		{
 			Description: "Repo error",
 			UserID:      999,
 			MockReturn:  MockUserReturn{Error: errors.New("some repo error")},
-			ExpectedErr: ErrGetUserByID,
+			ExpectedErr: service.ErrGetUserByID,
 		},
 	}
 
@@ -106,7 +108,7 @@ func TestGetUserByID(t *testing.T) {
 
 func TestGetUserByEmail(t *testing.T) {
 	mock := mock_service.NewMockUserRepo(gomock.NewController(t))
-	svc := NewUserService(mock)
+	svc := service.NewUserService(mock, bcrypt.MinCost)
 	ctx := context.Background()
 
 	type testCase struct {
@@ -129,14 +131,14 @@ func TestGetUserByEmail(t *testing.T) {
 		{
 			Description: "User not found",
 			Email:       someEmail,
-			MockReturn:  MockUserReturn{Error: ErrNotFound},
-			ExpectedErr: ErrUserNotFound,
+			MockReturn:  MockUserReturn{Error: service.ErrNotFound},
+			ExpectedErr: service.ErrUserNotFound,
 		},
 		{
 			Description: "Repo error",
 			Email:       someEmail,
 			MockReturn:  MockUserReturn{Error: errors.New("some repo error")},
-			ExpectedErr: ErrGetUserByEmail,
+			ExpectedErr: service.ErrGetUserByEmail,
 		},
 	}
 
@@ -152,7 +154,7 @@ func TestGetUserByEmail(t *testing.T) {
 
 func TestCreateUser(t *testing.T) {
 	mock := mock_service.NewMockUserRepo(gomock.NewController(t))
-	svc := NewUserService(mock)
+	svc := service.NewUserService(mock, bcrypt.MinCost)
 	ctx := context.Background()
 
 	someUserCreate := m.UserCreate{
@@ -177,7 +179,7 @@ func TestCreateUser(t *testing.T) {
 		{
 			Description:    "Success",
 			Create:         someUserCreate,
-			MockGetByEmail: MockUserReturn{Error: ErrNotFound},
+			MockGetByEmail: MockUserReturn{Error: service.ErrNotFound},
 			MockCreate:     &MockCreateReturn{ID: someID},
 			ExpectedID:     someID,
 		},
@@ -186,20 +188,20 @@ func TestCreateUser(t *testing.T) {
 			Description:    "User already exists",
 			Create:         someUserCreate,
 			MockGetByEmail: MockUserReturn{User: someUser},
-			ExpectedErr:    ErrAccountWithEmailAlreadyExists,
+			ExpectedErr:    service.ErrAccountWithEmailAlreadyExists,
 		},
 		{
 			Description:    "GetUserByEmail fails",
 			Create:         someUserCreate,
 			MockGetByEmail: MockUserReturn{Error: errors.New("some error")},
-			ExpectedErr:    ErrGetUserByEmail,
+			ExpectedErr:    service.ErrGetUserByEmail,
 		},
 		{
 			Description:    "CreateUser fails",
 			Create:         someUserCreate,
-			MockGetByEmail: MockUserReturn{Error: ErrNotFound},
+			MockGetByEmail: MockUserReturn{Error: service.ErrNotFound},
 			MockCreate:     &MockCreateReturn{Error: errors.New("some error")},
-			ExpectedErr:    ErrCreateUser,
+			ExpectedErr:    service.ErrCreateUser,
 		},
 	}
 
@@ -220,7 +222,7 @@ func TestCreateUser(t *testing.T) {
 
 func TestUpdateUser(t *testing.T) {
 	mock := mock_service.NewMockUserRepo(gomock.NewController(t))
-	svc := NewUserService(mock)
+	svc := service.NewUserService(mock, bcrypt.MinCost)
 	ctx := context.Background()
 
 	newEmail := "newemail@gmail.com"
@@ -295,22 +297,22 @@ func TestUpdateUser(t *testing.T) {
 			UserID:      someUser.ID,
 			Update:      m.UserUpdate{},
 			MockGetByID: MockUserReturn{User: someUser},
-			MockUpdate:  &MockUserReturn{Error: ErrNoChangesInUpdate},
-			ExpectedErr: ErrNoChangesInUpdate,
+			MockUpdate:  &MockUserReturn{Error: service.ErrNoChangesInUpdate},
+			ExpectedErr: service.ErrNoChangesInUpdate,
 		},
 		{
 			Description: "GetByID returns NotFound",
 			UserID:      999,
 			Update:      fullUpdate,
-			MockGetByID: MockUserReturn{Error: ErrNotFound},
-			ExpectedErr: ErrUserNotFound,
+			MockGetByID: MockUserReturn{Error: service.ErrNotFound},
+			ExpectedErr: service.ErrUserNotFound,
 		},
 		{
 			Description: "GetByID returns error",
 			UserID:      someUser.ID,
 			Update:      fullUpdate,
 			MockGetByID: MockUserReturn{Error: errors.New("some repo error")},
-			ExpectedErr: ErrGetUserByID,
+			ExpectedErr: service.ErrGetUserByID,
 		},
 		{
 			Description: "UpdateUser returns error",
@@ -318,7 +320,7 @@ func TestUpdateUser(t *testing.T) {
 			Update:      fullUpdate,
 			MockGetByID: MockUserReturn{User: someUser},
 			MockUpdate:  &MockUserReturn{Error: errors.New("some repo error")},
-			ExpectedErr: ErrUpdateUser,
+			ExpectedErr: service.ErrUpdateUser,
 		},
 	}
 
@@ -337,27 +339,27 @@ func TestUpdateUser(t *testing.T) {
 
 func TestChangePasswordUser(t *testing.T) {
 	mock := mock_service.NewMockUserRepo(gomock.NewController(t))
-	svc := NewUserService(mock)
+	svc := service.NewUserService(mock, bcrypt.MinCost)
 	ctx := context.Background()
 
 	type testCase struct {
-		Description     string
-		UserID          int64
-		OldPassword     string
-		NewPassword     string
-		MockGetByID     MockUserReturn
-		MockChangePass  *error
-		ExpectedErr     error
+		Description    string
+		UserID         int64
+		OldPassword    string
+		NewPassword    string
+		MockGetByID    MockUserReturn
+		MockChangePass *error
+		ExpectedErr    error
 	}
 
 	tCases := []testCase{
 		// positives
 		{
-			Description: "Success",
-			UserID:      someID,
-			OldPassword: someStrongPassword,
-			NewPassword: "newStrongPassword123!",
-			MockGetByID: MockUserReturn{User: someUser},
+			Description:    "Success",
+			UserID:         someID,
+			OldPassword:    someStrongPassword,
+			NewPassword:    "newStrongPassword123!",
+			MockGetByID:    MockUserReturn{User: someUser},
 			MockChangePass: ptrErr(nil),
 		},
 		// negatives
@@ -366,8 +368,8 @@ func TestChangePasswordUser(t *testing.T) {
 			UserID:      999,
 			OldPassword: someStrongPassword,
 			NewPassword: "newStrongPassword123!",
-			MockGetByID: MockUserReturn{Error: ErrNotFound},
-			ExpectedErr: ErrUserNotFound,
+			MockGetByID: MockUserReturn{Error: service.ErrNotFound},
+			ExpectedErr: service.ErrUserNotFound,
 		},
 		{
 			Description: "GetByID repo error",
@@ -375,7 +377,7 @@ func TestChangePasswordUser(t *testing.T) {
 			OldPassword: someStrongPassword,
 			NewPassword: "newStrongPassword123!",
 			MockGetByID: MockUserReturn{Error: errors.New("some repo error")},
-			ExpectedErr: ErrGetUserByID,
+			ExpectedErr: service.ErrGetUserByID,
 		},
 		{
 			Description: "Wrong old password",
@@ -383,16 +385,16 @@ func TestChangePasswordUser(t *testing.T) {
 			OldPassword: "wrongPassword",
 			NewPassword: "newStrongPassword123!",
 			MockGetByID: MockUserReturn{User: someUser},
-			ExpectedErr: ErrWrongPassword,
+			ExpectedErr: service.ErrWrongPassword,
 		},
 		{
-			Description: "ChangePasswordUser repo error",
-			UserID:      someID,
-			OldPassword: someStrongPassword,
-			NewPassword: "newStrongPassword123!",
-			MockGetByID: MockUserReturn{User: someUser},
+			Description:    "ChangePasswordUser repo error",
+			UserID:         someID,
+			OldPassword:    someStrongPassword,
+			NewPassword:    "newStrongPassword123!",
+			MockGetByID:    MockUserReturn{User: someUser},
 			MockChangePass: ptrErr(errors.New("some repo error")),
-			ExpectedErr:    ErrChangePasswordUser,
+			ExpectedErr:    service.ErrChangePasswordUser,
 		},
 	}
 
@@ -410,7 +412,7 @@ func TestChangePasswordUser(t *testing.T) {
 
 func TestDeleteUserByID(t *testing.T) {
 	mock := mock_service.NewMockUserRepo(gomock.NewController(t))
-	svc := NewUserService(mock)
+	svc := service.NewUserService(mock, bcrypt.MinCost)
 	ctx := context.Background()
 
 	type testCase struct {
@@ -429,7 +431,7 @@ func TestDeleteUserByID(t *testing.T) {
 			Description: "Repo error",
 			UserID:      someID,
 			MockError:   errors.New("some repo error"),
-			ExpectedErr: ErrDeleteUser,
+			ExpectedErr: service.ErrDeleteUser,
 		},
 	}
 

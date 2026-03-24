@@ -32,7 +32,7 @@ func AuthMiddleware(authService service.AuthService) func(http.Handler) http.Han
 				return
 			}
 
-			claims, err := authService.ValidateToken(token)
+			claims, err := authService.ValidateToken(r.Context(), token)
 			if err != nil {
 				w.WriteHeader(http.StatusUnauthorized)
 				return

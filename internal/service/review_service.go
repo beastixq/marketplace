@@ -8,6 +8,7 @@ import (
 	m "github.com/beastixq/marketplace/internal/model"
 )
 
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_review_repo.go github.com/beastixq/marketplace/internal/service ReviewRepo
 type ReviewRepo interface {
 	GetReviewByID(ctx context.Context, id int64) (r m.Review, err error)
 	GetReviewsByProductID(ctx context.Context, pid int64, opts m.PaginationOpts) (rs []m.Review, err error)
@@ -22,6 +23,17 @@ type ReviewService struct {
 
 func NewReviewService(reviewRepo ReviewRepo) ReviewService {
 	return ReviewService{reviewRepo: reviewRepo}
+}
+
+func (rs ReviewService) GetReviewByID(ctx context.Context, id int64) (r m.Review, err error) {
+	r, err = rs.reviewRepo.GetReviewByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return m.Review{}, ErrReviewNotFound
+		}
+		return m.Review{}, fmt.Errorf("%w: %v", ErrGetReviewByID, err)
+	}
+	return r, nil
 }
 
 func (rs ReviewService) CreateReview(ctx context.Context, rc m.ReviewCreate) (id int64, err error) {

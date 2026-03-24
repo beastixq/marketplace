@@ -9,20 +9,40 @@ import (
 	m "github.com/beastixq/marketplace/internal/model"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
-type AuthService struct {
-	userService UserService
-	secret      string
-	tokenTTL    time.Duration
-	// redis
+// AuthUserProvider is a subset of UserService methods required by AuthService.
+// Follows ISP: AuthService only depends on what it actually uses.
+//
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_auth_user_provider.go github.com/beastixq/marketplace/internal/service AuthUserProvider
+type AuthUserProvider interface {
+	CreateUser(ctx context.Context, uc m.UserCreate) (id int64, err error)
+	GetUserByID(ctx context.Context, id int64) (u m.User, err error)
+	GetUserByEmail(ctx context.Context, email string) (u m.User, err error)
 }
 
-func NewAuthService(userService UserService, secret string, tokenTTL time.Duration) AuthService {
+// TokenBlocklist stores revoked token JTIs (e.g. Redis SET with TTL).
+//
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_token_blocklist.go github.com/beastixq/marketplace/internal/service TokenBlocklist
+type TokenBlocklist interface {
+	Add(ctx context.Context, jti string, exp time.Duration) error
+	Contains(ctx context.Context, jti string) (bool, error)
+}
+
+type AuthService struct {
+	userProvider AuthUserProvider
+	blocklist    TokenBlocklist
+	secret       string
+	tokenTTL     time.Duration
+}
+
+func NewAuthService(userProvider AuthUserProvider, blocklist TokenBlocklist, secret string, tokenTTL time.Duration) AuthService {
 	return AuthService{
-		userService: userService,
-		secret:      secret,
-		tokenTTL:    tokenTTL}
+		userProvider: userProvider,
+		blocklist:    blocklist,
+		secret:       secret,
+		tokenTTL:     tokenTTL}
 }
 
 type jwtClaims struct {
@@ -48,7 +68,7 @@ func (as AuthService) generateToken(user m.User) (token string, err error) {
 }
 
 func (as AuthService) Register(ctx context.Context, uc m.UserCreate) (token string, err error) {
-	userID, err := as.userService.CreateUser(ctx, uc)
+	userID, err := as.userProvider.CreateUser(ctx, uc)
 	if err != nil {
 		if errors.Is(err, ErrAccountWithEmailAlreadyExists) {
 			return "", ErrAccountWithEmailAlreadyExists
@@ -56,9 +76,9 @@ func (as AuthService) Register(ctx context.Context, uc m.UserCreate) (token stri
 		return "", fmt.Errorf("%w: %v", ErrCreateUser, err)
 	}
 
-	user, err := as.userService.GetUserByID(ctx, userID)
+	user, err := as.userProvider.GetUserByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
+		if errors.Is(err, ErrUserNotFound) {
 			return "", ErrRegistration
 		}
 		return "", fmt.Errorf("%w: %v", ErrGetUserByID, err)
@@ -72,15 +92,16 @@ func (as AuthService) Register(ctx context.Context, uc m.UserCreate) (token stri
 }
 
 func (as AuthService) Login(ctx context.Context, email, password string) (token string, err error) {
-	user, err := as.userService.Login(ctx, email, password)
+	user, err := as.userProvider.GetUserByEmail(ctx, email)
 	if err != nil {
-		if errors.Is(err, ErrWrongPassword) {
-			return "", ErrWrongPassword
-		}
 		if errors.Is(err, ErrUserNotFound) {
 			return "", ErrUserNotFound
 		}
 		return "", fmt.Errorf("%w: %v", ErrLogin, err)
+	}
+
+	if err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		return "", ErrWrongPassword
 	}
 
 	token, err = as.generateToken(user)
@@ -91,12 +112,21 @@ func (as AuthService) Login(ctx context.Context, email, password string) (token 
 	return token, nil
 }
 
-func (as AuthService) Logout(ctx context.Context, token string) error {
-	// TODO: redis blocklist
-	panic("not implemented yet")
+func (as AuthService) Logout(ctx context.Context, claims m.TokenClaims) error {
+	if as.blocklist == nil {
+		return nil
+	}
+	remaining := time.Until(claims.Exp)
+	if remaining <= 0 {
+		return nil
+	}
+	if err := as.blocklist.Add(ctx, claims.JTI.String(), remaining); err != nil {
+		return fmt.Errorf("%w: %v", ErrLogout, err)
+	}
+	return nil
 }
 
-func (as AuthService) ValidateToken(token string) (claims m.TokenClaims, err error) {
+func (as AuthService) ValidateToken(ctx context.Context, token string) (claims m.TokenClaims, err error) {
 	t, err := jwt.ParseWithClaims(token, &jwtClaims{}, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, ErrWrongSigningMethod
@@ -118,5 +148,16 @@ func (as AuthService) ValidateToken(token string) (claims m.TokenClaims, err err
 		Exp:    c.ExpiresAt.Time,
 		JTI:    uuid.MustParse(c.ID),
 	}
+
+	if as.blocklist != nil {
+		blocked, err := as.blocklist.Contains(ctx, claims.JTI.String())
+		if err != nil {
+			return m.TokenClaims{}, fmt.Errorf("%w: %v", ErrParseToken, err)
+		}
+		if blocked {
+			return m.TokenClaims{}, ErrTokenBlocked
+		}
+	}
+
 	return claims, nil
 }

@@ -13,9 +13,10 @@ var (
 	ErrParseToken         = errors.New("Failed to parse token")
 	ErrWrongSigningMethod = errors.New("Wrong signing method algorithm")
 	ErrRegistration       = errors.New("Failed to register user")
+	ErrLogout             = errors.New("Failed to logout")
+	ErrTokenBlocked       = errors.New("Token has been revoked")
 
 	// users
-	ErrAccWithEmailCheck      = errors.New("Error occured when check account with such email")
 	ErrAccountWithEmailAlreadyExists = errors.New("Account with this email already exists")
 	ErrHashingPassword        = errors.New("Error occured when hashing passowrd")
 	ErrCreateUser             = errors.New("Error occured when creating user")
@@ -59,6 +60,7 @@ var (
 	ErrDeleteOrderItemByID    = errors.New("Failed to delete order item by id")
 	ErrNoOrders               = errors.New("User does not have orders")
 	ErrOrderNotFound          = errors.New("Order not found")
+	ErrOrderItemNotFound      = errors.New("Order item not found")
 	ErrCartNotFound           = errors.New("Cart not found")
 	ErrEmptyCart              = errors.New("Cart is empty")
 	ErrNotYourOrder           = errors.New("It's not your order")
