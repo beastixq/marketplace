@@ -57,7 +57,12 @@ func (ur UserRepoImpl) GetUserByEmail(ctx context.Context, email string) (u m.Us
 
 func (ur UserRepoImpl) CreateUser(ctx context.Context, uc m.UserCreate) (id int64, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sql, args, err := psql.Insert("users").Columns("email", "password_hash", "full_name", "phone", "role").Values(uc.Email, uc.Password, uc.FullName, uc.Phone, uc.Role).Suffix("RETURNING id").ToSql()
+	sql, args, err := psql.
+		Insert("users").
+		Columns("email", "password_hash", "full_name", "phone", "role").
+		Values(uc.Email, uc.Password, uc.FullName, uc.Phone, uc.Role).
+		Suffix("RETURNING id").
+		ToSql()
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToSql, err)
 	}

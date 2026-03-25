@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	m "github.com/beastixq/marketplace/internal/model"
+
 	"golang.org/x/crypto/bcrypt"
 )
 

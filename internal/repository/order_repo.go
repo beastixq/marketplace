@@ -111,7 +111,10 @@ func (or OrderRepoImpl) UpdateOrder(ctx context.Context, id int64, ou m.OrderUpd
 
 func (or OrderRepoImpl) DeleteOrderByID(ctx context.Context, id int64) (err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sql, args, err := psql.Delete("orders").Where(sq.Eq{"id": id}).ToSql()
+	sql, args, err := psql.
+		Delete("orders").
+		Where(sq.Eq{"id": id}).
+		ToSql()
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrToSql, err)
 	}

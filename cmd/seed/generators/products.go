@@ -31,11 +31,12 @@ var realProducts = []realProduct{
 	{"JBL Charge 5", "Portable Bluetooth speaker, IP67 waterproof", 9990.00, 350},
 }
 
-func CreateProducts(tx pgx.Tx, ctx context.Context, sellersIDs []int64, count int) (productsIDs []int64, err error) {
+func CreateProducts(tx pgx.Tx, ctx context.Context, sellersIDs []int64, count int) (productsIDs []int64, productsBySeller map[int64][]int64, err error) {
 	createdInLoop := 0
 	psql := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
 	insertBuilder := psql.Insert("products").Columns("seller_id", "name", "description", "price", "stock_quantity")
 	productsIDs = make([]int64, count)
+	productSellers := make([]int64, count)
 
 	for i := range count {
 		var name, desc string
@@ -56,33 +57,41 @@ func CreateProducts(tx pgx.Tx, ctx context.Context, sellersIDs []int64, count in
 		}
 
 		sellerID := sellersIDs[rand.Intn(len(sellersIDs))]
+		productSellers[i] = sellerID
 		insertBuilder = insertBuilder.Values(sellerID, name, desc, price, stock)
 		createdInLoop++
 
 		if i%10 == 9 || i == count-1 {
 			sql, args, err := insertBuilder.Suffix("RETURNING id").ToSql()
 			if err != nil {
-				return nil, fmt.Errorf("Products %s: %v", ErrToSql, err)
+				return nil, nil, fmt.Errorf("Products %s: %v", ErrToSql, err)
 			}
 			rows, err := tx.Query(ctx, sql, args...)
 			if err != nil {
-				return nil, fmt.Errorf("Products %s: %v", ErrQuery, err)
+				return nil, nil, fmt.Errorf("Products %s: %v", ErrQuery, err)
 			}
 			curInd := i - createdInLoop + 1
 			for rows.Next() {
 				err = rows.Scan(&productsIDs[curInd])
 				if err != nil {
-					return nil, fmt.Errorf("Products %s: %v", ErrScan, err)
+					return nil, nil, fmt.Errorf("Products %s: %v", ErrScan, err)
 				}
 				curInd++
 			}
 			rows.Close()
 			if err = rows.Err(); err != nil {
-				return nil, fmt.Errorf("Products %s: %v", ErrCloseRows, err)
+				return nil, nil, fmt.Errorf("Products %s: %v", ErrCloseRows, err)
 			}
 			insertBuilder = psql.Insert("products").Columns("seller_id", "name", "description", "price", "stock_quantity")
 			createdInLoop = 0
 		}
 	}
-	return productsIDs, nil
+
+	productsBySeller = make(map[int64][]int64, len(sellersIDs))
+	for i, pid := range productsIDs {
+		sid := productSellers[i]
+		productsBySeller[sid] = append(productsBySeller[sid], pid)
+	}
+
+	return productsIDs, productsBySeller, nil
 }

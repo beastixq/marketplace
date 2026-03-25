@@ -71,7 +71,12 @@ func (sr SellerRepoImpl) GetSellerStats(ctx context.Context, sellerID int64, dat
 
 func (sr SellerRepoImpl) CreateSeller(ctx context.Context, sc m.SellerCreate) (id int64, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sql, args, err := psql.Insert("sellers").Columns("user_id", "company_name", "description", "rating").Values(sc.UserID, sc.CompanyName, sc.Description, sc.Rating).Suffix("RETURNING id").ToSql()
+	sql, args, err := psql.
+		Insert("sellers").
+		Columns("user_id", "company_name", "description", "rating").
+		Values(sc.UserID, sc.CompanyName, sc.Description, sc.Rating).
+		Suffix("RETURNING id").
+		ToSql()
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToSql, err)
 	}

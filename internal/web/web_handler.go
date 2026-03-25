@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"html/template"
@@ -40,6 +41,8 @@ type WebHandler struct {
 	userService     service.UserService
 	orderService    service.OrderService
 	addressService  service.AddressService
+	sellerService   service.SellerService
+	reviewService   service.ReviewService
 	templates       map[string]*template.Template
 }
 
@@ -50,8 +53,10 @@ func NewWebHandler(
 	userSvc service.UserService,
 	orderSvc service.OrderService,
 	addressSvc service.AddressService,
+	sellerSvc service.SellerService,
+	reviewSvc service.ReviewService,
 ) *WebHandler {
-	pages := []string{"catalog", "product", "login", "register", "categories", "profile", "orders", "cart"}
+	pages := []string{"catalog", "product", "login", "register", "categories", "profile", "orders", "cart", "addresses", "seller", "product-edit"}
 	templates := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
 		templates[page] = template.Must(
@@ -69,6 +74,8 @@ func NewWebHandler(
 		userService:     userSvc,
 		orderService:    orderSvc,
 		addressService:  addressSvc,
+		sellerService:   sellerSvc,
+		reviewService:   reviewSvc,
 		templates:       templates,
 	}
 }
@@ -91,7 +98,7 @@ func (wh *WebHandler) userFromCookie(r *http.Request) *userInfo {
 	if err != nil {
 		return nil
 	}
-	claims, err := wh.authService.ValidateToken(cookie.Value)
+	claims, err := wh.authService.ValidateToken(r.Context(), cookie.Value)
 	if err != nil {
 		return nil
 	}
@@ -477,6 +484,25 @@ func (wh *WebHandler) OrderCancel(w http.ResponseWriter, r *http.Request) {
 
 // --- Cart ---
 
+type cartItemDisplay struct {
+	model.OrderItem
+	ProductName string
+	TotalPrice  string
+}
+
+func (wh *WebHandler) buildCartDisplay(ctx context.Context, items []model.OrderItem) []cartItemDisplay {
+	display := make([]cartItemDisplay, 0, len(items))
+	for _, item := range items {
+		p, _ := wh.productService.GetProductByID(ctx, item.ProductID)
+		display = append(display, cartItemDisplay{
+			OrderItem:   item,
+			ProductName: p.Name,
+			TotalPrice:  item.PriceAtPurchase.Mul(decimal.NewFromInt(int64(item.Quantity))).String(),
+		})
+	}
+	return display
+}
+
 func (wh *WebHandler) Cart(w http.ResponseWriter, r *http.Request) {
 	user := wh.userFromCookie(r)
 	if user == nil {
@@ -490,28 +516,12 @@ func (wh *WebHandler) Cart(w http.ResponseWriter, r *http.Request) {
 		items, _ = wh.orderService.GetOrderItemsByOrderID(r.Context(), cart.ID)
 	}
 
-	// Resolve product names for display
-	type cartItemDisplay struct {
-		model.OrderItem
-		ProductName string
-		TotalPrice  string
-	}
-	displayItems := make([]cartItemDisplay, 0, len(items))
-	for _, item := range items {
-		p, _ := wh.productService.GetProductByID(r.Context(), item.ProductID)
-		displayItems = append(displayItems, cartItemDisplay{
-			OrderItem:   item,
-			ProductName: p.Name,
-			TotalPrice:  item.PriceAtPurchase.Mul(decimal.NewFromInt(int64(item.Quantity))).String(),
-		})
-	}
-
 	addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), user.UserID)
 
 	wh.render(w, "cart", map[string]any{
 		"User":      user,
 		"Cart":      cart,
-		"Items":     displayItems,
+		"Items":     wh.buildCartDisplay(r.Context(), items),
 		"HasCart":    err == nil,
 		"Addresses": addresses,
 		"Error":     "",
@@ -562,6 +572,33 @@ func (wh *WebHandler) CartRemoveItem(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/cart", http.StatusSeeOther)
 }
 
+func (wh *WebHandler) CartUpdateQuantity(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/cart", http.StatusSeeOther)
+		return
+	}
+
+	quantityStr := r.FormValue("quantity")
+	quantity, err := strconv.Atoi(quantityStr)
+	if err != nil || quantity < 1 {
+		http.Redirect(w, r, "/cart", http.StatusSeeOther)
+		return
+	}
+
+	if err = wh.orderService.ChangeQuantityCartItem(r.Context(), id, quantity); err != nil {
+		log.Printf("CartUpdateQuantity error: %v", err)
+	}
+	http.Redirect(w, r, "/cart", http.StatusSeeOther)
+}
+
 func (wh *WebHandler) CartCheckout(w http.ResponseWriter, r *http.Request) {
 	user := wh.userFromCookie(r)
 	if user == nil {
@@ -588,7 +625,7 @@ func (wh *WebHandler) CartCheckout(w http.ResponseWriter, r *http.Request) {
 		wh.render(w, "cart", map[string]any{
 			"User":      user,
 			"Cart":      cart,
-			"Items":     items,
+			"Items":     wh.buildCartDisplay(r.Context(), items),
 			"HasCart":    cartErr == nil,
 			"Addresses": addresses,
 			"Error":     "Checkout failed: " + err.Error(),
@@ -597,4 +634,397 @@ func (wh *WebHandler) CartCheckout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/orders", http.StatusSeeOther)
+}
+
+// --- Addresses ---
+
+func (wh *WebHandler) Addresses(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), user.UserID)
+
+	wh.render(w, "addresses", map[string]any{
+		"User":      user,
+		"Addresses": addresses,
+		"Error":     "",
+		"Success":   "",
+	})
+}
+
+func (wh *WebHandler) AddressCreate(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	city := r.FormValue("city")
+	street := r.FormValue("street")
+	zipCode := r.FormValue("zip_code")
+	isDefault := r.FormValue("is_default") == "on"
+
+	_, err := wh.addressService.CreateAddress(r.Context(), model.AddressCreate{
+		UserID:    user.UserID,
+		City:      city,
+		Street:    street,
+		ZipCode:   zipCode,
+		IsDefault: isDefault,
+	})
+
+	addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), user.UserID)
+
+	if err != nil {
+		wh.render(w, "addresses", map[string]any{
+			"User":      user,
+			"Addresses": addresses,
+			"Error":     "Failed to create address: " + err.Error(),
+			"Success":   "",
+		})
+		return
+	}
+
+	wh.render(w, "addresses", map[string]any{
+		"User":      user,
+		"Addresses": addresses,
+		"Error":     "",
+		"Success":   "Address added",
+	})
+}
+
+func (wh *WebHandler) AddressDelete(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/addresses", http.StatusSeeOther)
+		return
+	}
+
+	_ = wh.addressService.DeleteAddressByID(r.Context(), user.UserID, id)
+	http.Redirect(w, r, "/addresses", http.StatusSeeOther)
+}
+
+// --- Seller Dashboard ---
+
+func (wh *WebHandler) sellerFromUser(r *http.Request, user *userInfo) (model.Seller, bool) {
+	if user == nil || user.Role != "seller" {
+		return model.Seller{}, false
+	}
+	seller, err := wh.sellerService.GetSellerByUserID(r.Context(), user.UserID)
+	if err != nil {
+		return model.Seller{}, false
+	}
+	return seller, true
+}
+
+func (wh *WebHandler) SellerDashboard(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if user.Role != "seller" {
+		http.Error(w, "Only sellers can access this page", http.StatusForbidden)
+		return
+	}
+
+	seller, err := wh.sellerService.GetSellerByUserID(r.Context(), user.UserID)
+	hasSeller := err == nil
+
+	var products []model.Product
+	var orders []model.Order
+	var stats *model.SellerStats
+	if hasSeller {
+		allProducts, _ := wh.productService.GetProducts(r.Context(), model.CatalogOptions{})
+		for _, p := range allProducts {
+			if p.SellerID == seller.ID {
+				products = append(products, p)
+			}
+		}
+
+		s, statsErr := wh.sellerService.GetSellerStats(r.Context(), user.UserID, seller.ID, time.Now().AddDate(-1, 0, 0), time.Now())
+		if statsErr == nil {
+			stats = &s
+		}
+	}
+
+	wh.render(w, "seller", map[string]any{
+		"User":      user,
+		"Seller":    seller,
+		"HasSeller": hasSeller,
+		"Products":  products,
+		"Orders":    orders,
+		"Stats":     stats,
+		"Error":     "",
+		"Success":   "",
+	})
+}
+
+func (wh *WebHandler) SellerCreate(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if user.Role != "seller" {
+		http.Error(w, "Only sellers can access this page", http.StatusForbidden)
+		return
+	}
+
+	companyName := r.FormValue("company_name")
+	description := r.FormValue("description")
+
+	sc := model.SellerCreate{
+		UserID:      user.UserID,
+		CompanyName: companyName,
+	}
+	if description != "" {
+		sc.Description = &description
+	}
+
+	_, err := wh.sellerService.CreateSeller(r.Context(), sc)
+	if err != nil {
+		wh.render(w, "seller", map[string]any{
+			"User":      user,
+			"HasSeller": false,
+			"Error":     "Failed to create seller profile: " + err.Error(),
+			"Success":   "",
+		})
+		return
+	}
+
+	http.Redirect(w, r, "/seller", http.StatusSeeOther)
+}
+
+// --- Seller Product CRUD ---
+
+func (wh *WebHandler) SellerProductCreate(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	seller, ok := wh.sellerFromUser(r, user)
+	if !ok {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	name := r.FormValue("name")
+	description := r.FormValue("description")
+	priceStr := r.FormValue("price")
+	stockStr := r.FormValue("stock_quantity")
+
+	price, err := decimal.NewFromString(priceStr)
+	if err != nil {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
+		return
+	}
+	stock, err := strconv.Atoi(stockStr)
+	if err != nil || stock < 0 {
+		stock = 0
+	}
+
+	pc := model.ProductCreate{
+		SellerID:      seller.ID,
+		Name:          name,
+		Price:         price,
+		StockQuantity: stock,
+	}
+	if description != "" {
+		pc.Description = &description
+	}
+
+	_, err = wh.productService.CreateProduct(r.Context(), user.UserID, pc)
+	if err != nil {
+		log.Printf("SellerProductCreate error: %v", err)
+	}
+	http.Redirect(w, r, "/seller", http.StatusSeeOther)
+}
+
+func (wh *WebHandler) SellerProductEditPage(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	seller, ok := wh.sellerFromUser(r, user)
+	if !ok {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid product ID", http.StatusBadRequest)
+		return
+	}
+
+	product, err := wh.productService.GetProductByID(r.Context(), id)
+	if err != nil || product.SellerID != seller.ID {
+		http.Error(w, "Product not found", http.StatusNotFound)
+		return
+	}
+
+	wh.render(w, "product-edit", map[string]any{
+		"User":    user,
+		"Product": product,
+		"Error":   "",
+	})
+}
+
+func (wh *WebHandler) SellerProductEditSubmit(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	seller, ok := wh.sellerFromUser(r, user)
+	if !ok {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid product ID", http.StatusBadRequest)
+		return
+	}
+
+	product, err := wh.productService.GetProductByID(r.Context(), id)
+	if err != nil || product.SellerID != seller.ID {
+		http.Error(w, "Product not found", http.StatusNotFound)
+		return
+	}
+
+	name := r.FormValue("name")
+	description := r.FormValue("description")
+	priceStr := r.FormValue("price")
+	stockStr := r.FormValue("stock_quantity")
+
+	pu := model.ProductUpdate{}
+	if name != "" {
+		pu.Name = &name
+	}
+	pu.Description = &description
+	if p, err := decimal.NewFromString(priceStr); err == nil {
+		pu.Price = &p
+	}
+	if s, err := strconv.Atoi(stockStr); err == nil {
+		pu.StockQuantity = &s
+	}
+
+	_, err = wh.productService.UpdateProduct(r.Context(), user.UserID, id, pu)
+	if err != nil {
+		wh.render(w, "product-edit", map[string]any{
+			"User":    user,
+			"Product": product,
+			"Error":   "Failed to update: " + err.Error(),
+		})
+		return
+	}
+
+	http.Redirect(w, r, "/seller", http.StatusSeeOther)
+}
+
+func (wh *WebHandler) SellerProductDelete(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	seller, ok := wh.sellerFromUser(r, user)
+	if !ok {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
+		return
+	}
+
+	product, err := wh.productService.GetProductByID(r.Context(), id)
+	if err != nil || product.SellerID != seller.ID {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
+		return
+	}
+
+	_ = wh.productService.DeleteProductByID(r.Context(), user.UserID, id)
+	http.Redirect(w, r, "/seller", http.StatusSeeOther)
+}
+
+// --- Seller Order Actions ---
+
+func (wh *WebHandler) SellerOrderShip(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil || user.Role != "seller" {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
+		return
+	}
+
+	_ = wh.orderService.ShipOrder(r.Context(), id, user.UserID)
+	http.Redirect(w, r, "/seller", http.StatusSeeOther)
+}
+
+func (wh *WebHandler) SellerOrderDeliver(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil || user.Role != "seller" {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
+		return
+	}
+
+	_ = wh.orderService.DeliverOrder(r.Context(), id, user.UserID)
+	http.Redirect(w, r, "/seller", http.StatusSeeOther)
+}
+
+// --- Review Submission ---
+
+func (wh *WebHandler) ReviewSubmit(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	productID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid product ID", http.StatusBadRequest)
+		return
+	}
+
+	ratingStr := r.FormValue("rating")
+	rating, err := strconv.Atoi(ratingStr)
+	if err != nil || rating < 1 || rating > 5 {
+		rating = 5
+	}
+
+	comment := r.FormValue("comment")
+
+	rc := model.ReviewCreate{
+		UserID:    user.UserID,
+		ProductID: productID,
+		Rating:    int8(rating),
+	}
+	if comment != "" {
+		rc.Comment = &comment
+	}
+
+	if _, err = wh.reviewService.CreateReview(r.Context(), rc); err != nil {
+		log.Printf("ReviewSubmit error: %v", err)
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/products/%d", productID), http.StatusSeeOther)
 }

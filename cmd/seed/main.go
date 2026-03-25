@@ -84,7 +84,7 @@ func main() {
 	log.Println("Categories created: ", len(categoriesIDs))
 	// Products
 	log.Printf("Start creating %d products...\n", productsCount)
-	productsIDs, err := generators.CreateProducts(tx, ctx, sellersIDs, productsCount)
+	productsIDs, productsBySeller, err := generators.CreateProducts(tx, ctx, sellersIDs, productsCount)
 	if err != nil {
 		log.Printf("Failed on CreateProducts: %v\n", err)
 		return
@@ -108,7 +108,12 @@ func main() {
 	log.Println("Addresses created: ", len(addressesIDs))
 	// Orders (buyers place orders)
 	log.Printf("Start creating %d orders...\n", ordersCount)
-	ordersIDs, err := generators.CreateOrders(tx, ctx, usersIDs[2], addressesIDs, ordersCount)
+	// Only use sellers that have at least one product
+	sellersWithProducts := make([]int64, 0, len(productsBySeller))
+	for sid := range productsBySeller {
+		sellersWithProducts = append(sellersWithProducts, sid)
+	}
+	ordersIDs, orderSellers, err := generators.CreateOrders(tx, ctx, usersIDs[2], addressesIDs, sellersWithProducts, ordersCount)
 	if err != nil {
 		log.Printf("Failed on CreateOrders: %v\n", err)
 		return
@@ -116,7 +121,7 @@ func main() {
 	log.Println("Orders created: ", len(ordersIDs))
 	// OrderItems
 	log.Printf("Start creating %d order items...\n", orderItemsCount)
-	err = generators.CreateOrderItems(tx, ctx, ordersIDs, productsIDs, orderItemsCount)
+	err = generators.CreateOrderItems(tx, ctx, ordersIDs, productsIDs, orderSellers, productsBySeller, orderItemsCount)
 	if err != nil {
 		log.Printf("Failed on CreateOrderItems: %v\n", err)
 		return

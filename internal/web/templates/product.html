@@ -56,6 +56,29 @@
 </script>
 {{end}}
 
+{{if .User}}
+<div class="form-card" style="margin-top: 2rem; margin-bottom: 2rem;">
+    <h2>Leave a Review</h2>
+    <form method="POST" action="/products/{{.Product.ID}}/review">
+        <div class="form-group">
+            <label for="rating">Rating</label>
+            <select id="rating" name="rating">
+                <option value="5">&#9733;&#9733;&#9733;&#9733;&#9733; (5)</option>
+                <option value="4">&#9733;&#9733;&#9733;&#9733;&#9734; (4)</option>
+                <option value="3">&#9733;&#9733;&#9733;&#9734;&#9734; (3)</option>
+                <option value="2">&#9733;&#9733;&#9734;&#9734;&#9734; (2)</option>
+                <option value="1">&#9733;&#9734;&#9734;&#9734;&#9734; (1)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="comment">Comment (optional)</label>
+            <textarea id="comment" name="comment" rows="3" placeholder="Share your experience..."></textarea>
+        </div>
+        <button type="submit" class="btn btn--primary">Submit Review</button>
+    </form>
+</div>
+{{end}}
+
 {{if .Reviews}}
 <div class="reviews-section">
     <h2>Reviews ({{len .Reviews}})</h2>

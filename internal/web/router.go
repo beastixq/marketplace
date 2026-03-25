@@ -34,8 +34,27 @@ func NewWebRouter(wh *WebHandler) http.Handler {
 	r.Post("/orders/{id}/cancel", wh.OrderCancel)
 	r.Get("/cart", wh.Cart)
 	r.Post("/cart/add", wh.CartAdd)
+	r.Post("/cart/items/{id}/update", wh.CartUpdateQuantity)
 	r.Post("/cart/items/{id}/remove", wh.CartRemoveItem)
 	r.Post("/cart/checkout", wh.CartCheckout)
+
+	// Addresses
+	r.Get("/addresses", wh.Addresses)
+	r.Post("/addresses", wh.AddressCreate)
+	r.Post("/addresses/{id}/delete", wh.AddressDelete)
+
+	// Seller
+	r.Get("/seller", wh.SellerDashboard)
+	r.Post("/seller", wh.SellerCreate)
+	r.Post("/seller/products", wh.SellerProductCreate)
+	r.Get("/seller/products/{id}/edit", wh.SellerProductEditPage)
+	r.Post("/seller/products/{id}/edit", wh.SellerProductEditSubmit)
+	r.Post("/seller/products/{id}/delete", wh.SellerProductDelete)
+	r.Post("/seller/orders/{id}/ship", wh.SellerOrderShip)
+	r.Post("/seller/orders/{id}/deliver", wh.SellerOrderDeliver)
+
+	// Reviews
+	r.Post("/products/{id}/review", wh.ReviewSubmit)
 
 	return r
 }

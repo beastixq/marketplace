@@ -113,7 +113,7 @@ create table order_items (
 
     constraint fk_order_items_order_id
         foreign key (order_id)
-        references orders (id) on delete restrict,
+        references orders (id) on delete cascade,
 
     constraint fk_order_items_product_id
         foreign key (product_id)

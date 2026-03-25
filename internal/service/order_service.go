@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	m "github.com/beastixq/marketplace/internal/model"
+
 	"github.com/shopspring/decimal"
 )
 
@@ -177,6 +178,11 @@ func (os OrderService) DeleteCartItem(ctx context.Context, itemID int64) (err er
 	return nil
 }
 
+// TODO: 1. N+1 products read -> less reads
+// 2. think about price at purchase. it item was added long ago and now it
+// has new price -> create with updated
+// 3. delete draft order items before actual order delete (on delete restrict)
+// 3. or think about cascade delete
 func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int64) (orderIDs []int64, err error) {
 	cart, err := os.GetCart(ctx, userID)
 	if err != nil {

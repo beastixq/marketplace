@@ -1,0 +1,54 @@
+{{define "title"}}My Addresses{{end}}
+
+{{define "content"}}
+<h1 style="margin-bottom: 1.5rem;">My Addresses</h1>
+
+{{if .Success}}
+<div class="alert alert--success">{{.Success}}</div>
+{{end}}
+{{if .Error}}
+<div class="alert alert--error">{{.Error}}</div>
+{{end}}
+
+{{if .Addresses}}
+<div class="address-list">
+    {{range .Addresses}}
+    <div class="card" style="margin-bottom: 1rem; padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <strong>{{.City}}</strong>, {{.Street}}, {{.ZipCode}}
+            {{if .IsDefault}} <span class="badge badge--success">Default</span>{{end}}
+        </div>
+        <form method="POST" action="/addresses/{{.ID}}/delete">
+            <button type="submit" class="btn btn--danger btn--sm">Delete</button>
+        </form>
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="empty-state">No addresses yet.</div>
+{{end}}
+
+<div class="form-card" style="margin-top: 2rem;">
+    <h2>Add New Address</h2>
+    <form method="POST" action="/addresses">
+        <div class="form-group">
+            <label for="city">City</label>
+            <input type="text" id="city" name="city" required placeholder="Moscow">
+        </div>
+        <div class="form-group">
+            <label for="street">Street</label>
+            <input type="text" id="street" name="street" required placeholder="Baumanskaya st., 5">
+        </div>
+        <div class="form-group">
+            <label for="zip_code">Zip Code</label>
+            <input type="text" id="zip_code" name="zip_code" required placeholder="105005">
+        </div>
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="is_default"> Set as default
+            </label>
+        </div>
+        <button type="submit" class="btn btn--primary">Add Address</button>
+    </form>
+</div>
+{{end}}

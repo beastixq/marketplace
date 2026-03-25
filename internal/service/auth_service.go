@@ -7,6 +7,7 @@ import (
 	"time"
 
 	m "github.com/beastixq/marketplace/internal/model"
+
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
