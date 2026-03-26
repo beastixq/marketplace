@@ -18,15 +18,15 @@ var (
 
 	// users
 	ErrAccountWithEmailAlreadyExists = errors.New("Account with this email already exists")
-	ErrHashingPassword        = errors.New("Error occured when hashing passowrd")
-	ErrCreateUser             = errors.New("Error occured when creating user")
-	ErrUpdateUser             = errors.New("Error occured when updating user")
-	ErrGetUserByID            = errors.New("Error occured when getting user by id")
-	ErrGetUserByEmail         = errors.New("Error occured when getting user by email")
-	ErrDeleteUser             = errors.New("Error occured when deleting user")
-	ErrChangePasswordUser     = errors.New("Error occured when changing user password")
-	ErrUserNotFound           = errors.New("User not found")
-	ErrWrongPassword          = errors.New("Wrong password")
+	ErrHashingPassword               = errors.New("Error occured when hashing passowrd")
+	ErrCreateUser                    = errors.New("Error occured when creating user")
+	ErrUpdateUser                    = errors.New("Error occured when updating user")
+	ErrGetUserByID                   = errors.New("Error occured when getting user by id")
+	ErrGetUserByEmail                = errors.New("Error occured when getting user by email")
+	ErrDeleteUser                    = errors.New("Error occured when deleting user")
+	ErrChangePasswordUser            = errors.New("Error occured when changing user password")
+	ErrUserNotFound                  = errors.New("User not found")
+	ErrWrongPassword                 = errors.New("Wrong password")
 
 	// addresses
 	ErrGetAddressByID       = errors.New("Failed to get address by id")
@@ -38,18 +38,20 @@ var (
 	ErrAddressNotFound      = errors.New("Address not found")
 
 	// sellers
-	ErrGetSellerByID    = errors.New("Failed to get seller by id")
-	ErrGetSellerStats   = errors.New("Failed to get seller stats")
-	ErrCreateSeller     = errors.New("Failed to create seller")
-	ErrUpdateSeller     = errors.New("Failed to update seller")
-	ErrDeleteSellerByID = errors.New("Failed to delete seller by id")
-	ErrNotYourSeller    = errors.New("It's not your seller")
-	ErrSellerNotFound   = errors.New("Seller not found")
+	ErrGetSellerByID     = errors.New("Failed to get seller by id")
+	ErrGetSellerByUserID = errors.New("Failed to get seller by user id")
+	ErrGetSellerStats    = errors.New("Failed to get seller stats")
+	ErrCreateSeller      = errors.New("Failed to create seller")
+	ErrUpdateSeller      = errors.New("Failed to update seller")
+	ErrDeleteSellerByID  = errors.New("Failed to delete seller by id")
+	ErrNotYourSeller     = errors.New("It's not your seller")
+	ErrSellerNotFound    = errors.New("Seller not found")
 
 	// orders
 	ErrGetOrderByID           = errors.New("Failed to get order by id")
 	ErrGetOrderItemByID       = errors.New("Failed to get order item by id")
 	ErrGetOrdersByUserID      = errors.New("Failed to get orders by user id")
+	ErrGetOrdersBySellerID    = errors.New("Failed to get orders by seller id")
 	ErrGetOrderItemsByOrderID = errors.New("Failed to get order items by order id")
 	ErrGetCart                = errors.New("Failed to get cart order")
 	ErrCreateOrder            = errors.New("Failed to create order")
@@ -64,8 +66,10 @@ var (
 	ErrCartNotFound           = errors.New("Cart not found")
 	ErrEmptyCart              = errors.New("Cart is empty")
 	ErrNotYourOrder           = errors.New("It's not your order")
+	ErrProductAlreadyInCart   = errors.New("This product is already in the cart")
 	ErrSellerNotSet           = errors.New("Seller is not set for this order")
 	ErrOrderStatusInvalid     = errors.New("Invalid order status")
+
 
 	//categories
 	ErrGetCategories    = errors.New("Failed to get categories")

@@ -33,9 +33,9 @@ func (ah AddressHandler) GetAddresses(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	result := make([]Address, len(addrs))
+	result := make([]AddressDTO, len(addrs))
 	for i := range addrs {
-		result[i] = addressFromService(addrs[i])
+		result[i] = addressDTO(addrs[i])
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -156,7 +156,7 @@ func (ah AddressHandler) UpdateAddress(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, addressFromService(addr))
+	writeJSON(w, http.StatusOK, addressDTO(addr))
 }
 
 // DELETE /api/v1/addresses/:id

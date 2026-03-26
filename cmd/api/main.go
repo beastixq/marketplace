@@ -48,7 +48,7 @@ func main() {
 
 	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler(userService)
-	sellerHandler := handler.NewSellerHandler(sellerService)
+	sellerHandler := handler.NewSellerHandler(sellerService, orderService)
 	addressHandler := handler.NewAddressHandler(addressService)
 	productHandler := handler.NewProductHandler(productService)
 	orderHandler := handler.NewOrderHandler(orderService)

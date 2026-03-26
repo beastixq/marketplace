@@ -15,10 +15,14 @@ import (
 
 type SellerHandler struct {
 	sellerService service.SellerService
+	orderService  service.OrderService
 }
 
-func NewSellerHandler(sellerSvc service.SellerService) SellerHandler {
-	return SellerHandler{sellerService: sellerSvc}
+func NewSellerHandler(sellerSvc service.SellerService, orderSvc service.OrderService) SellerHandler {
+	return SellerHandler{
+		sellerService: sellerSvc,
+		orderService:  orderSvc,
+	}
 }
 
 // GET /api/v1/sellers/:id
@@ -37,7 +41,7 @@ func (sh SellerHandler) GetSellerByID(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, sellerFromService(seller))
+	writeJSON(w, http.StatusOK, sellerDTO(seller))
 }
 
 // POST /api/v1/sellers
@@ -110,7 +114,7 @@ func (sh SellerHandler) UpdateSeller(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, sellerFromService(seller))
+	writeJSON(w, http.StatusOK, sellerDTO(seller))
 }
 
 // DELETE /api/v1/sellers/:id
@@ -191,7 +195,38 @@ func (sh SellerHandler) GetSellerStats(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, sellerStatsFromService(stats))
+	writeJSON(w, http.StatusOK, sellerStatsDTO(stats))
+}
+
+// GET /api/v1/sellers/me/orders
+func (sh SellerHandler) GetSellerOrders(w http.ResponseWriter, r *http.Request) {
+	tokenClaims, ok := middleware.ClaimsFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+
+	pg, err := parsePagination(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	ordersService, err := sh.orderService.GetSellerOrdersByUserID(r.Context(), tokenClaims.UserID, pg)
+	if err != nil {
+		if errors.Is(err, service.ErrSellerNotFound) {
+			writeError(w, http.StatusNotFound, service.ErrSellerNotFound.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		return
+	}
+	orders := make([]OrderDTO, len(ordersService))
+	for i, orderService := range ordersService {
+		orders[i] = orderDTO(orderService)
+	}
+
+	writeJSON(w, http.StatusOK, orders)
 }
 
 // --- Request DTOs ---

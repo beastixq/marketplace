@@ -43,7 +43,7 @@ func (ah AdminHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, userFromService(user))
+	writeJSON(w, http.StatusOK, userDTO(user))
 }
 
 type AdminUpdateUserRequest struct {
@@ -92,7 +92,7 @@ func (ah AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, userFromService(user))
+	writeJSON(w, http.StatusOK, userDTO(user))
 }
 
 // DELETE /api/v1/admin/users/:id

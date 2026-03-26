@@ -49,9 +49,9 @@ func (ch CategoryHandler) GetCategories(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	result := make([]Category, len(categories))
+	result := make([]CategoryDTO, len(categories))
 	for i := range categories {
-		result[i] = categoryFromService(categories[i])
+		result[i] = categoryDTO(categories[i])
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -140,7 +140,7 @@ func (ch CategoryHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, categoryFromService(category))
+	writeJSON(w, http.StatusOK, categoryDTO(category))
 }
 
 // DELETE /api/v1/categories/:id — admin only

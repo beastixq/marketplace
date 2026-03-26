@@ -123,3 +123,37 @@ func (or OrderRepoImpl) DeleteOrderByID(ctx context.Context, id int64) (err erro
 	}
 	return nil
 }
+
+func (or OrderRepoImpl) GetSellerOrdersBySellerID(ctx context.Context, sellerID int64, pg m.PaginationOpts) (orders []m.Order, err error) {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	qb := psql.
+		Select("id", "user_id", "address_id", "seller_id", "status", "total_amount", "created_at", "updated_at").
+		From("orders").
+		Where(sq.Eq{"seller_id": sellerID}).
+		OrderBy("created_at DESC")
+	if pg.Page > 0 && pg.Limit > 0 {
+		qb = qb.Offset(uint64((pg.Page - 1) * pg.Limit)).Limit(uint64(pg.Limit))
+	}
+	sql, args, err := qb.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	rows, err := or.pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
+	}
+	defer rows.Close()
+	orders = make([]m.Order, 0)
+	var orow orderRow
+	for rows.Next() {
+		err = rows.Scan(&orow.ID, &orow.UserID, &orow.AddressID, &orow.SellerID, &orow.Status, &orow.TotalAmount, &orow.CreatedAt, &orow.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrToScan, err)
+		}
+		orders = append(orders, orow.toModel())
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrRowsIteration, err)
+	}
+	return orders, nil
+}

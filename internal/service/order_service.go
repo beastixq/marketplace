@@ -23,30 +23,31 @@ type OrderItemRepo interface {
 type OrderRepo interface {
 	GetOrderByID(ctx context.Context, id int64) (o m.Order, err error)
 	GetOrdersByUserID(ctx context.Context, userID int64) (orders []m.Order, err error)
+	GetSellerOrdersBySellerID(ctx context.Context, sellerID int64, pg m.PaginationOpts) (orders []m.Order, err error)
 	CreateOrder(ctx context.Context, oc m.OrderCreate) (id int64, err error)
 	UpdateOrder(ctx context.Context, id int64, ou m.OrderUpdate) (o m.Order, err error)
 	DeleteOrderByID(ctx context.Context, id int64) (err error)
 }
 
-//go:generate mockgen -package mock_service -destination ../mocks/service/mock_order_product_repo.go github.com/beastixq/marketplace/internal/service OrderProductRepo
-type OrderProductRepo interface {
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_product_getter.go github.com/beastixq/marketplace/internal/service ProductGetter
+type ProductGetter interface {
 	GetProductByID(ctx context.Context, id int64) (p m.Product, err error)
 }
 
-//go:generate mockgen -package mock_service -destination ../mocks/service/mock_order_seller_repo.go github.com/beastixq/marketplace/internal/service OrderSellerRepo
-type OrderSellerRepo interface {
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_seller_getter.go github.com/beastixq/marketplace/internal/service SellerGetter
+type SellerGetter interface {
 	GetSellerByUserID(ctx context.Context, userID int64) (s m.Seller, err error)
 }
 
 type OrderService struct {
 	orderRepo     OrderRepo
 	orderItemRepo OrderItemRepo
-	productRepo   OrderProductRepo
-	sellerRepo    OrderSellerRepo
+	productGetter ProductGetter
+	sellerGetter  SellerGetter
 }
 
-func NewOrderService(or OrderRepo, oir OrderItemRepo, pr OrderProductRepo, sr OrderSellerRepo) OrderService {
-	return OrderService{orderRepo: or, orderItemRepo: oir, productRepo: pr, sellerRepo: sr}
+func NewOrderService(or OrderRepo, oir OrderItemRepo, pr ProductGetter, sr SellerGetter) OrderService {
+	return OrderService{orderRepo: or, orderItemRepo: oir, productGetter: pr, sellerGetter: sr}
 }
 
 func (os OrderService) GetOrderByID(ctx context.Context, orderID int64) (order m.Order, err error) {
@@ -64,6 +65,22 @@ func (os OrderService) GetOrdersByUserID(ctx context.Context, userID int64) (ord
 	orders, err = os.orderRepo.GetOrdersByUserID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrGetOrdersByUserID, err)
+	}
+	return orders, nil
+}
+
+func (os OrderService) GetSellerOrdersByUserID(ctx context.Context, userID int64, pg m.PaginationOpts) (orders []m.Order, err error) {
+	seller, err := os.sellerGetter.GetSellerByUserID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, ErrSellerNotFound
+		}
+		return nil, fmt.Errorf("%w: %v", ErrGetSellerByUserID, err)
+	}
+
+	orders, err = os.orderRepo.GetSellerOrdersBySellerID(ctx, seller.ID, pg)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrGetOrdersBySellerID, err)
 	}
 	return orders, nil
 }
@@ -99,7 +116,19 @@ func (os OrderService) GetCart(ctx context.Context, userID int64) (order m.Order
 			latest = idx
 		}
 	}
-	return orders[latest], nil
+
+	cart := orders[latest]
+	items, err := os.orderItemRepo.GetOrderItemsByOrderID(ctx, cart.ID)
+	if err != nil {
+		return m.Order{}, fmt.Errorf("%w: %v", ErrGetCart, err)
+	}
+	total := decimal.Zero
+	for _, item := range items {
+		total = total.Add(item.PriceAtPurchase.Mul(decimal.NewFromInt(int64(item.Quantity))))
+	}
+	cart.TotalAmount = total
+
+	return cart, nil
 }
 
 func (os OrderService) AddItemToCart(ctx context.Context, userID int64, productID int64, quantity int) (err error) {
@@ -122,7 +151,17 @@ func (os OrderService) AddItemToCart(ctx context.Context, userID int64, productI
 		cartOrderID = cartOrder.ID
 	}
 
-	product, err := os.productRepo.GetProductByID(ctx, productID)
+	existingItems, err := os.orderItemRepo.GetOrderItemsByOrderID(ctx, cartOrderID)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
+	}
+	for _, item := range existingItems {
+		if item.ProductID == productID {
+			return ErrProductAlreadyInCart
+		}
+	}
+
+	product, err := os.productGetter.GetProductByID(ctx, productID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return ErrProductNotFound
@@ -153,7 +192,7 @@ func (os OrderService) ChangeQuantityCartItem(ctx context.Context, itemID int64,
 		}
 		return fmt.Errorf("%w: %v", ErrGetOrderItemByID, err)
 	}
-	product, err := os.productRepo.GetProductByID(ctx, orderItem.ProductID)
+	product, err := os.productGetter.GetProductByID(ctx, orderItem.ProductID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return ErrProductNotFound
@@ -202,7 +241,7 @@ func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int
 
 	itemsBySellerIDs := make(map[int64][]m.OrderItem)
 	for _, item := range items {
-		product, err := os.productRepo.GetProductByID(ctx, item.ProductID)
+		product, err := os.productGetter.GetProductByID(ctx, item.ProductID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				return nil, ErrProductNotFound
@@ -297,12 +336,12 @@ func (os OrderService) CancelOrder(ctx context.Context, orderID int64, userID in
 }
 
 func (os OrderService) ShipOrder(ctx context.Context, orderID int64, userID int64) (err error) {
-	seller, err := os.sellerRepo.GetSellerByUserID(ctx, userID)
+	seller, err := os.sellerGetter.GetSellerByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return ErrSellerNotFound
 		}
-		return fmt.Errorf("%w: %v", ErrGetSellerByID, err)
+		return fmt.Errorf("%w: %v", ErrGetSellerByUserID, err)
 	}
 	order, err := os.orderRepo.GetOrderByID(ctx, orderID)
 	if err != nil {
@@ -326,12 +365,12 @@ func (os OrderService) ShipOrder(ctx context.Context, orderID int64, userID int6
 }
 
 func (os OrderService) DeliverOrder(ctx context.Context, orderID int64, userID int64) (err error) {
-	seller, err := os.sellerRepo.GetSellerByUserID(ctx, userID)
+	seller, err := os.sellerGetter.GetSellerByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return ErrSellerNotFound
 		}
-		return fmt.Errorf("%w: %v", ErrGetSellerByID, err)
+		return fmt.Errorf("%w: %v", ErrGetSellerByUserID, err)
 	}
 	order, err := os.orderRepo.GetOrderByID(ctx, orderID)
 	if err != nil {

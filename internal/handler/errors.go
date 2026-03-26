@@ -2,18 +2,23 @@ package handler
 
 import (
 	"errors"
-	"fmt"
+
+	"github.com/beastixq/marketplace/internal/validators"
+)
+
+// Validation errors from shared validators package
+var (
+	ErrFullNameShouldBeTwoWords = validators.ErrFullNameShouldBeTwoWords
+	ErrPasswordTooShort         = validators.ErrPasswordTooShort
+	ErrInvalidRole              = validators.ErrInvalidRole
+	ErrInvalidEmail             = validators.ErrInvalidEmail
+	ErrInvalidPhone             = validators.ErrInvalidPhone
 )
 
 // Validation
 var (
 	// RegisterRequest validation
-	ErrFullNameShouldBeTwoWords = errors.New("Full name should consist of two words")
-	ErrPasswordTooShort         = fmt.Errorf("Password too short. Should be at least %d symbols", minPassLen)
-	ErrInvalidRole              = errors.New("Invalid role name")
-	ErrRoleUnavailable          = errors.New("User with this role is unavailable to be created")
-	ErrInvalidEmail             = errors.New("Invalid email")
-	ErrInvalidPhone             = errors.New("Invalid phone number")
+	ErrRoleUnavailable = errors.New("User with this role is unavailable to be created")
 
 	// UpdateProfileRequest validation
 	ErrUpdateProfileAllNil = errors.New("No updates in body")

@@ -32,9 +32,9 @@ func (oh OrderHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	result := make([]Order, len(orders))
+	result := make([]OrderDTO, len(orders))
 	for i := range orders {
-		result[i] = orderFromService(orders[i])
+		result[i] = orderDTO(orders[i])
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -56,7 +56,7 @@ func (oh OrderHandler) GetOrder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, orderFromService(order))
+	writeJSON(w, http.StatusOK, orderDTO(order))
 }
 
 // GET /api/v1/orders/:id/items
@@ -72,9 +72,9 @@ func (oh OrderHandler) GetOrderItems(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	result := make([]OrderItem, len(items))
+	result := make([]OrderItemDTO, len(items))
 	for i := range items {
-		result[i] = orderItemFromService(items[i])
+		result[i] = orderItemDTO(items[i])
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -96,7 +96,7 @@ func (oh OrderHandler) GetCart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, orderFromService(cart))
+	writeJSON(w, http.StatusOK, orderDTO(cart))
 }
 
 type AddCartItemRequest struct {

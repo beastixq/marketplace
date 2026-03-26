@@ -99,7 +99,7 @@ func (uh UserHandler) UpdateMyProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, userFromService(user))
+	writeJSON(w, http.StatusOK, userDTO(user))
 }
 
 func (uh UserHandler) DeleteMyAccount(w http.ResponseWriter, r *http.Request) {

@@ -7,7 +7,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-type User struct {
+type UserDTO struct {
 	ID        int64          `json:"id"`
 	Email     string         `json:"email"`
 	FullName  string         `json:"full_name"`
@@ -16,8 +16,8 @@ type User struct {
 	CreatedAt time.Time      `json:"created_at"`
 }
 
-func userFromService(user model.User) User {
-	return User{
+func userDTO(user model.User) UserDTO {
+	return UserDTO{
 		ID:        user.ID,
 		Email:     user.Email,
 		FullName:  user.FullName,
@@ -27,7 +27,7 @@ func userFromService(user model.User) User {
 	}
 }
 
-type Seller struct {
+type SellerDTO struct {
 	ID          int64     `json:"id"`
 	UserID      int64     `json:"user_id"`
 	CompanyName string    `json:"company_name"`
@@ -36,8 +36,8 @@ type Seller struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-func sellerFromService(s model.Seller) Seller {
-	return Seller{
+func sellerDTO(s model.Seller) SellerDTO {
+	return SellerDTO{
 		ID:          s.ID,
 		UserID:      s.UserID,
 		CompanyName: s.CompanyName,
@@ -47,15 +47,15 @@ func sellerFromService(s model.Seller) Seller {
 	}
 }
 
-type SellerStats struct {
+type SellerStatsDTO struct {
 	TotalOrders    int64           `json:"total_orders"`
 	TotalRevenue   decimal.Decimal `json:"total_revenue"`
 	AvgOrderValue  decimal.Decimal `json:"avg_order_value"`
 	TopProductName string          `json:"top_product_name"`
 }
 
-func sellerStatsFromService(ss model.SellerStats) SellerStats {
-	return SellerStats{
+func sellerStatsDTO(ss model.SellerStats) SellerStatsDTO {
+	return SellerStatsDTO{
 		TotalOrders:    ss.TotalOrders,
 		TotalRevenue:   ss.TotalRevenue,
 		AvgOrderValue:  ss.AvgOrderValue,
@@ -63,7 +63,7 @@ func sellerStatsFromService(ss model.SellerStats) SellerStats {
 	}
 }
 
-type Product struct {
+type ProductDTO struct {
 	ID          int64           `json:"id"`
 	SellerID    int64           `json:"seller_id"`
 	Name        string          `json:"name"`
@@ -72,8 +72,8 @@ type Product struct {
 	CreatedAt   time.Time       `json:"created_at"`
 }
 
-func productFromService(p model.Product) Product {
-	return Product{
+func productDTO(p model.Product) ProductDTO {
+	return ProductDTO{
 		ID:          p.ID,
 		SellerID:    p.SellerID,
 		Name:        p.Name,
@@ -83,7 +83,7 @@ func productFromService(p model.Product) Product {
 	}
 }
 
-type ProductPriceHistory struct {
+type ProductPriceHistoryDTO struct {
 	ID        int64           `json:"id"`
 	ProductID int64           `json:"product_id"`
 	OldPrice  decimal.Decimal `json:"old_price"`
@@ -91,8 +91,8 @@ type ProductPriceHistory struct {
 	ChangedAt time.Time       `json:"changed_at"`
 }
 
-func productPriceHistoryFromService(ph model.ProductPriceHistory) ProductPriceHistory {
-	return ProductPriceHistory{
+func productPriceHistoryDTO(ph model.ProductPriceHistory) ProductPriceHistoryDTO {
+	return ProductPriceHistoryDTO{
 		ID:        ph.ID,
 		ProductID: ph.ProductID,
 		OldPrice:  ph.OldPrice,
@@ -101,18 +101,23 @@ func productPriceHistoryFromService(ph model.ProductPriceHistory) ProductPriceHi
 	}
 }
 
-type Category struct {
+type CategoryDTO struct {
 	ID          int64   `json:"id"`
 	ParentID    *int64  `json:"parent_id"`
 	Name        string  `json:"name"`
 	Description *string `json:"description"`
 }
 
-func categoryFromService(c model.Category) Category {
-	return Category{ID: c.ID, ParentID: c.ParentID, Name: c.Name, Description: c.Description}
+func categoryDTO(c model.Category) CategoryDTO {
+	return CategoryDTO{
+		ID:          c.ID,
+		ParentID:    c.ParentID,
+		Name:        c.Name,
+		Description: c.Description,
+	}
 }
 
-type Address struct {
+type AddressDTO struct {
 	ID        int64     `json:"id"`
 	UserID    int64     `json:"user_id"`
 	City      string    `json:"city"`
@@ -122,11 +127,19 @@ type Address struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func addressFromService(a model.Address) Address {
-	return Address{ID: a.ID, UserID: a.UserID, City: a.City, Street: a.Street, ZipCode: a.ZipCode, IsDefault: a.IsDefault, CreatedAt: a.CreatedAt}
+func addressDTO(a model.Address) AddressDTO {
+	return AddressDTO{
+		ID:        a.ID,
+		UserID:    a.UserID,
+		City:      a.City,
+		Street:    a.Street,
+		ZipCode:   a.ZipCode,
+		IsDefault: a.IsDefault,
+		CreatedAt: a.CreatedAt,
+	}
 }
 
-type Order struct {
+type OrderDTO struct {
 	ID          int64           `json:"id"`
 	UserID      int64           `json:"user_id"`
 	AddressID   *int64          `json:"address_id"`
@@ -137,11 +150,20 @@ type Order struct {
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
-func orderFromService(o model.Order) Order {
-	return Order{ID: o.ID, UserID: o.UserID, AddressID: o.AddressID, SellerID: o.SellerID, Status: string(o.Status), TotalAmount: o.TotalAmount, CreatedAt: o.CreatedAt, UpdatedAt: o.UpdatedAt}
+func orderDTO(o model.Order) OrderDTO {
+	return OrderDTO{
+		ID:          o.ID,
+		UserID:      o.UserID,
+		AddressID:   o.AddressID,
+		SellerID:    o.SellerID,
+		Status:      string(o.Status),
+		TotalAmount: o.TotalAmount,
+		CreatedAt:   o.CreatedAt,
+		UpdatedAt:   o.UpdatedAt,
+	}
 }
 
-type OrderItem struct {
+type OrderItemDTO struct {
 	ID              int64           `json:"id"`
 	OrderID         int64           `json:"order_id"`
 	ProductID       int64           `json:"product_id"`
@@ -149,11 +171,17 @@ type OrderItem struct {
 	PriceAtPurchase decimal.Decimal `json:"price_at_purchase"`
 }
 
-func orderItemFromService(oi model.OrderItem) OrderItem {
-	return OrderItem{ID: oi.ID, OrderID: oi.OrderID, ProductID: oi.ProductID, Quantity: oi.Quantity, PriceAtPurchase: oi.PriceAtPurchase}
+func orderItemDTO(oi model.OrderItem) OrderItemDTO {
+	return OrderItemDTO{
+		ID:              oi.ID,
+		OrderID:         oi.OrderID,
+		ProductID:       oi.ProductID,
+		Quantity:        oi.Quantity,
+		PriceAtPurchase: oi.PriceAtPurchase,
+	}
 }
 
-type Review struct {
+type ReviewDTO struct {
 	ID        int64     `json:"id"`
 	UserID    int64     `json:"user_id"`
 	ProductID int64     `json:"product_id"`
@@ -162,8 +190,8 @@ type Review struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func reviewFromService(r model.Review) Review {
-	return Review{
+func reviewDTO(r model.Review) ReviewDTO {
+	return ReviewDTO{
 		ID:        r.ID,
 		UserID:    r.UserID,
 		ProductID: r.ProductID,

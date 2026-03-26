@@ -118,7 +118,7 @@ func (rh ReviewHandler) UpdateReview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, reviewFromService(review))
+	writeJSON(w, http.StatusOK, reviewDTO(review))
 }
 
 // DELETE /api/v1/reviews/:id

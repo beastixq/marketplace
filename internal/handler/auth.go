@@ -11,8 +11,6 @@ import (
 	"github.com/beastixq/marketplace/internal/service"
 )
 
-const minPassLen = 6
-
 type AuthHandler struct {
 	authService service.AuthService
 }

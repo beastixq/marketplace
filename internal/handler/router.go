@@ -49,42 +49,55 @@ func NewRouter(
 		r.Delete("/api/v1/users/me", userHandler.DeleteMyAccount)
 		r.Patch("/api/v1/users/me/password", userHandler.ChangePassword)
 
-		// Sellers
-		r.Post("/api/v1/sellers", sellerHandler.CreateSeller)
-		r.Patch("/api/v1/sellers/{id}", sellerHandler.UpdateSeller)
-		r.Delete("/api/v1/sellers/{id}", sellerHandler.DeleteSeller)
+		// Buyer only
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRole(model.RoleBuyer))
 
-		// Addresses
-		r.Get("/api/v1/addresses", addressHandler.GetAddresses)
-		r.Post("/api/v1/addresses", addressHandler.CreateAddress)
-		r.Patch("/api/v1/addresses/{id}", addressHandler.UpdateAddress)
-		r.Delete("/api/v1/addresses/{id}", addressHandler.DeleteAddress)
+			// Addresses
+			r.Get("/api/v1/addresses", addressHandler.GetAddresses)
+			r.Post("/api/v1/addresses", addressHandler.CreateAddress)
+			r.Patch("/api/v1/addresses/{id}", addressHandler.UpdateAddress)
+			r.Delete("/api/v1/addresses/{id}", addressHandler.DeleteAddress)
 
-		// Products (seller creates/updates/deletes)
-		r.Post("/api/v1/products", productHandler.CreateProduct)
-		r.Patch("/api/v1/products/{id}", productHandler.UpdateProduct)
-		r.Delete("/api/v1/products/{id}", productHandler.DeleteProduct)
+			// Cart
+			r.Get("/api/v1/cart", orderHandler.GetCart)
+			r.Post("/api/v1/cart/items", orderHandler.AddCartItem)
+			r.Patch("/api/v1/cart/items/{id}", orderHandler.UpdateCartItem)
+			r.Delete("/api/v1/cart/items/{id}", orderHandler.DeleteCartItem)
 
-		// Cart
-		r.Get("/api/v1/cart", orderHandler.GetCart)
-		r.Post("/api/v1/cart/items", orderHandler.AddCartItem)
-		r.Patch("/api/v1/cart/items/{id}", orderHandler.UpdateCartItem)
-		r.Delete("/api/v1/cart/items/{id}", orderHandler.DeleteCartItem)
+			// Orders (buyer)
+			r.Get("/api/v1/orders", orderHandler.GetOrders)
+			r.Get("/api/v1/orders/{id}", orderHandler.GetOrder)
+			r.Get("/api/v1/orders/{id}/items", orderHandler.GetOrderItems)
+			r.Post("/api/v1/orders", orderHandler.Checkout)
+			r.Post("/api/v1/orders/{id}/pay", orderHandler.PayOrder)
+			r.Post("/api/v1/orders/{id}/cancel", orderHandler.CancelOrder)
 
-		// Orders
-		r.Get("/api/v1/orders", orderHandler.GetOrders)
-		r.Get("/api/v1/orders/{id}", orderHandler.GetOrder)
-		r.Get("/api/v1/orders/{id}/items", orderHandler.GetOrderItems)
-		r.Post("/api/v1/orders", orderHandler.Checkout)
-		r.Post("/api/v1/orders/{id}/pay", orderHandler.PayOrder)
-		r.Post("/api/v1/orders/{id}/cancel", orderHandler.CancelOrder)
-		r.Post("/api/v1/orders/{id}/ship", orderHandler.ShipOrder)
-		r.Post("/api/v1/orders/{id}/deliver", orderHandler.DeliverOrder)
+			// Reviews
+			r.Post("/api/v1/reviews", reviewHandler.CreateReview)
+			r.Patch("/api/v1/reviews/{id}", reviewHandler.UpdateReview)
+			r.Delete("/api/v1/reviews/{id}", reviewHandler.DeleteReview)
+		})
 
-		// Reviews
-		r.Post("/api/v1/reviews", reviewHandler.CreateReview)
-		r.Patch("/api/v1/reviews/{id}", reviewHandler.UpdateReview)
-		r.Delete("/api/v1/reviews/{id}", reviewHandler.DeleteReview)
+		// Seller only
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRole(model.RoleSeller))
+
+			// Sellers
+			r.Post("/api/v1/sellers", sellerHandler.CreateSeller)
+			r.Patch("/api/v1/sellers/{id}", sellerHandler.UpdateSeller)
+			r.Delete("/api/v1/sellers/{id}", sellerHandler.DeleteSeller)
+			r.Get("/api/v1/sellers/me/orders", sellerHandler.GetSellerOrders)
+
+			// Products (seller creates/updates/deletes)
+			r.Post("/api/v1/products", productHandler.CreateProduct)
+			r.Patch("/api/v1/products/{id}", productHandler.UpdateProduct)
+			r.Delete("/api/v1/products/{id}", productHandler.DeleteProduct)
+
+			// Orders (seller)
+			r.Post("/api/v1/orders/{id}/ship", orderHandler.ShipOrder)
+			r.Post("/api/v1/orders/{id}/deliver", orderHandler.DeliverOrder)
+		})
 
 		// Admin only
 		r.Group(func(r chi.Router) {

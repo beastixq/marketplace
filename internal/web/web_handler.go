@@ -13,6 +13,7 @@ import (
 
 	"github.com/beastixq/marketplace/internal/model"
 	"github.com/beastixq/marketplace/internal/service"
+	"github.com/beastixq/marketplace/internal/validators"
 	"github.com/go-chi/chi/v5"
 	"github.com/shopspring/decimal"
 )
@@ -318,6 +319,36 @@ func (wh *WebHandler) RegisterSubmit(w http.ResponseWriter, r *http.Request) {
 	phone := r.FormValue("phone")
 	role := r.FormValue("role")
 
+	renderErr := func(msg string) {
+		wh.render(w, "register", map[string]any{
+			"Email":    email,
+			"FullName": fullName,
+			"Phone":    phone,
+			"Role":     role,
+			"Error":    msg,
+			"User":     nil,
+		})
+	}
+
+	if err := validators.ValidateEmail(email); err != nil {
+		renderErr(err.Error())
+		return
+	}
+	if err := validators.ValidateFullName(fullName); err != nil {
+		renderErr(err.Error())
+		return
+	}
+	if err := validators.ValidatePassword(password); err != nil {
+		renderErr(err.Error())
+		return
+	}
+	if phone != "" {
+		if err := validators.ValidatePhone(phone); err != nil {
+			renderErr(err.Error())
+			return
+		}
+	}
+
 	uc := model.UserCreate{
 		Email:    email,
 		FullName: fullName,
@@ -398,12 +429,42 @@ func (wh *WebHandler) ProfileUpdate(w http.ResponseWriter, r *http.Request) {
 
 	update := model.UserUpdate{}
 	if fullName != "" {
+		if err := validators.ValidateFullName(fullName); err != nil {
+			u, _ := wh.userService.GetUserByID(r.Context(), user.UserID)
+			wh.render(w, "profile", map[string]any{
+				"User":    user,
+				"Profile": u,
+				"Error":   err.Error(),
+				"Success": "",
+			})
+			return
+		}
 		update.FullName = &fullName
 	}
 	if email != "" {
+		if err := validators.ValidateEmail(email); err != nil {
+			u, _ := wh.userService.GetUserByID(r.Context(), user.UserID)
+			wh.render(w, "profile", map[string]any{
+				"User":    user,
+				"Profile": u,
+				"Error":   err.Error(),
+				"Success": "",
+			})
+			return
+		}
 		update.Email = &email
 	}
 	if phone != "" {
+		if err := validators.ValidatePhone(phone); err != nil {
+			u, _ := wh.userService.GetUserByID(r.Context(), user.UserID)
+			wh.render(w, "profile", map[string]any{
+				"User":    user,
+				"Profile": u,
+				"Error":   err.Error(),
+				"Success": "",
+			})
+			return
+		}
 		update.Phone = &phone
 	}
 

@@ -103,9 +103,9 @@ func (ph ProductHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	products := make([]Product, len(productsService))
+	products := make([]ProductDTO, len(productsService))
 	for i, productService := range productsService {
-		products[i] = productFromService(productService)
+		products[i] = productDTO(productService)
 	}
 	writeJSON(w, http.StatusOK, products)
 }
@@ -126,7 +126,7 @@ func (ph ProductHandler) GetProduct(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, productFromService(product))
+	writeJSON(w, http.StatusOK, productDTO(product))
 }
 
 // GET /api/v1/products/:id/price-history
@@ -170,9 +170,9 @@ func (ph ProductHandler) GetProductPriceHistory(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	priceHistory := make([]ProductPriceHistory, len(priceHistoryService))
+	priceHistory := make([]ProductPriceHistoryDTO, len(priceHistoryService))
 	for i := range priceHistory {
-		priceHistory[i] = productPriceHistoryFromService(priceHistoryService[i])
+		priceHistory[i] = productPriceHistoryDTO(priceHistoryService[i])
 	}
 	writeJSON(w, http.StatusOK, priceHistory)
 }
@@ -218,9 +218,9 @@ func (ph ProductHandler) GetProductReviews(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	reviews := make([]Review, len(reviewsService))
+	reviews := make([]ReviewDTO, len(reviewsService))
 	for i := range reviews {
-		reviews[i] = reviewFromService(reviewsService[i])
+		reviews[i] = reviewDTO(reviewsService[i])
 	}
 	writeJSON(w, http.StatusOK, reviews)
 }
@@ -350,7 +350,7 @@ func (ph ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, productFromService(product))
+	writeJSON(w, http.StatusOK, productDTO(product))
 }
 
 // DELETE /api/v1/products/:id

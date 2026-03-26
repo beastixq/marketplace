@@ -12,5 +12,7 @@ todo.md
 requests.http
 .playwright-mcp
 docs/
+.vscode
+problems.md
 
 internal/mocks
