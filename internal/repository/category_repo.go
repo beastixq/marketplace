@@ -30,7 +30,7 @@ func (cr CategoryRepoImpl) GetCategories(ctx context.Context, opts m.PaginationO
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	rows, err := cr.pool.Query(ctx, sql, args...)
+	rows, err := getConn(ctx, cr.pool).Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
 	}
@@ -58,7 +58,7 @@ func (cr CategoryRepoImpl) GetCategoryByID(ctx context.Context, id int64) (c m.C
 	if err != nil {
 		return m.Category{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := cr.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, cr.pool).QueryRow(ctx, sql, args...)
 	var crow categoryRow
 	if err = row.Scan(&crow.ID, &crow.ParentID, &crow.Name, &crow.Description); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -79,7 +79,7 @@ func (cr CategoryRepoImpl) CreateCategory(ctx context.Context, cc m.CategoryCrea
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := cr.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, cr.pool).QueryRow(ctx, sql, args...)
 	if err = row.Scan(&id); err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
@@ -106,7 +106,7 @@ func (cr CategoryRepoImpl) UpdateCategory(ctx context.Context, id int64, cu m.Ca
 	if err != nil {
 		return m.Category{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := cr.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, cr.pool).QueryRow(ctx, sql, args...)
 	var crow categoryRow
 	if err = row.Scan(&crow.ID, &crow.ParentID, &crow.Name, &crow.Description); err != nil {
 		return m.Category{}, fmt.Errorf("%w: %v", ErrToScan, err)
@@ -120,7 +120,7 @@ func (cr CategoryRepoImpl) DeleteCategoryByID(ctx context.Context, id int64) (er
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	if _, err = cr.pool.Exec(ctx, sql, args...); err != nil {
+	if _, err = getConn(ctx, cr.pool).Exec(ctx, sql, args...); err != nil {
 		return fmt.Errorf("%w: %v", ErrExec, err)
 	}
 	return nil

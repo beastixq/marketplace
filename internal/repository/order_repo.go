@@ -27,7 +27,7 @@ func (or OrderRepoImpl) GetOrderByID(ctx context.Context, id int64) (o m.Order, 
 	if err != nil {
 		return m.Order{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := or.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, or.pool).QueryRow(ctx, sql, args...)
 	var order orderRow
 	if err = row.Scan(&order.ID, &order.UserID, &order.AddressID, &order.SellerID, &order.Status, &order.TotalAmount, &order.CreatedAt, &order.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -44,7 +44,7 @@ func (or OrderRepoImpl) GetOrdersByUserID(ctx context.Context, userID int64) (or
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	rows, err := or.pool.Query(ctx, sql, args...)
+	rows, err := getConn(ctx, or.pool).Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
 	}
@@ -70,7 +70,7 @@ func (or OrderRepoImpl) CreateOrder(ctx context.Context, oc m.OrderCreate) (id i
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := or.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, or.pool).QueryRow(ctx, sql, args...)
 	if err = row.Scan(&id); err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
@@ -101,7 +101,7 @@ func (or OrderRepoImpl) UpdateOrder(ctx context.Context, id int64, ou m.OrderUpd
 	if err != nil {
 		return m.Order{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := or.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, or.pool).QueryRow(ctx, sql, args...)
 	var order orderRow
 	if err = row.Scan(&order.ID, &order.UserID, &order.AddressID, &order.SellerID, &order.Status, &order.TotalAmount, &order.CreatedAt, &order.UpdatedAt); err != nil {
 		return m.Order{}, fmt.Errorf("%w: %v", ErrToScan, err)
@@ -118,7 +118,7 @@ func (or OrderRepoImpl) DeleteOrderByID(ctx context.Context, id int64) (err erro
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	if _, err = or.pool.Exec(ctx, sql, args...); err != nil {
+	if _, err = getConn(ctx, or.pool).Exec(ctx, sql, args...); err != nil {
 		return fmt.Errorf("%w: %v", ErrExec, err)
 	}
 	return nil
@@ -138,7 +138,7 @@ func (or OrderRepoImpl) GetSellerOrdersBySellerID(ctx context.Context, sellerID 
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	rows, err := or.pool.Query(ctx, sql, args...)
+	rows, err := getConn(ctx, or.pool).Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
 	}

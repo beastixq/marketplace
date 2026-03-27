@@ -26,7 +26,7 @@ func (ar AddressRepoImpl) GetAddressByID(ctx context.Context, id int64) (a m.Add
 	if err != nil {
 		return m.Address{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := ar.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, ar.pool).QueryRow(ctx, sql, args...)
 	var address addressRow
 	if err = row.Scan(&address.ID, &address.UserID, &address.City, &address.Street, &address.ZipCode, &address.IsDefault, &address.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -43,7 +43,7 @@ func (ar AddressRepoImpl) GetAddressesByUserID(ctx context.Context, userID int64
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	rows, err := ar.pool.Query(ctx, sql, args...)
+	rows, err := getConn(ctx, ar.pool).Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
 	}
@@ -73,7 +73,7 @@ func (ar AddressRepoImpl) CreateAddress(ctx context.Context, ac m.AddressCreate)
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := ar.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, ar.pool).QueryRow(ctx, sql, args...)
 	if err = row.Scan(&id); err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
@@ -107,7 +107,7 @@ func (ar AddressRepoImpl) UpdateAddress(ctx context.Context, id int64, au m.Addr
 	if err != nil {
 		return m.Address{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := ar.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, ar.pool).QueryRow(ctx, sql, args...)
 	var address addressRow
 	if err = row.Scan(&address.ID, &address.UserID, &address.City, &address.Street, &address.ZipCode, &address.IsDefault, &address.CreatedAt); err != nil {
 		return m.Address{}, fmt.Errorf("%w: %v", ErrToScan, err)
@@ -121,7 +121,7 @@ func (ar AddressRepoImpl) DeleteAddressByID(ctx context.Context, id int64) (err 
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	if _, err = ar.pool.Exec(ctx, sql, args...); err != nil {
+	if _, err = getConn(ctx, ar.pool).Exec(ctx, sql, args...); err != nil {
 		return fmt.Errorf("%w: %v", ErrExec, err)
 	}
 	return nil

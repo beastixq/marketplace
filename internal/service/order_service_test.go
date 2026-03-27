@@ -67,6 +67,12 @@ type MockOrderItemListReturn struct {
 	Error error
 }
 
+type passThroughTxManager struct{}
+
+func (passThroughTxManager) WithTransaction(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
 func newOrderService(ctrl *gomock.Controller) (
 	service.OrderService,
 	*mock_service.MockOrderRepo,
@@ -78,7 +84,7 @@ func newOrderService(ctrl *gomock.Controller) (
 	itemMock := mock_service.NewMockOrderItemRepo(ctrl)
 	productMock := mock_service.NewMockProductGetter(ctrl)
 	sellerMock := mock_service.NewMockSellerGetter(ctrl)
-	svc := service.NewOrderService(orderMock, itemMock, productMock, sellerMock)
+	svc := service.NewOrderService(orderMock, itemMock, productMock, sellerMock, passThroughTxManager{})
 	return svc, orderMock, itemMock, productMock, sellerMock
 }
 
@@ -451,7 +457,6 @@ func TestAddItemToCart(t *testing.T) {
 			Description:     "Success creating new cart",
 			MockGetOrders:   MockOrderListReturn{Orders: []m.Order{}},
 			MockCreateOrder: &MockCreateReturn{ID: someOrderID},
-			MockGetItems:    &emptyItems,
 			MockGetProduct:  &MockProductReturn{Product: productWithStock},
 			MockCreateItem:  &MockCreateReturn{ID: someItemID},
 		},
@@ -463,6 +468,7 @@ func TestAddItemToCart(t *testing.T) {
 		{
 			Description:     "CreateOrder fails when no cart",
 			MockGetOrders:   MockOrderListReturn{Orders: []m.Order{}},
+			MockGetProduct:  &MockProductReturn{Product: productWithStock},
 			MockCreateOrder: &MockCreateReturn{Error: errors.New("db error")},
 			ExpectedErr:     service.ErrCreateOrder,
 		},

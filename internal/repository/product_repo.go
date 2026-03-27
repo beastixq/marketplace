@@ -60,7 +60,7 @@ func (pr ProductRepoImpl) GetProducts(ctx context.Context, options m.CatalogOpti
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	rows, err := pr.pool.Query(ctx, sql, args...)
+	rows, err := getConn(ctx, pr.pool).Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
 	}
@@ -86,7 +86,7 @@ func (pr ProductRepoImpl) GetProductByID(ctx context.Context, id int64) (p m.Pro
 	if err != nil {
 		return m.Product{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := pr.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, pr.pool).QueryRow(ctx, sql, args...)
 	var product productRow
 	if err = row.Scan(&product.ID, &product.SellerID, &product.Name, &product.Description, &product.Price, &product.StockQuantity, &product.CreatedAt, &product.DeletedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -105,7 +105,7 @@ func (pr ProductRepoImpl) GetProductPriceHistory(ctx context.Context, pid int64,
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	rows, err := pr.pool.Query(ctx, sql, args...)
+	rows, err := getConn(ctx, pr.pool).Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
 	}
@@ -131,7 +131,7 @@ func (pr ProductRepoImpl) CreateProduct(ctx context.Context, pc m.ProductCreate)
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := pr.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, pr.pool).QueryRow(ctx, sql, args...)
 	if err = row.Scan(&id); err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
@@ -165,7 +165,7 @@ func (pr ProductRepoImpl) UpdateProduct(ctx context.Context, id int64, pu m.Prod
 	if err != nil {
 		return m.Product{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := pr.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, pr.pool).QueryRow(ctx, sql, args...)
 	var product productRow
 	if err = row.Scan(&product.ID, &product.SellerID, &product.Name, &product.Description, &product.Price, &product.StockQuantity, &product.CreatedAt, &product.DeletedAt); err != nil {
 		return m.Product{}, fmt.Errorf("%w: %v", ErrToScan, err)
@@ -179,7 +179,7 @@ func (pr ProductRepoImpl) DeleteProductByID(ctx context.Context, id int64) (err 
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	if _, err = pr.pool.Exec(ctx, sql, args...); err != nil {
+	if _, err = getConn(ctx, pr.pool).Exec(ctx, sql, args...); err != nil {
 		return fmt.Errorf("%w: %v", ErrExec, err)
 	}
 	return nil

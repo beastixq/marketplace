@@ -28,7 +28,7 @@ func (sr SellerRepoImpl) GetSellerByID(ctx context.Context, id int64) (s m.Selle
 	if err != nil {
 		return m.Seller{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := sr.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, sr.pool).QueryRow(ctx, sql, args...)
 	var seller sellerRow
 	if err = row.Scan(&seller.ID, &seller.UserID, &seller.CompanyName, &seller.Description, &seller.Rating, &seller.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -45,7 +45,7 @@ func (sr SellerRepoImpl) GetSellerByUserID(ctx context.Context, userID int64) (s
 	if err != nil {
 		return m.Seller{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := sr.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, sr.pool).QueryRow(ctx, sql, args...)
 	var seller sellerRow
 	if err = row.Scan(&seller.ID, &seller.UserID, &seller.CompanyName, &seller.Description, &seller.Rating, &seller.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -58,7 +58,7 @@ func (sr SellerRepoImpl) GetSellerByUserID(ctx context.Context, userID int64) (s
 
 func (sr SellerRepoImpl) GetSellerStats(ctx context.Context, sellerID int64, dateFrom time.Time, dateTo time.Time) (ss m.SellerStats, err error) {
 	sql := "SELECT total_orders, total_revenue, avg_order_value, top_product_name FROM get_seller_statistics($1, $2, $3)"
-	row := sr.pool.QueryRow(ctx, sql, sellerID, dateFrom, dateTo)
+	row := getConn(ctx, sr.pool).QueryRow(ctx, sql, sellerID, dateFrom, dateTo)
 	var ssrow sellerStatsRow
 	if err = row.Scan(&ssrow.TotalOrders, &ssrow.TotalRevenue, &ssrow.AvgOrderValue, &ssrow.TopProductName); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -80,7 +80,7 @@ func (sr SellerRepoImpl) CreateSeller(ctx context.Context, sc m.SellerCreate) (i
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := sr.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, sr.pool).QueryRow(ctx, sql, args...)
 	if err = row.Scan(&id); err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
@@ -111,7 +111,7 @@ func (sr SellerRepoImpl) UpdateSeller(ctx context.Context, id int64, su m.Seller
 	if err != nil {
 		return m.Seller{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := sr.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, sr.pool).QueryRow(ctx, sql, args...)
 	var seller sellerRow
 	if err = row.Scan(&seller.ID, &seller.UserID, &seller.CompanyName, &seller.Description, &seller.Rating, &seller.CreatedAt); err != nil {
 		return m.Seller{}, fmt.Errorf("%w: %v", ErrToScan, err)
@@ -125,7 +125,7 @@ func (sr SellerRepoImpl) DeleteSellerByID(ctx context.Context, id int64) (err er
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	if _, err = sr.pool.Exec(ctx, sql, args...); err != nil {
+	if _, err = getConn(ctx, sr.pool).Exec(ctx, sql, args...); err != nil {
 		return fmt.Errorf("%w: %v", ErrExec, err)
 	}
 	return nil

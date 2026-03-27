@@ -30,7 +30,7 @@ func (ur UserRepoImpl) GetUserByID(ctx context.Context, id int64) (u m.User, err
 	if err != nil {
 		return m.User{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := ur.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, ur.pool).QueryRow(ctx, sql, args...)
 	var user userRow
 	if err = row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.FullName, &user.Phone, &user.Role, &user.CreatedAt, &user.DeletedAt); err != nil {
 		return m.User{}, fmt.Errorf("%w: %v", ErrToScan, err)
@@ -44,7 +44,7 @@ func (ur UserRepoImpl) GetUserByEmail(ctx context.Context, email string) (u m.Us
 	if err != nil {
 		return m.User{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := ur.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, ur.pool).QueryRow(ctx, sql, args...)
 	var user userRow
 	if err = row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.FullName, &user.Phone, &user.Role, &user.CreatedAt, &user.DeletedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -66,7 +66,7 @@ func (ur UserRepoImpl) CreateUser(ctx context.Context, uc m.UserCreate) (id int6
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := ur.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, ur.pool).QueryRow(ctx, sql, args...)
 	if err = row.Scan(&id); err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
@@ -97,7 +97,7 @@ func (ur UserRepoImpl) UpdateUser(ctx context.Context, id int64, uu m.UserUpdate
 	if err != nil {
 		return m.User{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := ur.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, ur.pool).QueryRow(ctx, sql, args...)
 	var user userRow
 	if err = row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.FullName, &user.Phone, &user.Role, &user.CreatedAt, &user.DeletedAt); err != nil {
 		return m.User{}, fmt.Errorf("%w: %v", ErrToScan, err)
@@ -111,7 +111,7 @@ func (ur UserRepoImpl) ChangePasswordUser(ctx context.Context, id int64, newPass
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	if _, err = ur.pool.Exec(ctx, sql, args...); err != nil {
+	if _, err = getConn(ctx, ur.pool).Exec(ctx, sql, args...); err != nil {
 		return fmt.Errorf("%w: %v", ErrExec, err)
 	}
 	return nil
@@ -123,7 +123,7 @@ func (ur UserRepoImpl) DeleteUserByID(ctx context.Context, id int64) (err error)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	if _, err = ur.pool.Exec(ctx, sql, args...); err != nil {
+	if _, err = getConn(ctx, ur.pool).Exec(ctx, sql, args...); err != nil {
 		return fmt.Errorf("%w: %v", ErrExec, err)
 	}
 	return nil

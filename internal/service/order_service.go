@@ -44,10 +44,11 @@ type OrderService struct {
 	orderItemRepo OrderItemRepo
 	productGetter ProductGetter
 	sellerGetter  SellerGetter
+	txManager     TxManager
 }
 
-func NewOrderService(or OrderRepo, oir OrderItemRepo, pr ProductGetter, sr SellerGetter) OrderService {
-	return OrderService{orderRepo: or, orderItemRepo: oir, productGetter: pr, sellerGetter: sr}
+func NewOrderService(or OrderRepo, oir OrderItemRepo, pr ProductGetter, sr SellerGetter, tx TxManager) OrderService {
+	return OrderService{orderRepo: or, orderItemRepo: oir, productGetter: pr, sellerGetter: sr, txManager: tx}
 }
 
 func (os OrderService) GetOrderByID(ctx context.Context, orderID int64) (order m.Order, err error) {
@@ -131,33 +132,22 @@ func (os OrderService) GetCart(ctx context.Context, userID int64) (order m.Order
 	return cart, nil
 }
 
-func (os OrderService) AddItemToCart(ctx context.Context, userID int64, productID int64, quantity int) (err error) {
+func (os OrderService) AddItemToCart(ctx context.Context, userID int64, productID int64, quantity int) error {
 	var cartOrderID int64
 	cartOrder, err := os.GetCart(ctx, userID)
-	if err != nil {
-		if !errors.Is(err, ErrCartNotFound) {
-			return fmt.Errorf("%w: %v", ErrGetCart, err)
-		}
-		cartOrderID, err = os.orderRepo.CreateOrder(ctx, m.OrderCreate{
-			UserID:      userID,
-			Status:      m.StatusDraft,
-			TotalAmount: decimal.Zero,
-		})
-		if err != nil {
-			return fmt.Errorf("%w: %v", ErrCreateOrder, err)
-		}
+	if err != nil && !errors.Is(err, ErrCartNotFound) {
+		return fmt.Errorf("%w: %v", ErrGetCart, err)
 	}
-	if cartOrderID == 0 {
+	if err == nil {
 		cartOrderID = cartOrder.ID
-	}
-
-	existingItems, err := os.orderItemRepo.GetOrderItemsByOrderID(ctx, cartOrderID)
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
-	}
-	for _, item := range existingItems {
-		if item.ProductID == productID {
-			return ErrProductAlreadyInCart
+		existingItems, err := os.orderItemRepo.GetOrderItemsByOrderID(ctx, cartOrderID)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
+		}
+		for _, item := range existingItems {
+			if item.ProductID == productID {
+				return ErrProductAlreadyInCart
+			}
 		}
 	}
 
@@ -172,16 +162,28 @@ func (os OrderService) AddItemToCart(ctx context.Context, userID int64, productI
 		return ErrQuantityTooBig
 	}
 
-	_, err = os.orderItemRepo.CreateOrderItem(ctx, m.OrderItemCreate{
-		OrderID:         cartOrderID,
-		ProductID:       productID,
-		Quantity:        quantity,
-		PriceAtPurchase: product.Price,
+	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
+		if cartOrderID == 0 {
+			cartOrderID, err = os.orderRepo.CreateOrder(ctx, m.OrderCreate{
+				UserID:      userID,
+				Status:      m.StatusDraft,
+				TotalAmount: decimal.Zero,
+			})
+			if err != nil {
+				return fmt.Errorf("%w: %v", ErrCreateOrder, err)
+			}
+		}
+		_, err = os.orderItemRepo.CreateOrderItem(ctx, m.OrderItemCreate{
+			OrderID:         cartOrderID,
+			ProductID:       productID,
+			Quantity:        quantity,
+			PriceAtPurchase: product.Price,
+		})
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrCreateOrderItem, err)
+		}
+		return nil
 	})
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrCreateOrderItem, err)
-	}
-	return nil
 }
 
 func (os OrderService) ChangeQuantityCartItem(ctx context.Context, itemID int64, quantity int) (err error) {
@@ -217,11 +219,10 @@ func (os OrderService) DeleteCartItem(ctx context.Context, itemID int64) (err er
 	return nil
 }
 
-// TODO: 1. N+1 products read -> less reads
+// TODO: 1. N+1 products read. make less reads
 // 2. think about price at purchase. it item was added long ago and now it
 // has new price -> create with updated
-// 3. delete draft order items before actual order delete (on delete restrict)
-// 3. or think about cascade delete
+// 3. or think about cascade delete (already cascade order items delete on order delete. changed table FK constraint)
 func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int64) (orderIDs []int64, err error) {
 	cart, err := os.GetCart(ctx, userID)
 	if err != nil {
@@ -251,43 +252,48 @@ func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int
 		itemsBySellerIDs[product.SellerID] = append(itemsBySellerIDs[product.SellerID], item)
 	}
 
-	createdOrdersIDs := make([]int64, 0, len(itemsBySellerIDs))
-	for sellerID, sellerItems := range itemsBySellerIDs {
-		totalAmount := decimal.Zero
-		for _, item := range sellerItems {
-			totalAmount = totalAmount.Add(item.PriceAtPurchase.Mul(decimal.NewFromInt(int64(item.Quantity))))
-		}
+	var createdOrdersIDs []int64
+	err = os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
+		createdOrdersIDs = make([]int64, 0, len(itemsBySellerIDs))
+		for sellerID, sellerItems := range itemsBySellerIDs {
+			totalAmount := decimal.Zero
+			for _, item := range sellerItems {
+				totalAmount = totalAmount.Add(item.PriceAtPurchase.Mul(decimal.NewFromInt(int64(item.Quantity))))
+			}
 
-		orderID, err := os.orderRepo.CreateOrder(ctx, m.OrderCreate{
-			UserID:      userID,
-			AddressID:   &addressID,
-			SellerID:    &sellerID,
-			Status:      m.StatusPending,
-			TotalAmount: totalAmount,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrCreateOrder, err)
-		}
-
-		for _, item := range sellerItems {
-			_, err = os.orderItemRepo.CreateOrderItem(ctx, m.OrderItemCreate{
-				OrderID:         orderID,
-				ProductID:       item.ProductID,
-				Quantity:        item.Quantity,
-				PriceAtPurchase: item.PriceAtPurchase,
+			orderID, err := os.orderRepo.CreateOrder(ctx, m.OrderCreate{
+				UserID:      userID,
+				AddressID:   &addressID,
+				SellerID:    &sellerID,
+				Status:      m.StatusPending,
+				TotalAmount: totalAmount,
 			})
 			if err != nil {
-				return nil, fmt.Errorf("%w: %v", ErrCreateOrderItem, err)
+				return fmt.Errorf("%w: %v", ErrCreateOrder, err)
 			}
+
+			for _, item := range sellerItems {
+				_, err = os.orderItemRepo.CreateOrderItem(ctx, m.OrderItemCreate{
+					OrderID:         orderID,
+					ProductID:       item.ProductID,
+					Quantity:        item.Quantity,
+					PriceAtPurchase: item.PriceAtPurchase,
+				})
+				if err != nil {
+					return fmt.Errorf("%w: %v", ErrCreateOrderItem, err)
+				}
+			}
+			createdOrdersIDs = append(createdOrdersIDs, orderID)
 		}
 
-		createdOrdersIDs = append(createdOrdersIDs, orderID)
+		if err := os.orderRepo.DeleteOrderByID(ctx, cart.ID); err != nil {
+			return fmt.Errorf("%w: %v", ErrDeleteOrderByID, err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	if err = os.orderRepo.DeleteOrderByID(ctx, cart.ID); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrDeleteOrderByID, err)
-	}
-
 	return createdOrdersIDs, nil
 }
 

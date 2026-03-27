@@ -27,7 +27,7 @@ func (oir OrderItemRepoImpl) GetOrderItemByID(ctx context.Context, id int64) (oi
 	if err != nil {
 		return m.OrderItem{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := oir.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, oir.pool).QueryRow(ctx, sql, args...)
 	var ordItem orderItemRow
 	if err = row.Scan(&ordItem.ID, &ordItem.OrderID, &ordItem.ProductID, &ordItem.Quantity, &ordItem.PriceAtPurchase); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -44,7 +44,7 @@ func (oir OrderItemRepoImpl) GetOrderItemsByOrderID(ctx context.Context, orderID
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	rows, err := oir.pool.Query(ctx, sql, args...)
+	rows, err := getConn(ctx, oir.pool).Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
 	}
@@ -70,7 +70,7 @@ func (oir OrderItemRepoImpl) CreateOrderItem(ctx context.Context, oic m.OrderIte
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := oir.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, oir.pool).QueryRow(ctx, sql, args...)
 	if err = row.Scan(&id); err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
@@ -101,7 +101,7 @@ func (oir OrderItemRepoImpl) UpdateOrderItem(ctx context.Context, id int64, oiu 
 	if err != nil {
 		return m.OrderItem{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := oir.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, oir.pool).QueryRow(ctx, sql, args...)
 	var ordItem orderItemRow
 	if err = row.Scan(&ordItem.ID, &ordItem.OrderID, &ordItem.ProductID, &ordItem.Quantity, &ordItem.PriceAtPurchase); err != nil {
 		return m.OrderItem{}, fmt.Errorf("%w: %v", ErrToScan, err)
@@ -115,7 +115,7 @@ func (oir OrderItemRepoImpl) DeleteOrderItemByID(ctx context.Context, id int64) 
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	if _, err = oir.pool.Exec(ctx, sql, args...); err != nil {
+	if _, err = getConn(ctx, oir.pool).Exec(ctx, sql, args...); err != nil {
 		return fmt.Errorf("%w: %v", ErrExec, err)
 	}
 	return nil

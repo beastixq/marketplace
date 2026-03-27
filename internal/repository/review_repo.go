@@ -27,7 +27,7 @@ func (rr ReviewRepoImpl) GetReviewByID(ctx context.Context, id int64) (r m.Revie
 	if err != nil {
 		return m.Review{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := rr.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, rr.pool).QueryRow(ctx, sql, args...)
 	var review reviewRow
 	if err = row.Scan(&review.ID, &review.UserID, &review.ProductID, &review.Rating, &review.Comment, &review.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -46,7 +46,7 @@ func (rr ReviewRepoImpl) GetReviewsByProductID(ctx context.Context, pid int64, o
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	rows, err := rr.pool.Query(ctx, sql, args...)
+	rows, err := getConn(ctx, rr.pool).Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
 	}
@@ -72,7 +72,7 @@ func (rr ReviewRepoImpl) CreateReview(ctx context.Context, rc m.ReviewCreate) (i
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := rr.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, rr.pool).QueryRow(ctx, sql, args...)
 	if err = row.Scan(&id); err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
@@ -97,7 +97,7 @@ func (rr ReviewRepoImpl) UpdateReview(ctx context.Context, id int64, ru m.Review
 	if err != nil {
 		return m.Review{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := rr.pool.QueryRow(ctx, sql, args...)
+	row := getConn(ctx, rr.pool).QueryRow(ctx, sql, args...)
 	var review reviewRow
 	if err = row.Scan(&review.ID, &review.UserID, &review.ProductID, &review.Rating, &review.Comment, &review.CreatedAt); err != nil {
 		return m.Review{}, fmt.Errorf("%w: %v", ErrToScan, err)
@@ -111,7 +111,7 @@ func (rr ReviewRepoImpl) DeleteReviewByID(ctx context.Context, id int64) (err er
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	if _, err = rr.pool.Exec(ctx, sql, args...); err != nil {
+	if _, err = getConn(ctx, rr.pool).Exec(ctx, sql, args...); err != nil {
 		return fmt.Errorf("%w: %v", ErrExec, err)
 	}
 	return nil
