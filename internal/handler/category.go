@@ -21,30 +21,13 @@ func NewCategoryHandler(categorySvc service.CategoryService) CategoryHandler {
 
 // GET /api/v1/categories
 func (ch CategoryHandler) GetCategories(w http.ResponseWriter, r *http.Request) {
-	var opts model.PaginationOpts
-	if r.URL.Query().Has("limit") && !r.URL.Query().Has("page") {
-		writeError(w, http.StatusBadRequest, ErrNoPageInPaginationOptions.Error())
+	pg, err := parsePagination(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
-	}
-	if r.URL.Query().Has("page") && !r.URL.Query().Has("limit") {
-		writeError(w, http.StatusBadRequest, ErrNoLimitInPaginationOptions.Error())
-		return
-	}
-	if r.URL.Query().Has("page") {
-		page, err := strconv.Atoi(r.URL.Query().Get("page"))
-		if err != nil || page <= 0 {
-			writeError(w, http.StatusBadRequest, ErrInvalidPagePaginationOption.Error())
-			return
-		}
-		limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
-		if err != nil || limit <= 0 {
-			writeError(w, http.StatusBadRequest, ErrInvalidLimitPaginationOption.Error())
-			return
-		}
-		opts = model.PaginationOpts{Page: page, Limit: limit}
 	}
 
-	categories, err := ch.categoryService.GetCategories(r.Context(), opts)
+	categories, err := ch.categoryService.GetCategories(r.Context(), pg)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return

@@ -26,8 +26,17 @@ func NewProductHandler(productSvc service.ProductService) ProductHandler {
 // GET /api/v1/products - get catalog
 func (ph ProductHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 
-	var minPrice, maxPrice *decimal.Decimal
+	pg, err := parsePagination(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	var paginationOpts *model.PaginationOpts
+	if pg.Page > 0 {
+		paginationOpts = &pg
+	}
+
+	var minPrice, maxPrice *decimal.Decimal
 	var filterName *string
 	var sortingOrder *model.SortingOrderType
 	if r.URL.Query().Has("min_price") {
@@ -53,28 +62,6 @@ func (ph ProductHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 	fn := r.URL.Query().Get("filter_name")
 	if fn != "" {
 		filterName = &fn
-	}
-	if r.URL.Query().Has("limit") && !r.URL.Query().Has("page") {
-		writeError(w, http.StatusBadRequest, ErrNoPageInPaginationOptions.Error())
-		return
-	}
-	if r.URL.Query().Has("page") {
-		if !r.URL.Query().Has("limit") {
-			writeError(w, http.StatusBadRequest, ErrNoLimitInPaginationOptions.Error())
-			return
-		}
-		page, err := strconv.Atoi(r.URL.Query().Get("page"))
-		if err != nil || page <= 0 {
-			writeError(w, http.StatusBadRequest, ErrInvalidPagePaginationOption.Error())
-			return
-		}
-		limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
-		if err != nil || limit <= 0 {
-			writeError(w, http.StatusBadRequest, ErrInvalidLimitPaginationOption.Error())
-			return
-		}
-		p := model.PaginationOpts{Page: page, Limit: limit}
-		paginationOpts = &p
 	}
 	so := model.SortingOrderType(r.URL.Query().Get("sorting_order"))
 	if so != "" && !slices.Contains([]model.SortingOrderType{model.SortingOrderAsc, model.SortingOrderDesc}, so) {
@@ -185,31 +172,13 @@ func (ph ProductHandler) GetProductReviews(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if r.URL.Query().Has("limit") && !r.URL.Query().Has("page") {
-		writeError(w, http.StatusBadRequest, ErrNoPageInPaginationOptions.Error())
-		return
-	}
-	if r.URL.Query().Has("page") && !r.URL.Query().Has("limit") {
-		writeError(w, http.StatusBadRequest, ErrNoLimitInPaginationOptions.Error())
+	pg, err := parsePagination(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	var opts model.PaginationOpts
-	if r.URL.Query().Has("page") {
-		page, err := strconv.Atoi(r.URL.Query().Get("page"))
-		if err != nil || page <= 0 {
-			writeError(w, http.StatusBadRequest, ErrInvalidPagePaginationOption.Error())
-			return
-		}
-		limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
-		if err != nil || limit <= 0 {
-			writeError(w, http.StatusBadRequest, ErrInvalidLimitPaginationOption.Error())
-			return
-		}
-		opts = model.PaginationOpts{Page: page, Limit: limit}
-	}
-
-	reviewsService, err := ph.productService.GetReviewsByProductID(r.Context(), id, opts)
+	reviewsService, err := ph.productService.GetReviewsByProductID(r.Context(), id, pg)
 	if err != nil {
 		if errors.Is(err, service.ErrProductNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrProductNotFound.Error())
