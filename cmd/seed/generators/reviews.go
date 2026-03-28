@@ -36,36 +36,61 @@ var fakerReviewTemplates = []string{
 }
 
 func CreateReviews(tx pgx.Tx, ctx context.Context, buyerIDs, productsIDs []int64, count int) error {
-	psql := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
-	insertBuilder := psql.Insert("reviews").Columns("user_id", "product_id", "rating", "comment")
-	createdInLoop := 0
-	created := 0
+	// Pre-generate unique (buyer, product) pairs by assigning
+	// each buyer a shuffled slice of product indices.
+	// This guarantees uniqueness without retries.
+	maxPossible := len(buyerIDs) * len(productsIDs)
+	if count > maxPossible {
+		count = maxPossible
+	}
 
-	seen := make(map[[2]int64]bool)
+	// Build all possible pairs by giving each buyer random products
+	type pair struct {
+		userID    int64
+		productID int64
+	}
+	pairs := make([]pair, 0, count)
 
-	for created < count {
-		userID := buyerIDs[rand.Intn(len(buyerIDs))]
-		productID := productsIDs[rand.Intn(len(productsIDs))]
-		key := [2]int64{userID, productID}
-		if seen[key] {
+	// How many reviews per buyer (spread evenly, remainder distributed)
+	perBuyer := count / len(buyerIDs)
+	remainder := count % len(buyerIDs)
+
+	for i, buyerID := range buyerIDs {
+		n := perBuyer
+		if i < remainder {
+			n++
+		}
+		if n == 0 {
 			continue
 		}
-		seen[key] = true
+		// Shuffle product indices and take first n
+		perm := rand.Perm(len(productsIDs))
+		for j := 0; j < n; j++ {
+			pairs = append(pairs, pair{buyerID, productsIDs[perm[j]]})
+		}
+	}
 
+	// Shuffle pairs so inserts aren't grouped by buyer
+	rand.Shuffle(len(pairs), func(i, j int) { pairs[i], pairs[j] = pairs[j], pairs[i] })
+
+	const batchSize = 500
+	psql := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
+	insertBuilder := psql.Insert("reviews").Columns("user_id", "product_id", "rating", "comment")
+	inBatch := 0
+
+	for i, p := range pairs {
 		rating := rand.Intn(5) + 1
-
 		var comment string
-		if created < len(realReviewComments) {
-			comment = realReviewComments[created]
+		if i < len(realReviewComments) {
+			comment = realReviewComments[i]
 		} else {
 			comment = fakerReviewTemplates[rand.Intn(len(fakerReviewTemplates))]
 		}
 
-		insertBuilder = insertBuilder.Values(userID, productID, rating, comment)
-		createdInLoop++
-		created++
+		insertBuilder = insertBuilder.Values(p.userID, p.productID, rating, comment)
+		inBatch++
 
-		if createdInLoop%10 == 0 || created == count {
+		if inBatch >= batchSize || i == len(pairs)-1 {
 			sql, args, err := insertBuilder.ToSql()
 			if err != nil {
 				return fmt.Errorf("Reviews %s: %v", ErrToSql, err)
@@ -75,7 +100,7 @@ func CreateReviews(tx pgx.Tx, ctx context.Context, buyerIDs, productsIDs []int64
 				return fmt.Errorf("Reviews %s: %v", ErrQuery, err)
 			}
 			insertBuilder = psql.Insert("reviews").Columns("user_id", "product_id", "rating", "comment")
-			createdInLoop = 0
+			inBatch = 0
 		}
 	}
 	return nil

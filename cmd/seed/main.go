@@ -18,16 +18,17 @@ import (
 
 func main() {
 	const (
-		adminsCount     = 100
-		analystsCount   = 100
-		buyersCount     = 1000
-		sellersCount    = 1000
-		categoriesCount = 1000
-		productsCount   = 5000
-		addressesCount  = 2000
-		ordersCount     = 1000
-		orderItemsCount = 3000
-		reviewsCount    = 2500
+		adminsCount       = 100
+		analystsCount     = 100
+		buyersCount       = 1000
+		sellersCount      = 1000
+		categoriesCount   = 1000
+		productsCount     = 5000
+		addressesCount    = 2000
+		ordersCount       = 1000
+		orderItemsCount   = 3000
+		reviewsCount      = 50000
+		priceHistoryCount = 25000
 	)
 
 	log.Println("Start seeding...")
@@ -39,10 +40,10 @@ func main() {
 	defer pool.Close()
 	log.Println("Pool created!")
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*1)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*3)
 	defer cancel()
 
-	rbCtx, rbCancel := context.WithTimeout(context.Background(), time.Minute*1)
+	rbCtx, rbCancel := context.WithTimeout(context.Background(), time.Minute*3)
 	defer rbCancel()
 
 	tx, err := pool.Begin(ctx)
@@ -135,6 +136,16 @@ func main() {
 		return
 	}
 	log.Println("Reviews created")
+	// Price History
+	log.Printf("Start creating %d price history records...\n", priceHistoryCount)
+	priceHistoryFrom := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	priceHistoryTo := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	err = generators.CreatePriceHistory(tx, ctx, productsIDs, priceHistoryCount, priceHistoryFrom, priceHistoryTo)
+	if err != nil {
+		log.Printf("Failed on CreatePriceHistory: %v\n", err)
+		return
+	}
+	log.Println("Price history created")
 
 	log.Println("All generators succeeded!")
 	if err = tx.Commit(ctx); err != nil {
