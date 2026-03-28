@@ -18,6 +18,7 @@ func NewWebRouter(wh *WebHandler) http.Handler {
 	r.Get("/", wh.Catalog)
 	r.Get("/products/{id}", wh.ProductDetail)
 	r.Get("/categories", wh.Categories)
+	r.Get("/sellers/{id}", wh.SellerProfile)
 
 	// Auth
 	r.Get("/login", wh.LoginPage)
@@ -30,6 +31,7 @@ func NewWebRouter(wh *WebHandler) http.Handler {
 	r.Get("/profile", wh.Profile)
 	r.Post("/profile", wh.ProfileUpdate)
 	r.Get("/orders", wh.Orders)
+	r.Get("/orders/{id}", wh.OrderDetail)
 	r.Post("/orders/{id}/pay", wh.OrderPay)
 	r.Post("/orders/{id}/cancel", wh.OrderCancel)
 	r.Get("/cart", wh.Cart)
@@ -46,6 +48,9 @@ func NewWebRouter(wh *WebHandler) http.Handler {
 	// Seller
 	r.Get("/seller", wh.SellerDashboard)
 	r.Post("/seller", wh.SellerCreate)
+	r.Post("/seller/update", wh.SellerUpdate)
+	r.Get("/seller/orders", wh.SellerOrders)
+	r.Get("/seller/products", wh.SellerProducts)
 	r.Post("/seller/products", wh.SellerProductCreate)
 	r.Get("/seller/products/{id}/edit", wh.SellerProductEditPage)
 	r.Post("/seller/products/{id}/edit", wh.SellerProductEditSubmit)

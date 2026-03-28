@@ -1,0 +1,74 @@
+{{define "title"}}Order #{{.Order.ID}}{{end}}
+
+{{define "content"}}
+<div style="margin-bottom: 1rem;">
+    <a href="/orders">&larr; Back to Orders</a>
+</div>
+
+<div class="order-card" style="margin-bottom: 2rem;">
+    <div class="order-card__header">
+        <span class="order-card__id">Order #{{.Order.ID}}</span>
+        <span class="order-card__status order-card__status--{{.Order.Status}}">{{.Order.Status}}</span>
+    </div>
+    <div class="order-card__details">
+        <span>Created: {{.Order.CreatedAt.Format "02.01.2006 15:04"}}</span>
+    </div>
+    <div class="order-card__actions">
+        {{if eq (printf "%s" .Order.Status) "pending"}}
+            <form method="POST" action="/orders/{{.Order.ID}}/pay" style="display:inline">
+                <button type="submit" class="btn btn--primary btn--sm">Pay</button>
+            </form>
+            <form method="POST" action="/orders/{{.Order.ID}}/cancel" style="display:inline">
+                <button type="submit" class="btn btn--danger btn--sm">Cancel</button>
+            </form>
+        {{end}}
+        {{if eq (printf "%s" .Order.Status) "paid"}}
+            <form method="POST" action="/orders/{{.Order.ID}}/cancel" style="display:inline">
+                <button type="submit" class="btn btn--danger btn--sm">Cancel</button>
+            </form>
+        {{end}}
+    </div>
+</div>
+
+{{if .Seller}}
+<div style="margin-bottom: 1.5rem;">
+    <strong>Seller:</strong> <a href="/sellers/{{.Seller.ID}}">{{.Seller.CompanyName}}</a>
+</div>
+{{end}}
+
+{{if .Address}}
+<div style="margin-bottom: 1.5rem;">
+    <strong>Delivery:</strong> {{.Address.City}}, {{.Address.Street}}, {{.Address.ZipCode}}
+</div>
+{{end}}
+
+<h2 style="margin-bottom: 1rem;">Items</h2>
+{{if .Items}}
+<table style="width:100%; border-collapse:collapse; margin-bottom: 1.5rem;">
+    <thead>
+        <tr style="border-bottom: 2px solid var(--border); text-align:left;">
+            <th style="padding: 0.5rem;">Product</th>
+            <th style="padding: 0.5rem;">Price</th>
+            <th style="padding: 0.5rem;">Qty</th>
+            <th style="padding: 0.5rem; text-align:right;">Subtotal</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Items}}
+        <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 0.5rem;"><a href="/products/{{.ProductID}}">{{.ProductName}}</a></td>
+            <td style="padding: 0.5rem;">{{.PriceAtPurchase}} &#8381;</td>
+            <td style="padding: 0.5rem;">{{.Quantity}}</td>
+            <td style="padding: 0.5rem; text-align:right;">{{.TotalPrice}} &#8381;</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{else}}
+<div class="empty-state">No items in this order.</div>
+{{end}}
+
+<div style="text-align:right; font-size: 1.2rem; font-weight: 700;">
+    Total: {{.Order.TotalAmount}} &#8381;
+</div>
+{{end}}

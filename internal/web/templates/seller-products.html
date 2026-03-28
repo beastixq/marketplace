@@ -1,0 +1,60 @@
+{{define "title"}}Seller Products{{end}}
+
+{{define "content"}}
+<h1 style="margin-bottom: 1.5rem;">Seller Dashboard</h1>
+
+<div style="display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border);">
+    <a href="/seller" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-muted);">Profile</a>
+    <a href="/seller/orders" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-muted);">Orders</a>
+    <a href="/seller/products" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid var(--primary); margin-bottom: -2px; color: var(--primary);">Products</a>
+</div>
+
+<div class="form-card" style="margin-bottom: 2rem;">
+    <h2>Add New Product</h2>
+    <form method="POST" action="/seller/products">
+        <div class="form-group">
+            <label for="name">Product Name</label>
+            <input type="text" id="name" name="name" required placeholder="iPhone 15 Pro">
+        </div>
+        <div class="form-group">
+            <label for="description">Description (optional)</label>
+            <textarea id="description" name="description" rows="3" placeholder="Product description..."
+                      style="width:100%;padding:0.6rem 0.75rem;border:1px solid var(--border);border-radius:4px;font-size:0.9rem;font-family:inherit;"></textarea>
+        </div>
+        <div class="form-group">
+            <label for="price">Price (RUB)</label>
+            <input type="number" id="price" name="price" required min="0.01" step="0.01" placeholder="999.99">
+        </div>
+        <div class="form-group">
+            <label for="stock_quantity">Stock Quantity</label>
+            <input type="number" id="stock_quantity" name="stock_quantity" required min="0" placeholder="100">
+        </div>
+        <button type="submit" class="btn btn--primary">Add Product</button>
+    </form>
+</div>
+
+<h2 style="margin-bottom: 1rem;">Your Products ({{len .Products}})</h2>
+
+{{if .Products}}
+<div class="product-grid">
+    {{range .Products}}
+    <div class="product-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+            <a href="/products/{{.ID}}" class="product-card__name">{{.Name}}</a>
+            <div class="product-card__price">{{.Price}} &#8381;</div>
+            <div class="product-card__stock">Stock: {{.StockQuantity}}</div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <a href="/seller/products/{{.ID}}/edit" class="btn btn--primary btn--sm" style="color: #fff;">Edit</a>
+            <form method="POST" action="/seller/products/{{.ID}}/delete" style="display:inline"
+                  onsubmit="return confirm('Delete this product?')">
+                <button type="submit" class="btn btn--danger btn--sm">Delete</button>
+            </form>
+        </div>
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="empty-state">No products yet.</div>
+{{end}}
+{{end}}

@@ -3,7 +3,10 @@ package web
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"html/template"
 	"log"
 	"net/http"
@@ -57,7 +60,7 @@ func NewWebHandler(
 	sellerSvc service.SellerService,
 	reviewSvc service.ReviewService,
 ) *WebHandler {
-	pages := []string{"catalog", "product", "login", "register", "categories", "profile", "orders", "cart", "addresses", "seller", "product-edit"}
+	pages := []string{"catalog", "product", "login", "register", "categories", "profile", "orders", "cart", "addresses", "seller", "product-edit", "seller-profile", "order-detail", "seller-orders", "seller-products"}
 	templates := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
 		templates[page] = template.Must(
@@ -248,11 +251,15 @@ func (wh *WebHandler) ProductDetail(w http.ResponseWriter, r *http.Request) {
 
 	reviews, _ := wh.productService.GetReviewsByProductID(r.Context(), id, model.PaginationOpts{Page: 1, Limit: 50})
 
+	seller, _ := wh.sellerService.GetSellerByID(r.Context(), product.SellerID)
+
 	wh.render(w, "product", map[string]any{
 		"Product":      product,
+		"Seller":       seller,
 		"PriceHistory": priceHistory,
 		"Reviews":      reviews,
 		"User":         wh.userFromCookie(r),
+		"Notice":       r.URL.Query().Get("notice"),
 	})
 }
 
@@ -473,10 +480,18 @@ func (wh *WebHandler) ProfileUpdate(w http.ResponseWriter, r *http.Request) {
 	u, _ := wh.userService.GetUserByID(r.Context(), user.UserID)
 
 	if err != nil {
+		errMsg := "Failed to update profile"
+		errStr := err.Error()
+		switch {
+		case strings.Contains(errStr, "users_phone_key"):
+			errMsg = "This phone number is already in use"
+		case strings.Contains(errStr, "users_email_key"):
+			errMsg = "This email is already in use"
+		}
 		wh.render(w, "profile", map[string]any{
 			"User":    user,
 			"Profile": u,
-			"Error":   "Failed to update profile: " + err.Error(),
+			"Error":   errMsg,
 			"Success": "",
 		})
 		return
@@ -498,12 +513,94 @@ func (wh *WebHandler) Orders(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
+	if user.Role == "seller" {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
+		return
+	}
 
 	orders, _ := wh.orderService.GetOrdersByUserID(r.Context(), user.UserID)
 
+	// Sort by CreatedAt DESC
+	sort.Slice(orders, func(i, j int) bool {
+		return orders[i].CreatedAt.After(orders[j].CreatedAt)
+	})
+
+	// Split into current (pending, paid, shipped) and completed (delivered, cancelled), skip drafts
+	var currentOrders, completedOrders []model.Order
+	for _, o := range orders {
+		switch o.Status {
+		case model.StatusPending, model.StatusPaid, model.StatusShipped:
+			currentOrders = append(currentOrders, o)
+		case model.StatusDelivered, model.StatusCancelled:
+			completedOrders = append(completedOrders, o)
+		}
+	}
+
+	tab := r.URL.Query().Get("tab")
+	if tab != "completed" {
+		tab = "current"
+	}
+
 	wh.render(w, "orders", map[string]any{
-		"User":   user,
-		"Orders": orders,
+		"User":            user,
+		"CurrentOrders":   currentOrders,
+		"CompletedOrders": completedOrders,
+		"Tab":             tab,
+	})
+}
+
+func (wh *WebHandler) OrderDetail(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if user.Role == "seller" {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid order ID", http.StatusBadRequest)
+		return
+	}
+
+	order, err := wh.orderService.GetOrderByID(r.Context(), id)
+	if err != nil || order.UserID != user.UserID {
+		http.Error(w, "Order not found", http.StatusNotFound)
+		return
+	}
+
+	items, _ := wh.orderService.GetOrderItemsByOrderID(r.Context(), order.ID)
+	displayItems := wh.buildCartDisplay(r.Context(), items)
+
+	var seller *model.Seller
+	if order.SellerID != nil {
+		s, err := wh.sellerService.GetSellerByID(r.Context(), *order.SellerID)
+		if err == nil {
+			seller = &s
+		}
+	}
+
+	var address *model.Address
+	if order.AddressID != nil {
+		addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), user.UserID)
+		for _, a := range addresses {
+			if a.ID == *order.AddressID {
+				address = &a
+				break
+			}
+		}
+	}
+
+	wh.render(w, "order-detail", map[string]any{
+		"User":    user,
+		"Order":   order,
+		"Items":   displayItems,
+		"Seller":  seller,
+		"Address": address,
 	})
 }
 
@@ -511,6 +608,10 @@ func (wh *WebHandler) OrderPay(w http.ResponseWriter, r *http.Request) {
 	user := wh.userFromCookie(r)
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if user.Role == "seller" {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
 		return
 	}
 
@@ -529,6 +630,10 @@ func (wh *WebHandler) OrderCancel(w http.ResponseWriter, r *http.Request) {
 	user := wh.userFromCookie(r)
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if user.Role == "seller" {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
 		return
 	}
 
@@ -570,6 +675,10 @@ func (wh *WebHandler) Cart(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
+	if user.Role == "seller" {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
+		return
+	}
 
 	cart, err := wh.orderService.GetCart(r.Context(), user.UserID)
 	var items []model.OrderItem
@@ -595,6 +704,10 @@ func (wh *WebHandler) CartAdd(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
+	if user.Role == "seller" {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
+		return
+	}
 
 	productIDStr := r.FormValue("product_id")
 	productID, err := strconv.ParseInt(productIDStr, 10, 64)
@@ -610,6 +723,10 @@ func (wh *WebHandler) CartAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = wh.orderService.AddItemToCart(r.Context(), user.UserID, productID, quantity); err != nil {
+		if errors.Is(err, service.ErrProductAlreadyInCart) {
+			http.Redirect(w, r, fmt.Sprintf("/products/%d?notice=already-in-cart", productID), http.StatusSeeOther)
+			return
+		}
 		log.Printf("CartAdd error: %v", err)
 	}
 	http.Redirect(w, r, "/cart", http.StatusSeeOther)
@@ -619,6 +736,10 @@ func (wh *WebHandler) CartRemoveItem(w http.ResponseWriter, r *http.Request) {
 	user := wh.userFromCookie(r)
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if user.Role == "seller" {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
 		return
 	}
 
@@ -637,6 +758,10 @@ func (wh *WebHandler) CartUpdateQuantity(w http.ResponseWriter, r *http.Request)
 	user := wh.userFromCookie(r)
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if user.Role == "seller" {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
 		return
 	}
 
@@ -664,6 +789,10 @@ func (wh *WebHandler) CartCheckout(w http.ResponseWriter, r *http.Request) {
 	user := wh.userFromCookie(r)
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if user.Role == "seller" {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
 		return
 	}
 
@@ -705,6 +834,10 @@ func (wh *WebHandler) Addresses(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
+	if user.Role == "seller" {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
+		return
+	}
 
 	addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), user.UserID)
 
@@ -720,6 +853,10 @@ func (wh *WebHandler) AddressCreate(w http.ResponseWriter, r *http.Request) {
 	user := wh.userFromCookie(r)
 	if user == nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if user.Role == "seller" {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
 		return
 	}
 
@@ -762,6 +899,10 @@ func (wh *WebHandler) AddressDelete(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
+	if user.Role == "seller" {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
+		return
+	}
 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -801,17 +942,8 @@ func (wh *WebHandler) SellerDashboard(w http.ResponseWriter, r *http.Request) {
 	seller, err := wh.sellerService.GetSellerByUserID(r.Context(), user.UserID)
 	hasSeller := err == nil
 
-	var products []model.Product
-	var orders []model.Order
 	var stats *model.SellerStats
 	if hasSeller {
-		allProducts, _ := wh.productService.GetProducts(r.Context(), model.CatalogOptions{})
-		for _, p := range allProducts {
-			if p.SellerID == seller.ID {
-				products = append(products, p)
-			}
-		}
-
 		s, statsErr := wh.sellerService.GetSellerStats(r.Context(), user.UserID, seller.ID, time.Now().AddDate(-1, 0, 0), time.Now())
 		if statsErr == nil {
 			stats = &s
@@ -822,11 +954,90 @@ func (wh *WebHandler) SellerDashboard(w http.ResponseWriter, r *http.Request) {
 		"User":      user,
 		"Seller":    seller,
 		"HasSeller": hasSeller,
-		"Products":  products,
-		"Orders":    orders,
 		"Stats":     stats,
-		"Error":     "",
-		"Success":   "",
+		"Error":     r.URL.Query().Get("error"),
+		"Success":   r.URL.Query().Get("success"),
+	})
+}
+
+func (wh *WebHandler) SellerUpdate(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	seller, ok := wh.sellerFromUser(r, user)
+	if !ok {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	companyName := r.FormValue("company_name")
+	description := r.FormValue("description")
+
+	su := model.SellerUpdate{}
+	if companyName != "" {
+		su.CompanyName = &companyName
+	}
+	su.Description = &description
+
+	_, err := wh.sellerService.UpdateSeller(r.Context(), user.UserID, seller.ID, su)
+	if err != nil {
+		http.Redirect(w, r, "/seller?error=Failed+to+update+profile", http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/seller?success=Profile+updated", http.StatusSeeOther)
+}
+
+func (wh *WebHandler) SellerOrders(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if user.Role != "seller" {
+		http.Error(w, "Only sellers can access this page", http.StatusForbidden)
+		return
+	}
+
+	_, err := wh.sellerService.GetSellerByUserID(r.Context(), user.UserID)
+	if err != nil {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
+		return
+	}
+
+	orders, _ := wh.orderService.GetSellerOrdersByUserID(r.Context(), user.UserID, model.PaginationOpts{Page: 1, Limit: 50})
+
+	wh.render(w, "seller-orders", map[string]any{
+		"User":   user,
+		"Orders": orders,
+	})
+}
+
+func (wh *WebHandler) SellerProducts(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if user.Role != "seller" {
+		http.Error(w, "Only sellers can access this page", http.StatusForbidden)
+		return
+	}
+
+	seller, err := wh.sellerService.GetSellerByUserID(r.Context(), user.UserID)
+	if err != nil {
+		http.Redirect(w, r, "/seller", http.StatusSeeOther)
+		return
+	}
+
+	allProducts, _ := wh.productService.GetProducts(r.Context(), model.CatalogOptions{})
+	var products []model.Product
+	for _, p := range allProducts {
+		if p.SellerID == seller.ID {
+			products = append(products, p)
+		}
+	}
+
+	wh.render(w, "seller-products", map[string]any{
+		"User":     user,
+		"Products": products,
 	})
 }
 
@@ -905,7 +1116,7 @@ func (wh *WebHandler) SellerProductCreate(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		log.Printf("SellerProductCreate error: %v", err)
 	}
-	http.Redirect(w, r, "/seller", http.StatusSeeOther)
+	http.Redirect(w, r, "/seller/products", http.StatusSeeOther)
 }
 
 func (wh *WebHandler) SellerProductEditPage(w http.ResponseWriter, r *http.Request) {
@@ -984,7 +1195,7 @@ func (wh *WebHandler) SellerProductEditSubmit(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	http.Redirect(w, r, "/seller", http.StatusSeeOther)
+	http.Redirect(w, r, "/seller/products", http.StatusSeeOther)
 }
 
 func (wh *WebHandler) SellerProductDelete(w http.ResponseWriter, r *http.Request) {
@@ -1004,12 +1215,12 @@ func (wh *WebHandler) SellerProductDelete(w http.ResponseWriter, r *http.Request
 
 	product, err := wh.productService.GetProductByID(r.Context(), id)
 	if err != nil || product.SellerID != seller.ID {
-		http.Redirect(w, r, "/seller", http.StatusSeeOther)
+		http.Redirect(w, r, "/seller/products", http.StatusSeeOther)
 		return
 	}
 
 	_ = wh.productService.DeleteProductByID(r.Context(), user.UserID, id)
-	http.Redirect(w, r, "/seller", http.StatusSeeOther)
+	http.Redirect(w, r, "/seller/products", http.StatusSeeOther)
 }
 
 // --- Seller Order Actions ---
@@ -1029,7 +1240,7 @@ func (wh *WebHandler) SellerOrderShip(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = wh.orderService.ShipOrder(r.Context(), id, user.UserID)
-	http.Redirect(w, r, "/seller", http.StatusSeeOther)
+	http.Redirect(w, r, "/seller/orders", http.StatusSeeOther)
 }
 
 func (wh *WebHandler) SellerOrderDeliver(w http.ResponseWriter, r *http.Request) {
@@ -1047,7 +1258,7 @@ func (wh *WebHandler) SellerOrderDeliver(w http.ResponseWriter, r *http.Request)
 	}
 
 	_ = wh.orderService.DeliverOrder(r.Context(), id, user.UserID)
-	http.Redirect(w, r, "/seller", http.StatusSeeOther)
+	http.Redirect(w, r, "/seller/orders", http.StatusSeeOther)
 }
 
 // --- Review Submission ---
@@ -1088,4 +1299,35 @@ func (wh *WebHandler) ReviewSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, fmt.Sprintf("/products/%d", productID), http.StatusSeeOther)
+}
+
+// --- Public Seller Profile ---
+
+func (wh *WebHandler) SellerProfile(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid seller ID", http.StatusBadRequest)
+		return
+	}
+
+	seller, err := wh.sellerService.GetSellerByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, "Seller not found", http.StatusNotFound)
+		return
+	}
+
+	allProducts, _ := wh.productService.GetProducts(r.Context(), model.CatalogOptions{})
+	var products []model.Product
+	for _, p := range allProducts {
+		if p.SellerID == seller.ID {
+			products = append(products, p)
+		}
+	}
+
+	wh.render(w, "seller-profile", map[string]any{
+		"Seller":   seller,
+		"Products": products,
+		"User":     wh.userFromCookie(r),
+	})
 }

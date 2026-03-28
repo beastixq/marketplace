@@ -1,0 +1,44 @@
+{{define "title"}}Seller Orders{{end}}
+
+{{define "content"}}
+<h1 style="margin-bottom: 1.5rem;">Seller Dashboard</h1>
+
+<div style="display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border);">
+    <a href="/seller" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-muted);">Profile</a>
+    <a href="/seller/orders" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid var(--primary); margin-bottom: -2px; color: var(--primary);">Orders</a>
+    <a href="/seller/products" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-muted);">Products</a>
+</div>
+
+<h2 style="margin-bottom: 1rem;">Incoming Orders ({{len .Orders}})</h2>
+{{if .Orders}}
+<div class="orders-list">
+    {{range .Orders}}
+    <div class="order-card">
+        <div class="order-card__header">
+            <span class="order-card__id">Order #{{.ID}}</span>
+            <span class="order-card__status order-card__status--{{.Status}}">{{.Status}}</span>
+        </div>
+        <div class="order-card__details">
+            <span>Buyer #{{.UserID}}</span>
+            <span>Total: {{.TotalAmount}} &#8381;</span>
+            <span>Created: {{.CreatedAt.Format "02.01.2006 15:04"}}</span>
+        </div>
+        <div class="order-card__actions">
+            {{if eq (printf "%s" .Status) "paid"}}
+                <form method="POST" action="/seller/orders/{{.ID}}/ship" style="display:inline">
+                    <button type="submit" class="btn btn--primary btn--sm">Ship</button>
+                </form>
+            {{end}}
+            {{if eq (printf "%s" .Status) "shipped"}}
+                <form method="POST" action="/seller/orders/{{.ID}}/deliver" style="display:inline">
+                    <button type="submit" class="btn btn--primary btn--sm">Mark Delivered</button>
+                </form>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="empty-state">No incoming orders.</div>
+{{end}}
+{{end}}

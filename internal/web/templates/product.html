@@ -6,13 +6,16 @@
     <div class="product-detail__price">{{.Product.Price}} &#8381;</div>
     <div class="product-detail__meta">
         In stock: {{.Product.StockQuantity}} &bull;
-        Seller #{{.Product.SellerID}} &bull;
+        <a href="/sellers/{{.Seller.ID}}">{{.Seller.CompanyName}}</a> &bull;
         Added: {{.Product.CreatedAt.Format "02.01.2006"}}
     </div>
     {{if .Product.Description}}
     <div class="product-detail__desc">{{.Product.Description}}</div>
     {{end}}
-    {{if .User}}
+    {{if and .User (eq .User.Role "buyer")}}
+    {{if eq .Notice "already-in-cart"}}
+    <div class="alert alert--error" style="margin-bottom: 1rem;">This product is already in your cart. <a href="/cart">Go to cart</a> to change quantity.</div>
+    {{end}}
     <form method="POST" action="/cart/add" class="product-detail__cart-form">
         <input type="hidden" name="product_id" value="{{.Product.ID}}">
         <label for="quantity">Quantity:</label>
@@ -56,7 +59,7 @@
 </script>
 {{end}}
 
-{{if .User}}
+{{if and .User (eq .User.Role "buyer")}}
 <div class="form-card" style="margin-top: 2rem; margin-bottom: 2rem;">
     <h2>Leave a Review</h2>
     <form method="POST" action="/products/{{.Product.ID}}/review">

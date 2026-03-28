@@ -15,9 +15,11 @@
             <a href="/">Catalog</a>
             <a href="/categories">Categories</a>
             {{if .User}}
-                <a href="/cart">Cart</a>
-                <a href="/orders">Orders</a>
-                <a href="/addresses">Addresses</a>
+                {{if eq .User.Role "buyer"}}
+                    <a href="/cart">Cart</a>
+                    <a href="/orders">Orders</a>
+                    <a href="/addresses">Addresses</a>
+                {{end}}
                 {{if eq .User.Role "seller"}}<a href="/seller">Seller</a>{{end}}
                 <a href="/profile">{{.User.FullName}}</a>
                 <a href="/logout">Logout</a>

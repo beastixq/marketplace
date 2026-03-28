@@ -3,6 +3,12 @@
 {{define "content"}}
 <h1 style="margin-bottom: 1.5rem;">Seller Dashboard</h1>
 
+<div style="display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border);">
+    <a href="/seller" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid var(--primary); margin-bottom: -2px; color: var(--primary);">Profile</a>
+    <a href="/seller/orders" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-muted);">Orders</a>
+    <a href="/seller/products" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-muted);">Products</a>
+</div>
+
 {{if .Success}}
 <div class="alert alert--success">{{.Success}}</div>
 {{end}}
@@ -13,12 +19,13 @@
 {{if .HasSeller}}
 <div class="card" style="padding: 1.5rem; margin-bottom: 2rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">
     <h2>{{.Seller.CompanyName}}</h2>
-    {{with .Seller.Description}}<p>{{.}}</p>{{end}}
-    {{with .Seller.Rating}}<p>Rating: {{.}} / 5</p>{{end}}
-    <p style="color: #666;">Registered: {{.Seller.CreatedAt.Format "02.01.2006"}}</p>
+    {{with .Seller.Description}}<p style="color: var(--text-muted);">{{.}}</p>{{end}}
+    {{with .Seller.Rating}}<p>Rating: {{.}} / 5 &#9733;</p>{{end}}
+    <p style="color: #666; font-size: 0.85rem;">Registered: {{.Seller.CreatedAt.Format "02.01.2006"}}</p>
 </div>
 
 {{if .Stats}}
+<h2 style="margin-bottom: 1rem;">Statistics (last year)</h2>
 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
     <div class="card" style="padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); text-align: center;">
         <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">{{.Stats.TotalOrders}}</div>
@@ -39,90 +46,19 @@
 </div>
 {{end}}
 
-<!-- Seller Orders -->
-<h2 style="margin-bottom: 1rem;">Incoming Orders ({{len .Orders}})</h2>
-{{if .Orders}}
-<div class="orders-list" style="margin-bottom: 2rem;">
-    {{range .Orders}}
-    <div class="order-card">
-        <div class="order-card__header">
-            <span class="order-card__id">Order #{{.ID}}</span>
-            <span class="order-card__status order-card__status--{{.Status}}">{{.Status}}</span>
-        </div>
-        <div class="order-card__details">
-            <span>Buyer #{{.UserID}}</span>
-            <span>Total: {{.TotalAmount}} &#8381;</span>
-            <span>Created: {{.CreatedAt.Format "02.01.2006 15:04"}}</span>
-        </div>
-        <div class="order-card__actions">
-            {{if eq (printf "%s" .Status) "paid"}}
-                <form method="POST" action="/seller/orders/{{.ID}}/ship" style="display:inline">
-                    <button type="submit" class="btn btn--primary btn--sm">Ship</button>
-                </form>
-            {{end}}
-            {{if eq (printf "%s" .Status) "shipped"}}
-                <form method="POST" action="/seller/orders/{{.ID}}/deliver" style="display:inline">
-                    <button type="submit" class="btn btn--primary btn--sm">Mark Delivered</button>
-                </form>
-            {{end}}
-        </div>
-    </div>
-    {{end}}
-</div>
-{{else}}
-<div class="empty-state" style="margin-bottom: 2rem;">No incoming orders.</div>
-{{end}}
-
-<!-- Products -->
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-    <h2>Your Products ({{len .Products}})</h2>
-</div>
-
-{{if .Products}}
-<div class="product-grid" style="margin-bottom: 2rem;">
-    {{range .Products}}
-    <div class="product-card" style="display: flex; flex-direction: column; justify-content: space-between;">
-        <div>
-            <a href="/products/{{.ID}}" class="product-card__name">{{.Name}}</a>
-            <div class="product-card__price">{{.Price}} &#8381;</div>
-            <div class="product-card__stock">Stock: {{.StockQuantity}}</div>
-        </div>
-        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-            <a href="/seller/products/{{.ID}}/edit" class="btn btn--primary btn--sm" style="color: #fff;">Edit</a>
-            <form method="POST" action="/seller/products/{{.ID}}/delete" style="display:inline"
-                  onsubmit="return confirm('Delete this product?')">
-                <button type="submit" class="btn btn--danger btn--sm">Delete</button>
-            </form>
-        </div>
-    </div>
-    {{end}}
-</div>
-{{else}}
-<div class="empty-state" style="margin-bottom: 2rem;">No products yet.</div>
-{{end}}
-
-<!-- Add Product Form -->
 <div class="form-card">
-    <h2>Add New Product</h2>
-    <form method="POST" action="/seller/products">
+    <h2>Update Shop Info</h2>
+    <form method="POST" action="/seller/update">
         <div class="form-group">
-            <label for="name">Product Name</label>
-            <input type="text" id="name" name="name" required placeholder="iPhone 15 Pro">
+            <label for="company_name">Company Name</label>
+            <input type="text" id="company_name" name="company_name" value="{{.Seller.CompanyName}}" required>
         </div>
         <div class="form-group">
-            <label for="description">Description (optional)</label>
-            <textarea id="description" name="description" rows="3" placeholder="Product description..."
-                      style="width:100%;padding:0.6rem 0.75rem;border:1px solid var(--border);border-radius:4px;font-size:0.9rem;font-family:inherit;"></textarea>
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="3"
+                      style="width:100%;padding:0.6rem 0.75rem;border:1px solid var(--border);border-radius:4px;font-size:0.9rem;font-family:inherit;">{{with .Seller.Description}}{{.}}{{end}}</textarea>
         </div>
-        <div class="form-group">
-            <label for="price">Price (RUB)</label>
-            <input type="number" id="price" name="price" required min="0.01" step="0.01" placeholder="999.99">
-        </div>
-        <div class="form-group">
-            <label for="stock_quantity">Stock Quantity</label>
-            <input type="number" id="stock_quantity" name="stock_quantity" required min="0" placeholder="100">
-        </div>
-        <button type="submit" class="btn btn--primary">Add Product</button>
+        <button type="submit" class="btn btn--primary">Save Changes</button>
     </form>
 </div>
 

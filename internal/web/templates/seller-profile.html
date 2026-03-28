@@ -1,0 +1,27 @@
+{{define "title"}}{{.Seller.CompanyName}}{{end}}
+
+{{define "content"}}
+<div class="card" style="padding: 1.5rem; margin-bottom: 2rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">
+    <h1 style="margin-bottom: 0.5rem;">{{.Seller.CompanyName}}</h1>
+    {{with .Seller.Description}}<p style="color: var(--text-muted); margin-bottom: 0.75rem;">{{.}}</p>{{end}}
+    <div style="display: flex; gap: 1.5rem; font-size: 0.9rem; color: var(--text-muted);">
+        {{with .Seller.Rating}}<span>Rating: {{.}} / 5 &#9733;</span>{{end}}
+        <span>Seller since {{.Seller.CreatedAt.Format "January 2006"}}</span>
+    </div>
+</div>
+
+<h2 style="margin-bottom: 1rem;">Products ({{len .Products}})</h2>
+{{if .Products}}
+<div class="product-grid">
+    {{range .Products}}
+    <a href="/products/{{.ID}}" class="product-card">
+        <div class="product-card__name">{{.Name}}</div>
+        <div class="product-card__price">{{.Price}} &#8381;</div>
+        <div class="product-card__stock">In stock: {{.StockQuantity}}</div>
+    </a>
+    {{end}}
+</div>
+{{else}}
+<div class="empty-state">This seller has no products yet.</div>
+{{end}}
+{{end}}

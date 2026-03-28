@@ -3,37 +3,75 @@
 {{define "content"}}
 <h1 style="margin-bottom: 1.5rem;">My Orders</h1>
 
-{{if .Orders}}
-<div class="orders-list">
-    {{range .Orders}}
-    <div class="order-card">
-        <div class="order-card__header">
-            <span class="order-card__id">Order #{{.ID}}</span>
-            <span class="order-card__status order-card__status--{{.Status}}">{{.Status}}</span>
-        </div>
-        <div class="order-card__details">
-            <span>Total: {{.TotalAmount}} &#8381;</span>
-            <span>Created: {{.CreatedAt.Format "02.01.2006 15:04"}}</span>
-        </div>
-        <div class="order-card__actions">
-            {{if eq (printf "%s" .Status) "pending"}}
-                <form method="POST" action="/orders/{{.ID}}/pay" style="display:inline">
-                    <button type="submit" class="btn btn--primary btn--sm">Pay</button>
-                </form>
-                <form method="POST" action="/orders/{{.ID}}/cancel" style="display:inline">
-                    <button type="submit" class="btn btn--danger btn--sm">Cancel</button>
-                </form>
-            {{end}}
-            {{if eq (printf "%s" .Status) "paid"}}
-                <form method="POST" action="/orders/{{.ID}}/cancel" style="display:inline">
-                    <button type="submit" class="btn btn--danger btn--sm">Cancel</button>
-                </form>
-            {{end}}
-        </div>
-    </div>
-    {{end}}
+<div style="display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border);">
+    <a href="/orders?tab=current"
+       style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid {{if eq .Tab "current"}}var(--primary){{else}}transparent{{end}}; margin-bottom: -2px; color: {{if eq .Tab "current"}}var(--primary){{else}}var(--text-muted){{end}};">
+        Current ({{len .CurrentOrders}})
+    </a>
+    <a href="/orders?tab=completed"
+       style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid {{if eq .Tab "completed"}}var(--primary){{else}}transparent{{end}}; margin-bottom: -2px; color: {{if eq .Tab "completed"}}var(--primary){{else}}var(--text-muted){{end}};">
+        Completed ({{len .CompletedOrders}})
+    </a>
 </div>
-{{else}}
-<div class="empty-state">No orders yet. <a href="/">Browse the catalog</a></div>
+
+{{if eq .Tab "current"}}
+    {{if .CurrentOrders}}
+    <div class="orders-list">
+        {{range .CurrentOrders}}
+        <div class="order-card">
+            <div class="order-card__header">
+                <a href="/orders/{{.ID}}" class="order-card__id" style="text-decoration:none;">Order #{{.ID}}</a>
+                <span class="order-card__status order-card__status--{{.Status}}">{{.Status}}</span>
+            </div>
+            <div class="order-card__details">
+                <span>Total: {{.TotalAmount}} &#8381;</span>
+                <span>Created: {{.CreatedAt.Format "02.01.2006 15:04"}}</span>
+            </div>
+            <div class="order-card__actions">
+                {{if eq (printf "%s" .Status) "pending"}}
+                    <form method="POST" action="/orders/{{.ID}}/pay" style="display:inline">
+                        <button type="submit" class="btn btn--primary btn--sm">Pay</button>
+                    </form>
+                    <form method="POST" action="/orders/{{.ID}}/cancel" style="display:inline">
+                        <button type="submit" class="btn btn--danger btn--sm">Cancel</button>
+                    </form>
+                {{end}}
+                {{if eq (printf "%s" .Status) "paid"}}
+                    <form method="POST" action="/orders/{{.ID}}/cancel" style="display:inline">
+                        <button type="submit" class="btn btn--danger btn--sm">Cancel</button>
+                    </form>
+                {{end}}
+                <a href="/orders/{{.ID}}" class="btn btn--sm" style="text-decoration:none;">Details</a>
+            </div>
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <div class="empty-state">No current orders. <a href="/">Browse the catalog</a></div>
+    {{end}}
+{{end}}
+
+{{if eq .Tab "completed"}}
+    {{if .CompletedOrders}}
+    <div class="orders-list">
+        {{range .CompletedOrders}}
+        <div class="order-card">
+            <div class="order-card__header">
+                <a href="/orders/{{.ID}}" class="order-card__id" style="text-decoration:none;">Order #{{.ID}}</a>
+                <span class="order-card__status order-card__status--{{.Status}}">{{.Status}}</span>
+            </div>
+            <div class="order-card__details">
+                <span>Total: {{.TotalAmount}} &#8381;</span>
+                <span>Created: {{.CreatedAt.Format "02.01.2006 15:04"}}</span>
+            </div>
+            <div class="order-card__actions">
+                <a href="/orders/{{.ID}}" class="btn btn--sm" style="text-decoration:none;">Details</a>
+            </div>
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <div class="empty-state">No completed orders yet.</div>
+    {{end}}
 {{end}}
 {{end}}
