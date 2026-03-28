@@ -5,8 +5,6 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"sort"
-	"strings"
 	"html/template"
 	"log"
 	"net/http"
@@ -481,12 +479,11 @@ func (wh *WebHandler) ProfileUpdate(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		errMsg := "Failed to update profile"
-		errStr := err.Error()
 		switch {
-		case strings.Contains(errStr, "users_phone_key"):
-			errMsg = "This phone number is already in use"
-		case strings.Contains(errStr, "users_email_key"):
-			errMsg = "This email is already in use"
+		case errors.Is(err, service.ErrPhoneAlreadyExists):
+			errMsg = service.ErrPhoneAlreadyExists.Error()
+		case errors.Is(err, service.ErrEmailAlreadyInUse):
+			errMsg = service.ErrEmailAlreadyInUse.Error()
 		}
 		wh.render(w, "profile", map[string]any{
 			"User":    user,
@@ -518,12 +515,7 @@ func (wh *WebHandler) Orders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orders, _ := wh.orderService.GetOrdersByUserID(r.Context(), user.UserID)
-
-	// Sort by CreatedAt DESC
-	sort.Slice(orders, func(i, j int) bool {
-		return orders[i].CreatedAt.After(orders[j].CreatedAt)
-	})
+	orders, _ := wh.orderService.GetOrdersByUserID(r.Context(), user.UserID, model.PaginationOpts{})
 
 	// Split into current (pending, paid, shipped) and completed (delivered, cancelled), skip drafts
 	var currentOrders, completedOrders []model.Order
@@ -1185,6 +1177,8 @@ func (wh *WebHandler) SellerProductEditSubmit(w http.ResponseWriter, r *http.Req
 		pu.StockQuantity = &s
 	}
 
+	changedBy := fmt.Sprintf("%s:%d", user.Role, user.UserID)
+	pu.ChangedBy = &changedBy
 	_, err = wh.productService.UpdateProduct(r.Context(), user.UserID, id, pu)
 	if err != nil {
 		wh.render(w, "product-edit", map[string]any{

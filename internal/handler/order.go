@@ -27,7 +27,13 @@ func (oh OrderHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orders, err := oh.orderService.GetOrdersByUserID(r.Context(), claims.UserID)
+	pg, err := parsePagination(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	orders, err := oh.orderService.GetOrdersByUserID(r.Context(), claims.UserID, pg)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return

@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -301,11 +302,13 @@ func (ph ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	changedBy := fmt.Sprintf("%s:%d", claims.Role, claims.UserID)
 	product, err := ph.productService.UpdateProduct(r.Context(), claims.UserID, id, model.ProductUpdate{
 		Name:          req.Name,
 		Description:   req.Description,
 		Price:         req.Price,
 		StockQuantity: req.StockQuantity,
+		ChangedBy:     &changedBy,
 	})
 	if err != nil {
 		if errors.Is(err, service.ErrProductNotFound) {

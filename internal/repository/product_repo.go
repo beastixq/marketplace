@@ -25,7 +25,7 @@ func NewProductRepo(pool *pgxpool.Pool) ProductRepoImpl {
 func (pr ProductRepoImpl) GetProducts(ctx context.Context, options m.CatalogOptions) (ps []m.Product, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	products := psql.
-		Select("products.id", "products.seller_id", "products.name", "products.description", "products.price", "products.stock_quantity", "products.created_at", "products.deleted_at").
+		Select("products.id", "products.seller_id", "products.name", "products.description", "products.price", "products.stock_quantity", "products.rating", "products.created_at", "products.deleted_at").
 		Distinct().
 		From("products").
 		Where(sq.Eq{"products.deleted_at": nil})
@@ -35,6 +35,9 @@ func (pr ProductRepoImpl) GetProducts(ctx context.Context, options m.CatalogOpti
 		products = products.Where(sq.GtOrEq{"price": options.MinPrice})
 	} else if options.MaxPrice != nil {
 		products = products.Where(sq.LtOrEq{"price": options.MaxPrice})
+	}
+	if options.SellerID != nil {
+		products = products.Where(sq.Eq{"products.seller_id": *options.SellerID})
 	}
 	if options.FilterName != nil {
 		products = products.Where(sq.Like{"products.name": fmt.Sprint("%", *options.FilterName, "%")})
@@ -68,7 +71,7 @@ func (pr ProductRepoImpl) GetProducts(ctx context.Context, options m.CatalogOpti
 	ps = make([]m.Product, 0)
 	var prow productRow
 	for rows.Next() {
-		err = rows.Scan(&prow.ID, &prow.SellerID, &prow.Name, &prow.Description, &prow.Price, &prow.StockQuantity, &prow.CreatedAt, &prow.DeletedAt)
+		err = rows.Scan(&prow.ID, &prow.SellerID, &prow.Name, &prow.Description, &prow.Price, &prow.StockQuantity, &prow.Rating, &prow.CreatedAt, &prow.DeletedAt)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrToScan, err)
 		}
@@ -82,13 +85,13 @@ func (pr ProductRepoImpl) GetProducts(ctx context.Context, options m.CatalogOpti
 
 func (pr ProductRepoImpl) GetProductByID(ctx context.Context, id int64) (p m.Product, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sql, args, err := psql.Select("id", "seller_id", "name", "description", "price", "stock_quantity", "created_at", "deleted_at").From("products").Where(sq.Eq{"id": id}).ToSql()
+	sql, args, err := psql.Select("id", "seller_id", "name", "description", "price", "stock_quantity", "rating", "created_at", "deleted_at").From("products").Where(sq.Eq{"id": id}).ToSql()
 	if err != nil {
 		return m.Product{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := getConn(ctx, pr.pool).QueryRow(ctx, sql, args...)
 	var product productRow
-	if err = row.Scan(&product.ID, &product.SellerID, &product.Name, &product.Description, &product.Price, &product.StockQuantity, &product.CreatedAt, &product.DeletedAt); err != nil {
+	if err = row.Scan(&product.ID, &product.SellerID, &product.Name, &product.Description, &product.Price, &product.StockQuantity, &product.Rating, &product.CreatedAt, &product.DeletedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return m.Product{}, service.ErrNotFound
 		}
@@ -160,17 +163,33 @@ func (pr ProductRepoImpl) UpdateProduct(ctx context.Context, id int64, pu m.Prod
 	if pu.StockQuantity != nil {
 		ub = ub.Set("stock_quantity", *pu.StockQuantity)
 	}
-	ub = ub.Suffix("RETURNING id, seller_id, name, description, price, stock_quantity, created_at, deleted_at")
-	sql, args, err := ub.ToSql()
+	ub = ub.Suffix("RETURNING id, seller_id, name, description, price, stock_quantity, rating, created_at, deleted_at")
+	updateSQL, args, err := ub.ToSql()
 	if err != nil {
 		return m.Product{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
-	row := getConn(ctx, pr.pool).QueryRow(ctx, sql, args...)
-	var product productRow
-	if err = row.Scan(&product.ID, &product.SellerID, &product.Name, &product.Description, &product.Price, &product.StockQuantity, &product.CreatedAt, &product.DeletedAt); err != nil {
-		return m.Product{}, fmt.Errorf("%w: %v", ErrToScan, err)
+
+	scanProduct := func(row pgx.Row) (m.Product, error) {
+		var product productRow
+		if err := row.Scan(&product.ID, &product.SellerID, &product.Name, &product.Description, &product.Price, &product.StockQuantity, &product.Rating, &product.CreatedAt, &product.DeletedAt); err != nil {
+			return m.Product{}, fmt.Errorf("%w: %v", ErrToScan, err)
+		}
+		return product.toModel(), nil
 	}
-	return product.toModel(), nil
+
+	if pu.ChangedBy != nil {
+		var result m.Product
+		err = pgx.BeginFunc(ctx, pr.pool, func(tx pgx.Tx) error {
+			if _, err := tx.Exec(ctx, "SET LOCAL app.current_user = $1", *pu.ChangedBy); err != nil {
+				return fmt.Errorf("%w: %v", ErrExec, err)
+			}
+			result, err = scanProduct(tx.QueryRow(ctx, updateSQL, args...))
+			return err
+		})
+		return result, err
+	}
+
+	return scanProduct(getConn(ctx, pr.pool).QueryRow(ctx, updateSQL, args...))
 }
 
 func (pr ProductRepoImpl) DeleteProductByID(ctx context.Context, id int64) (err error) {

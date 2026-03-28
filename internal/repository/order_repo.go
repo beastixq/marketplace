@@ -38,9 +38,17 @@ func (or OrderRepoImpl) GetOrderByID(ctx context.Context, id int64) (o m.Order, 
 	return order.toModel(), nil
 }
 
-func (or OrderRepoImpl) GetOrdersByUserID(ctx context.Context, userID int64) (orders []m.Order, err error) {
+func (or OrderRepoImpl) GetOrdersByUserID(ctx context.Context, userID int64, pg m.PaginationOpts) (orders []m.Order, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sql, args, err := psql.Select("id", "user_id", "address_id", "seller_id", "status", "total_amount", "created_at", "updated_at").From("orders").Where(sq.Eq{"user_id": userID}).ToSql()
+	qb := psql.
+		Select("id", "user_id", "address_id", "seller_id", "status", "total_amount", "created_at", "updated_at").
+		From("orders").
+		Where(sq.Eq{"user_id": userID}).
+		OrderBy("created_at DESC")
+	if pg.Page > 0 && pg.Limit > 0 {
+		qb = qb.Offset(uint64((pg.Page - 1) * pg.Limit)).Limit(uint64(pg.Limit))
+	}
+	sql, args, err := qb.ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
 	}

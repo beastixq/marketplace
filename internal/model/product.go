@@ -13,6 +13,7 @@ type Product struct {
 	Description   *string
 	Price         decimal.Decimal
 	StockQuantity int
+	Rating        *float32
 	CreatedAt     time.Time
 	DeletedAt     *time.Time
 }
@@ -31,6 +32,7 @@ type ProductUpdate struct {
 	Description   *string
 	Price         *decimal.Decimal
 	StockQuantity *int
+	ChangedBy     *string
 }
 
 type ProductPriceHistory struct {

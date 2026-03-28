@@ -27,6 +27,8 @@ var (
 	ErrChangePasswordUser            = errors.New("Error occured when changing user password")
 	ErrUserNotFound                  = errors.New("User not found")
 	ErrWrongPassword                 = errors.New("Wrong password")
+	ErrPhoneAlreadyExists            = errors.New("This phone number is already in use")
+	ErrEmailAlreadyInUse             = errors.New("This email is already in use")
 
 	// addresses
 	ErrGetAddressByID       = errors.New("Failed to get address by id")
@@ -69,6 +71,7 @@ var (
 	ErrProductAlreadyInCart   = errors.New("This product is already in the cart")
 	ErrSellerNotSet           = errors.New("Seller is not set for this order")
 	ErrOrderStatusInvalid     = errors.New("Invalid order status")
+	ErrInsufficientStock      = errors.New("Insufficient stock to ship order")
 
 
 	//categories

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	m "github.com/beastixq/marketplace/internal/model"
 
@@ -62,6 +63,13 @@ func (us UserService) UpdateUser(ctx context.Context, id int64, uu m.UserUpdate)
 	if err != nil {
 		if errors.Is(err, ErrNoChangesInUpdate) {
 			return m.User{}, ErrNoChangesInUpdate
+		}
+		errStr := err.Error()
+		switch {
+		case strings.Contains(errStr, "users_phone_key"):
+			return m.User{}, ErrPhoneAlreadyExists
+		case strings.Contains(errStr, "users_email_key"):
+			return m.User{}, ErrEmailAlreadyInUse
 		}
 		return m.User{}, fmt.Errorf("%w: %v", ErrUpdateUser, err)
 	}

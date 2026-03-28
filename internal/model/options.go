@@ -19,6 +19,7 @@ type CatalogOptions struct {
 	MinPrice     *decimal.Decimal
 	MaxPrice     *decimal.Decimal
 	FilterName   *string
+	SellerID     *int64
 	Pagination   *PaginationOpts
 	SortingOrder *SortingOrderType
 }

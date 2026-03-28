@@ -96,6 +96,7 @@ type productRow struct {
 	Description   *string
 	Price         decimal.Decimal
 	StockQuantity int
+	Rating        *float32
 	CreatedAt     time.Time
 	DeletedAt     *time.Time
 }
@@ -108,6 +109,7 @@ func (pr productRow) toModel() m.Product {
 		Description:   pr.Description,
 		Price:         pr.Price,
 		StockQuantity: pr.StockQuantity,
+		Rating:        pr.Rating,
 		CreatedAt:     pr.CreatedAt,
 		DeletedAt:     pr.DeletedAt,
 	}
