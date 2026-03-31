@@ -1,0 +1,91 @@
+{{define "title"}}Admin — Users{{end}}
+
+{{define "content"}}
+<h1 style="margin-bottom: 1.5rem;">Admin Panel — Users</h1>
+
+<div style="display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border);">
+    <a href="/admin/users" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid var(--primary); margin-bottom: -2px; color: var(--primary);">Users</a>
+    <a href="/admin/categories" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-muted);">Categories</a>
+    <a href="/admin/orders" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-muted);">Orders</a>
+</div>
+
+{{if .Success}}
+<div class="alert alert--success">{{.Success}}</div>
+{{end}}
+{{if .Error}}
+<div class="alert alert--error">{{.Error}}</div>
+{{end}}
+
+<div class="filters" style="margin-bottom: 1.5rem;">
+    <form method="GET" action="/admin/users" class="filters__form">
+        <div class="filters__group">
+            <label>Search (email / name)</label>
+            <input type="text" name="search" value="{{.Search}}" placeholder="Search users...">
+        </div>
+        <div class="filters__group">
+            <label>Role</label>
+            <select name="role">
+                <option value="">All roles</option>
+                <option value="buyer" {{if eq .Role "buyer"}}selected{{end}}>Buyer</option>
+                <option value="seller" {{if eq .Role "seller"}}selected{{end}}>Seller</option>
+                <option value="admin" {{if eq .Role "admin"}}selected{{end}}>Admin</option>
+                <option value="analyst" {{if eq .Role "analyst"}}selected{{end}}>Analyst</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn--primary">Filter</button>
+        {{if or .Search .Role}}<a href="/admin/users" class="btn btn--sm" style="background: var(--bg); border: 1px solid var(--border);">Clear</a>{{end}}
+    </form>
+</div>
+
+<div style="overflow-x: auto;">
+<table style="width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">
+    <thead>
+        <tr style="background: var(--bg); text-align: left;">
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">ID</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">Email</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">Full Name</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">Role</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">Phone</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">Status</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range .Users}}
+        <tr style="border-top: 1px solid var(--border);">
+            <td style="padding: 0.75rem 1rem;">{{.ID}}</td>
+            <td style="padding: 0.75rem 1rem;">{{.Email}}</td>
+            <td style="padding: 0.75rem 1rem;">{{.FullName}}</td>
+            <td style="padding: 0.75rem 1rem;">
+                <span style="padding: 0.15rem 0.5rem; border-radius: 8px; font-size: 0.75rem; font-weight: 600;
+                    {{if eq (printf "%s" .Role) "admin"}}background:#e0e7ff;color:#4f46e5;
+                    {{else if eq (printf "%s" .Role) "analyst"}}background:#fef3c7;color:#d97706;
+                    {{else if eq (printf "%s" .Role) "seller"}}background:#d1fae5;color:#059669;
+                    {{else}}background:#dbeafe;color:#2563eb;{{end}}">{{.Role}}</span>
+            </td>
+            <td style="padding: 0.75rem 1rem; color: var(--text-muted);">{{with .Phone}}{{.}}{{else}}&mdash;{{end}}</td>
+            <td style="padding: 0.75rem 1rem;">
+                {{if .DeletedAt}}<span style="color: var(--danger); font-size: 0.85rem;">Deleted</span>
+                {{else}}<span style="color: #059669; font-size: 0.85rem;">Active</span>{{end}}
+            </td>
+            <td style="padding: 0.75rem 1rem;">
+                <a href="/admin/users/{{.ID}}" class="btn btn--primary btn--sm">Edit</a>
+            </td>
+        </tr>
+    {{end}}
+    </tbody>
+</table>
+</div>
+
+{{if .Pagination}}
+<div class="pagination">
+    {{if gt .Pagination.Page 1}}
+    <a href="/admin/users?page={{sub .Pagination.Page 1}}">&laquo; Prev</a>
+    {{end}}
+    <span class="active">Page {{.Pagination.Page}}</span>
+    {{if .HasMore}}
+    <a href="/admin/users?page={{add .Pagination.Page 1}}">Next &raquo;</a>
+    {{end}}
+</div>
+{{end}}
+{{end}}

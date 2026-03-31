@@ -16,11 +16,18 @@
     <div class="card" style="margin-bottom: 1rem; padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
         <div>
             <strong>{{.City}}</strong>, {{.Street}}, {{.ZipCode}}
-            {{if .IsDefault}} <span class="badge badge--success">Default</span>{{end}}
+            {{if .IsDefault}} <span style="background: #d1fae5; color: #059669; padding: 0.15rem 0.5rem; border-radius: 8px; font-size: 0.75rem; font-weight: 600;">Default</span>{{end}}
         </div>
-        <form method="POST" action="/addresses/{{.ID}}/delete">
-            <button type="submit" class="btn btn--danger btn--sm">Delete</button>
-        </form>
+        <div style="display: flex; gap: 0.5rem;">
+            {{if not .IsDefault}}
+            <form method="POST" action="/addresses/{{.ID}}/default">
+                <button type="submit" class="btn btn--primary btn--sm">Make Default</button>
+            </form>
+            {{end}}
+            <form method="POST" action="/addresses/{{.ID}}/delete">
+                <button type="submit" class="btn btn--danger btn--sm">Delete</button>
+            </form>
+        </div>
     </div>
     {{end}}
 </div>

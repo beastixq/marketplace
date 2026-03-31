@@ -70,7 +70,7 @@ func main() {
 		adminHandler,
 	)
 
-	webHandler := web.NewWebHandler(productService, categoryService, authService, userService, orderService, addressService, sellerService, reviewService)
+	webHandler := web.NewWebHandler(productService, categoryService, authService, userService, orderService, addressService, sellerService, reviewService, pool)
 	webRouter := web.NewWebRouter(webHandler)
 
 	// API routes already include /api/v1/ prefix, so mount both at root.

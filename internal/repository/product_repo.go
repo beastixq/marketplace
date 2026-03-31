@@ -180,6 +180,7 @@ func (pr ProductRepoImpl) UpdateProduct(ctx context.Context, id int64, pu m.Prod
 	if pu.ChangedBy != nil {
 		var result m.Product
 		err = pgx.BeginFunc(ctx, pr.pool, func(tx pgx.Tx) error {
+			// TODO: Failed to update: Failed to update product: Failed to Exec: ERROR: syntax error at or near "current_user" (SQLSTATE 42601)
 			if _, err := tx.Exec(ctx, "SET LOCAL app.current_user = $1", *pu.ChangedBy); err != nil {
 				return fmt.Errorf("%w: %v", ErrExec, err)
 			}

@@ -13,6 +13,7 @@ import (
 
 //go:generate mockgen -package mock_service -destination ../mocks/service/mock_user_repo.go github.com/beastixq/marketplace/internal/service UserRepo
 type UserRepo interface {
+	GetUsers(ctx context.Context, opts m.UserListOptions) (us []m.User, err error)
 	GetUserByID(ctx context.Context, id int64) (u m.User, err error)
 	GetUserByEmail(ctx context.Context, email string) (u m.User, err error)
 	CreateUser(ctx context.Context, uc m.UserCreate) (id int64, err error)
@@ -28,6 +29,14 @@ type UserService struct {
 
 func NewUserService(ur UserRepo, bcryptCost int) UserService {
 	return UserService{repo: ur, bcryptCost: bcryptCost}
+}
+
+func (us UserService) GetUsers(ctx context.Context, opts m.UserListOptions) (users []m.User, err error) {
+	users, err = us.repo.GetUsers(ctx, opts)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrGetUsers, err)
+	}
+	return users, nil
 }
 
 func (us UserService) CreateUser(ctx context.Context, uc m.UserCreate) (id int64, err error) {

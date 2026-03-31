@@ -1,0 +1,60 @@
+{{define "title"}}Admin — Categories{{end}}
+
+{{define "content"}}
+<h1 style="margin-bottom: 1.5rem;">Admin Panel — Categories</h1>
+
+<div style="display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border);">
+    <a href="/admin/users" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-muted);">Users</a>
+    <a href="/admin/categories" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid var(--primary); margin-bottom: -2px; color: var(--primary);">Categories</a>
+    <a href="/admin/orders" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-muted);">Orders</a>
+</div>
+
+{{if .Success}}
+<div class="alert alert--success">{{.Success}}</div>
+{{end}}
+{{if .Error}}
+<div class="alert alert--error">{{.Error}}</div>
+{{end}}
+
+<div class="form-card" style="margin-bottom: 2rem;">
+    <h2>Add Category</h2>
+    <form method="POST" action="/admin/categories">
+        <div class="form-group">
+            <label for="name">Name</label>
+            <input type="text" id="name" name="name" required placeholder="Category name">
+        </div>
+        <div class="form-group">
+            <label for="description">Description (optional)</label>
+            <input type="text" id="description" name="description" placeholder="Short description">
+        </div>
+        <button type="submit" class="btn btn--primary">Add Category</button>
+    </form>
+</div>
+
+<div style="overflow-x: auto;">
+<table style="width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">
+    <thead>
+        <tr style="background: var(--bg); text-align: left;">
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">ID</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">Name</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">Description</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range .Categories}}
+        <tr style="border-top: 1px solid var(--border);">
+            <td style="padding: 0.75rem 1rem;">{{.ID}}</td>
+            <td style="padding: 0.75rem 1rem; font-weight: 600;">{{.Name}}</td>
+            <td style="padding: 0.75rem 1rem; color: var(--text-muted);">{{with .Description}}{{.}}{{else}}&mdash;{{end}}</td>
+            <td style="padding: 0.75rem 1rem;">
+                <form method="POST" action="/admin/categories/{{.ID}}/delete" style="display: inline;">
+                    <button type="submit" class="btn btn--danger btn--sm" onclick="return confirm('Delete category {{.Name}}?')">Delete</button>
+                </form>
+            </td>
+        </tr>
+    {{end}}
+    </tbody>
+</table>
+</div>
+{{end}}
