@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	sq "github.com/Masterminds/squirrel"
 	m "github.com/beastixq/marketplace/internal/model"
@@ -122,6 +123,24 @@ func (or OrderRepoImpl) DeleteOrderByID(ctx context.Context, id int64) (err erro
 	sql, args, err := psql.
 		Delete("orders").
 		Where(sq.Eq{"id": id}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	if _, err = getConn(ctx, or.pool).Exec(ctx, sql, args...); err != nil {
+		return fmt.Errorf("%w: %v", ErrExec, err)
+	}
+	return nil
+}
+
+func (or OrderRepoImpl) CancelExpiredPendingOrders(ctx context.Context, deadline time.Time) error {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.
+		Update("orders").
+		Set("status", "cancelled").
+		Set("updated_at", sq.Expr("now()")).
+		Where(sq.Eq{"status": "pending"}).
+		Where(sq.LtOrEq{"created_at": deadline}).
 		ToSql()
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrToSql, err)

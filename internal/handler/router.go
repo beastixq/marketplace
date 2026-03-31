@@ -17,6 +17,7 @@ func NewRouter(
 	addressHandler AddressHandler,
 	productHandler ProductHandler,
 	orderHandler OrderHandler,
+	paymentHandler PaymentHandler,
 	categoryHandler CategoryHandler,
 	reviewHandler ReviewHandler,
 	adminHandler AdminHandler,
@@ -26,6 +27,9 @@ func NewRouter(
 	// Public routes — no auth
 	r.Post("/api/v1/auth/register", authHandler.Register)
 	r.Post("/api/v1/auth/login", authHandler.Login)
+
+	// Payment callback (called by bank, no auth)
+	r.Post("/api/v1/payments/callback/mock-bank", paymentHandler.MockBankCallback)
 
 	// Public read-only
 	r.Get("/api/v1/products", productHandler.GetCatalog)
@@ -70,7 +74,7 @@ func NewRouter(
 			r.Get("/api/v1/orders/{id}", orderHandler.GetOrder)
 			r.Get("/api/v1/orders/{id}/items", orderHandler.GetOrderItems)
 			r.Post("/api/v1/orders", orderHandler.Checkout)
-			r.Post("/api/v1/orders/{id}/pay", orderHandler.PayOrder)
+			r.Post("/api/v1/orders/{id}/payment-link", paymentHandler.GetPaymentLink)
 			r.Post("/api/v1/orders/{id}/cancel", orderHandler.CancelOrder)
 
 			// Reviews

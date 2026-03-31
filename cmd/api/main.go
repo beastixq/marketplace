@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	payment "github.com/beastixq/marketplace/internal/adapter/payment"
 	"github.com/beastixq/marketplace/internal/handler"
 	repo "github.com/beastixq/marketplace/internal/repository"
 	svc "github.com/beastixq/marketplace/internal/service"
@@ -47,12 +49,21 @@ func main() {
 	// TODO: replace with Redis TokenBlocklist implementation
 	authService := svc.NewAuthService(userService, nil, "TODO_SECRET", 24*time.Hour)
 
+	paymentTTL := 15 * time.Minute
+	gateway := payment.NewMockBankGateway("http://localhost:8080")
+	paymentService := svc.NewPaymentService(orderRepo, gateway, paymentTTL)
+
+	logger := slog.Default()
+	worker := svc.NewOrderExpirationWorker(orderRepo, 1*time.Minute, paymentTTL, logger)
+	go worker.Run(context.Background())
+
 	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler(userService)
 	sellerHandler := handler.NewSellerHandler(sellerService, orderService)
 	addressHandler := handler.NewAddressHandler(addressService)
 	productHandler := handler.NewProductHandler(productService)
 	orderHandler := handler.NewOrderHandler(orderService)
+	paymentHandler := handler.NewPaymentHandler(paymentService)
 	categoryHandler := handler.NewCategoryHandler(categoryService)
 	reviewHandler := handler.NewReviewHandler(reviewService)
 	adminHandler := handler.NewAdminHandler(userService, sellerService)
@@ -65,6 +76,7 @@ func main() {
 		addressHandler,
 		productHandler,
 		orderHandler,
+		paymentHandler,
 		categoryHandler,
 		reviewHandler,
 		adminHandler,

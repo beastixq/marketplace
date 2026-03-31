@@ -1,0 +1,108 @@
+package handler
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+
+	"github.com/beastixq/marketplace/internal/middleware"
+	"github.com/beastixq/marketplace/internal/service"
+	"github.com/go-chi/chi/v5"
+)
+
+type PaymentHandler struct {
+	paymentService *service.PaymentService
+}
+
+func NewPaymentHandler(ps *service.PaymentService) PaymentHandler {
+	return PaymentHandler{paymentService: ps}
+}
+
+// POST /api/v1/orders/:id/payment-link
+func (ph PaymentHandler) GetPaymentLink(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, ErrInvalidIDParam.Error())
+		return
+	}
+
+	paymentURL, expiresAt, err := ph.paymentService.GetOrderPaymentURL(r.Context(), id, claims.UserID)
+	if err != nil {
+		if errors.Is(err, service.ErrOrderNotFound) {
+			writeError(w, http.StatusNotFound, service.ErrOrderNotFound.Error())
+			return
+		}
+		if errors.Is(err, service.ErrNotYourOrder) {
+			writeError(w, http.StatusForbidden, service.ErrNotYourOrder.Error())
+			return
+		}
+		if errors.Is(err, service.ErrOrderStatusInvalid) {
+			writeError(w, http.StatusConflict, service.ErrOrderStatusInvalid.Error())
+			return
+		}
+		if errors.Is(err, service.ErrPaymentExpired) {
+			writeError(w, http.StatusGone, service.ErrPaymentExpired.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, PaymentLinkResponse{
+		OrderID:    id,
+		PaymentURL: paymentURL,
+		ExpiresAt:  expiresAt,
+	})
+}
+
+type MockBankCallbackRequest struct {
+	Token string `json:"token"`
+}
+
+// POST /api/v1/payments/callback/mock-bank
+func (ph PaymentHandler) MockBankCallback(w http.ResponseWriter, r *http.Request) {
+	var req MockBankCallbackRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, ErrDecodeFailed.Error())
+		return
+	}
+
+	if req.Token == "" {
+		writeError(w, http.StatusBadRequest, "token is required")
+		return
+	}
+
+	if err := ph.paymentService.ProcessOrderPayment(r.Context(), req.Token); err != nil {
+		if errors.Is(err, service.ErrOrderNotFound) {
+			writeError(w, http.StatusNotFound, service.ErrOrderNotFound.Error())
+			return
+		}
+		if errors.Is(err, service.ErrOrderStatusInvalid) {
+			writeError(w, http.StatusConflict, service.ErrOrderStatusInvalid.Error())
+			return
+		}
+		if errors.Is(err, service.ErrPaymentExpired) {
+			writeError(w, http.StatusGone, service.ErrPaymentExpired.Error())
+			return
+		}
+		if errors.Is(err, service.ErrPaymentDeclined) {
+			writeError(w, http.StatusUnprocessableEntity, service.ErrPaymentDeclined.Error())
+			return
+		}
+		if errors.Is(err, service.ErrInvalidPaymentAmount) {
+			writeError(w, http.StatusUnprocessableEntity, service.ErrInvalidPaymentAmount.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "payment processed"})
+}

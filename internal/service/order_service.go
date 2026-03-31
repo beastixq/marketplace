@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	m "github.com/beastixq/marketplace/internal/model"
 
@@ -27,6 +28,7 @@ type OrderRepo interface {
 	CreateOrder(ctx context.Context, oc m.OrderCreate) (id int64, err error)
 	UpdateOrder(ctx context.Context, id int64, ou m.OrderUpdate) (o m.Order, err error)
 	DeleteOrderByID(ctx context.Context, id int64) (err error)
+	CancelExpiredPendingOrders(ctx context.Context, deadline time.Time) (err error)
 }
 
 //go:generate mockgen -package mock_service -destination ../mocks/service/mock_product_getter.go github.com/beastixq/marketplace/internal/service ProductGetter

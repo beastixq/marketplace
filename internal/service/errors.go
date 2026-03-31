@@ -73,6 +73,11 @@ var (
 	ErrOrderStatusInvalid     = errors.New("Invalid order status")
 	ErrInsufficientStock      = errors.New("Insufficient stock to ship order")
 
+	// payments
+	ErrPaymentExpired       = errors.New("Payment period has expired")
+	ErrPaymentDeclined      = errors.New("Payment was declined by bank")
+	ErrInvalidPaymentAmount = errors.New("Payment amount does not match order total")
+
 
 	//categories
 	ErrGetCategories    = errors.New("Failed to get categories")

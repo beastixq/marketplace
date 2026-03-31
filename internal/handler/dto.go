@@ -181,6 +181,12 @@ func orderItemDTO(oi model.OrderItem) OrderItemDTO {
 	}
 }
 
+type PaymentLinkResponse struct {
+	OrderID    int64     `json:"order_id"`
+	PaymentURL string    `json:"payment_url"`
+	ExpiresAt  time.Time `json:"expires_at"`
+}
+
 type ReviewDTO struct {
 	ID        int64     `json:"id"`
 	UserID    int64     `json:"user_id"`
