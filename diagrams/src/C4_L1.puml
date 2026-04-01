@@ -1,0 +1,27 @@
+@startuml C4_L1
+!include <C4/C4_Context>
+
+LAYOUT_LEFT_RIGHT()
+
+title Онлайн-маркетплейс — Контекст системы (C4 L1)
+
+Person(guest, "Гость", "Просматривает каталог и историю цен")
+Person(buyer, "Покупатель", "Оформляет заказы, оставляет отзывы")
+Person(seller, "Продавец", "Управляет товарами, отслеживает продажи")
+Person(admin, "Администратор", "Управляет пользователями и категориями")
+Person(analyst, "Аналитик", "Формирует аналитические отчёты")
+
+System(marketplace, "Онлайн-маркетплейс", "Веб-платформа для торговли между продавцами и покупателями")
+
+System_Ext(bank, "Платёжная система", "Обрабатывает платежи покупателей")
+
+Rel(guest, marketplace, "Просматривает каталог", "HTTPS")
+Rel(buyer, marketplace, "Оформляет заказы, оплачивает", "HTTPS")
+Rel(seller, marketplace, "Управляет товарами", "HTTPS")
+Rel(admin, marketplace, "Администрирует", "HTTPS")
+Rel(analyst, marketplace, "Просматривает отчёты", "HTTPS")
+Rel(marketplace, bank, "Проводит платежи", "HTTPS")
+
+LAYOUT_WITH_LEGEND()
+
+@enduml

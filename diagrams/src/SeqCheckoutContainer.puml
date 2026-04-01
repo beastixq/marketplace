@@ -1,0 +1,86 @@
+@startuml SeqCheckout
+title Оформление заказа (Checkout) — диаграмма последовательностей (уровень контейнеров)
+
+actor "Покупатель" as buyer
+participant "Веб-приложение\n(Go, chi)" as app
+database "PostgreSQL" as db
+participant "Платёжная\nсистема" as bank
+
+== Добавление товаров в корзину ==
+
+loop пока покупатель добавляет товары
+    buyer -> app : POST /cart/items {product_id, qty}
+    app -> db : SELECT product (наличие, цена)
+    db --> app : product
+    app -> db : INSERT order_item (в draft-заказ)
+    db --> app : ok
+    app --> buyer : 201 Created
+end
+
+== Оформление заказа ==
+
+buyer -> app : POST /orders {address_id}
+activate app
+
+app -> db : SELECT products по позициям корзины\n(проверка наличия товаров)
+db --> app : products
+
+break товары не в наличии
+    app --> buyer : 422 уведомление о недоступности
+end
+
+app -> app : разбиение позиций\nпо продавцам
+
+loop для каждого продавца
+    app -> db : INSERT order (status = pending,\nseller_id, total_amount)
+    db --> app : order ID
+
+    app -> db : INSERT order_items\n(позиции этого продавца)
+    db --> app : ok
+end
+
+app -> db : DELETE draft-заказ (корзина)
+db --> app : ok
+
+app --> buyer : 201 Created {order_ids}
+
+deactivate app
+
+== Оплата заказа ==
+
+buyer -> app : POST /orders/:id/pay
+activate app
+
+app -> db : SELECT order (проверка status = pending)
+db --> app : order
+
+app -> bank : отправка платежа
+activate bank
+
+bank -> bank : обработка платежа
+
+alt подтверждение от банка
+    bank --> app : подтверждение
+    deactivate bank
+
+    app -> db : UPDATE order SET status = paid
+    db --> app : ok
+
+    app --> buyer : 200 OK подтверждение оплаты
+
+else отказ от банка
+    bank --> app : отказ
+    app --> buyer : 402 Payment Required
+end
+
+deactivate app
+
+== Таймаут оплаты ==
+
+opt таймер истёк, статус всё ещё pending
+    app -> db : UPDATE order SET status = cancelled
+    db --> app : ok
+    app --> buyer : уведомление об отмене
+end
+
+@enduml

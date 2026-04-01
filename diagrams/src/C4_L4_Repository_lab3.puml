@@ -1,0 +1,245 @@
+@startuml C4_L4_Repository
+title Компонент доступа к данным — пакет repository (C4 L4)
+
+skinparam classAttributeIconSize 0
+
+package "service (interfaces)" {
+    interface UserRepo {
+        +GetUserByID(ctx, id): User, error
+        +GetUserByEmail(ctx, email): User, error
+        +CreateUser(ctx, uc UserCreate): int64, error
+        +UpdateUser(ctx, id, uu UserUpdate): User, error
+        +ChangePasswordUser(ctx, id, hash): error
+        +DeleteUserByID(ctx, id): error
+    }
+    interface SellerRepo {
+        +GetSellerByID(ctx, id): Seller, error
+        +GetSellerByUserID(ctx, uid): Seller, error
+        +GetSellerStats(ctx, id, from, to): SellerStats, error
+        +CreateSeller(ctx, sc SellerCreate): int64, error
+        +UpdateSeller(ctx, id, su SellerUpdate): Seller, error
+        +DeleteSellerByID(ctx, id): error
+    }
+    interface ProductRepo {
+        +GetProducts(ctx, opts CatalogOptions): []Product, error
+        +GetProductByID(ctx, id): Product, error
+        +GetProductPriceHistory(ctx, pid, from, to): []ProductPriceHistory, error
+        +CreateProduct(ctx, pc ProductCreate): int64, error
+        +UpdateProduct(ctx, id, pu ProductUpdate): Product, error
+        +DeleteProductByID(ctx, id): error
+    }
+    interface ReviewRepo {
+        +GetReviewByID(ctx, id): Review, error
+        +GetReviewsByProductID(ctx, pid, opts): []Review, error
+        +CreateReview(ctx, rc ReviewCreate): int64, error
+        +UpdateReview(ctx, id, ru ReviewUpdate): Review, error
+        +DeleteReviewByID(ctx, id): error
+    }
+    interface AddressRepo {
+        +GetAddressByID(ctx, id): Address, error
+        +GetAddressesByUserID(ctx, uid): []Address, error
+        +CreateAddress(ctx, ac AddressCreate): int64, error
+        +UpdateAddress(ctx, id, au AddressUpdate): Address, error
+        +DeleteAddressByID(ctx, id): error
+    }
+    interface CategoryRepo {
+        +GetCategories(ctx, opts PaginationOpts): []Category, error
+        +GetCategoryByID(ctx, id): Category, error
+        +CreateCategory(ctx, cc CategoryCreate): int64, error
+        +UpdateCategory(ctx, id, cu CategoryUpdate): Category, error
+        +DeleteCategoryByID(ctx, id): error
+    }
+    interface OrderRepo {
+        +GetOrderByID(ctx, id): Order, error
+        +GetOrdersByUserID(ctx, uid, pg PaginationOpts): []Order, error
+        +GetSellerOrdersBySellerID(ctx, sid, pg PaginationOpts): []Order, error
+        +CreateOrder(ctx, oc OrderCreate): int64, error
+        +UpdateOrder(ctx, id, ou OrderUpdate): Order, error
+        +DeleteOrderByID(ctx, id): error
+        +CancelExpiredPendingOrders(ctx, deadline time.Time): error
+    }
+    interface OrderItemRepo {
+        +GetOrderItemByID(ctx, id): OrderItem, error
+        +GetOrderItemsByOrderID(ctx, oid): []OrderItem, error
+        +CreateOrderItem(ctx, oic OrderItemCreate): int64, error
+        +UpdateOrderItem(ctx, id, oiu OrderItemUpdate): OrderItem, error
+        +DeleteOrderItemByID(ctx, id): error
+    }
+    interface OrderProductRepo {
+        +GetProductByID(ctx, id): Product, error
+    }
+    interface OrderSellerRepo {
+        +GetSellerByUserID(ctx, uid): Seller, error
+    }
+}
+
+package "repository (implementations)" {
+    class UserRepoImpl {
+        -db: pgxpool.Pool
+    }
+    class SellerRepoImpl {
+        -db: pgxpool.Pool
+    }
+    class ProductRepoImpl {
+        -db: pgxpool.Pool
+    }
+    class ReviewRepoImpl {
+        -db: pgxpool.Pool
+    }
+    class AddressRepoImpl {
+        -db: pgxpool.Pool
+    }
+    class CategoryRepoImpl {
+        -db: pgxpool.Pool
+    }
+    class OrderRepoImpl {
+        -db: pgxpool.Pool
+    }
+    class OrderItemRepoImpl {
+        -db: pgxpool.Pool
+    }
+}
+
+package "repository (DB entities)" {
+    class userRow {
+        +toModel(): User
+    }
+    class sellerRow {
+        +toModel(): Seller
+    }
+    class sellerStatsRow {
+        +toModel(): SellerStats
+    }
+    class productRow {
+        +toModel(): Product
+    }
+    class productPriceHistoryRow {
+        +toModel(): ProductPriceHistory
+    }
+    class reviewRow {
+        +toModel(): Review
+    }
+    class addressRow {
+        +toModel(): Address
+    }
+    class orderRow {
+        +toModel(): Order
+    }
+    class orderItemRow {
+        +toModel(): OrderItem
+    }
+}
+
+package "model" {
+    class User {
+        +ID: int64
+        +Email, PasswordHash, FullName: string
+        +Phone: *string
+        +Role: UserRole
+        +CreatedAt: time.Time
+        +DeletedAt: *time.Time
+    }
+    class Seller {
+        +ID, UserID: int64
+        +CompanyName: string
+        +Description: *string
+        +Rating: *float32
+        +CreatedAt: time.Time
+    }
+    class SellerStats {
+        +TotalOrders: int64
+        +TotalRevenue, AvgOrderValue: decimal.Decimal
+        +TopProductName: string
+    }
+    class Product {
+        +ID, SellerID: int64
+        +Name: string
+        +Description: *string
+        +Price: decimal.Decimal
+        +StockQuantity: int
+        +CreatedAt: time.Time
+        +DeletedAt: *time.Time
+    }
+    class ProductPriceHistory {
+        +ID, ProductID: int64
+        +OldPrice, NewPrice: decimal.Decimal
+        +ChangedAt: time.Time
+        +ChangedBy: string
+    }
+    class Review {
+        +ID, UserID, ProductID: int64
+        +Rating: int8
+        +Comment: *string
+        +CreatedAt: time.Time
+    }
+    class Address {
+        +ID, UserID: int64
+        +City, Street, ZipCode: string
+        +IsDefault: bool
+        +CreatedAt: time.Time
+    }
+    class Category {
+        +ID: int64
+        +ParentID: *int64
+        +Name: string
+        +Description: *string
+    }
+    class Order {
+        +ID, UserID: int64
+        +AddressID, SellerID: *int64
+        +Status: OrderStatus
+        +TotalAmount: decimal.Decimal
+        +CreatedAt, UpdatedAt: time.Time
+    }
+    class OrderItem {
+        +ID, OrderID, ProductID: int64
+        +Quantity: int
+        +PriceAtPurchase: decimal.Decimal
+    }
+
+    User "1" *-- "*" Address : CASCADE
+    User "1" *-- "*" Review : CASCADE
+    User "1" o-- "0..1" Seller : RESTRICT
+    User "1" o-- "*" Order : RESTRICT
+    Seller "1" o-- "*" Product : RESTRICT
+    Seller "1" o-- "*" Order : RESTRICT
+    Product "1" *-- "*" ProductPriceHistory : CASCADE
+    Product "1" *-- "*" Review : CASCADE
+    Product "1" o-- "*" OrderItem : RESTRICT
+    Order "1" o-- "*" OrderItem : RESTRICT
+    Address "1" o-- "*" Order : RESTRICT
+    Category "0..1" o-- "*" Category : SET NULL
+}
+
+UserRepoImpl ..|> UserRepo : реализует
+SellerRepoImpl ..|> SellerRepo : реализует
+SellerRepoImpl ..|> OrderSellerRepo : реализует
+ProductRepoImpl ..|> ProductRepo : реализует
+ProductRepoImpl ..|> OrderProductRepo : реализует
+ReviewRepoImpl ..|> ReviewRepo : реализует
+AddressRepoImpl ..|> AddressRepo : реализует
+CategoryRepoImpl ..|> CategoryRepo : реализует
+OrderRepoImpl ..|> OrderRepo : реализует
+OrderItemRepoImpl ..|> OrderItemRepo : реализует
+
+UserRepoImpl ..> userRow : <<create>>
+SellerRepoImpl ..> sellerRow : <<create>>
+SellerRepoImpl ..> sellerStatsRow : <<create>>
+ProductRepoImpl ..> productRow : <<create>>
+ProductRepoImpl ..> productPriceHistoryRow : <<create>>
+ReviewRepoImpl ..> reviewRow : <<create>>
+AddressRepoImpl ..> addressRow : <<create>>
+OrderRepoImpl ..> orderRow : <<create>>
+OrderItemRepoImpl ..> orderItemRow : <<create>>
+
+userRow ..> User : <<convert>>
+sellerRow ..> Seller : <<convert>>
+sellerStatsRow ..> SellerStats : <<convert>>
+productRow ..> Product : <<convert>>
+productPriceHistoryRow ..> ProductPriceHistory : <<convert>>
+reviewRow ..> Review : <<convert>>
+addressRow ..> Address : <<convert>>
+orderRow ..> Order : <<convert>>
+orderItemRow ..> OrderItem : <<convert>>
+
+@enduml

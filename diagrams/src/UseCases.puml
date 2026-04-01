@@ -1,0 +1,92 @@
+@startuml UseCases2
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Гость" as guest
+actor "Покупатель" as buyer
+actor "Продавец" as seller
+actor "Аналитик" as analyst
+actor "Администратор" as admin
+
+' --- Наследование ---
+buyer --|> guest
+seller --|> guest
+analyst --|> guest
+admin --|> guest
+
+rectangle "Онлайн-маркетплейс" {
+  usecase "Авторизация" as auth
+  usecase "Просмотр каталога" as browseCatalog
+  usecase "Просмотр карточки товара" as viewProduct
+  usecase "Просмотр информации\nо товаре" as viewProductInfo
+  usecase "Просмотр истории\nизменения цены" as viewPriceHistory
+  usecase "Просмотр отзывов" as viewReviews
+  usecase "Оформление заказа" as placeOrder
+  usecase "Оставление отзыва" as leaveReview
+  usecase "Управление товарами" as manageProducts
+  usecase "Добавление товара" as addProduct
+  usecase "Редактирование товара" as editProduct
+  usecase "Удаление товара" as deleteProduct
+  usecase "Просмотр статистики продаж" as viewSellerStats
+  usecase "Просмотр отчётов" as viewReports
+  usecase "Топ товаров по продажам" as reportTopProducts
+  usecase "Динамика заказов по времени" as reportOrdersDynamics
+  usecase "Распределение продаж по категориям" as reportByCategory
+  usecase "Управление категориями" as manageCategories
+  usecase "Создание категории" as addCategory
+  usecase "Редактирование категории" as editCategory
+  usecase "Удаление категории" as deleteCategory
+  usecase "Удаление пользователя" as deleteUser
+  usecase "Удаление продавца" as deleteSeller
+  usecase "Удаление товара" as adminDeleteProduct
+  usecase "Удаление отзыва" as deleteReview
+  usecase "Просмотр всех заказов" as viewAllOrders
+}
+
+' --- Гость ---
+guest --> auth
+guest --> browseCatalog
+guest --> viewProduct
+
+' --- Покупатель (+ всё от Гостя) ---
+buyer --> placeOrder
+buyer --> leaveReview
+
+' --- Продавец (+ всё от Гостя) ---
+seller --> manageProducts
+seller --> viewSellerStats
+
+' --- Аналитик (+ всё от Гостя) ---
+analyst --> viewReports
+
+' --- Администратор (наследует от Гостя: авторизация, каталог, карточка товара) ---
+admin --> manageCategories
+admin --> deleteUser
+admin --> deleteSeller
+admin --> adminDeleteProduct
+admin --> deleteReview
+admin --> viewAllOrders
+admin --> viewReports
+admin --> viewSellerStats
+
+' --- Extend: Управление товарами ---
+manageProducts <.. addProduct
+manageProducts <.. editProduct
+manageProducts <.. deleteProduct
+
+' --- Extend: Просмотр карточки товара ---
+viewProduct <.. viewProductInfo
+viewProduct <.. viewPriceHistory
+viewProduct <.. viewReviews
+
+' --- Extend: Управление категориями ---
+manageCategories <.. addCategory
+manageCategories <.. editCategory
+manageCategories <.. deleteCategory
+
+' --- Extend: Просмотр отчётов ---
+viewReports <.. reportTopProducts
+viewReports <.. reportOrdersDynamics
+viewReports <.. reportByCategory
+
+@enduml

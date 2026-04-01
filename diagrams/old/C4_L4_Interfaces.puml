@@ -1,0 +1,69 @@
+@startuml C4_L4_Interfaces
+title Интерфейсы репозиториев — пакет service (C4 L4)
+
+skinparam classAttributeIconSize 0
+
+interface UserRepo {
+    +GetUserByID(ctx, id): User, error
+    +GetUserByEmail(ctx, email): User, error
+    +CreateUser(ctx, uc UserCreate): int64, error
+    +UpdateUser(ctx, id, uu UserUpdate): User, error
+    +ChangePasswordUser(ctx, id, hash): error
+    +DeleteUserByID(ctx, id): error
+}
+interface SellerRepo {
+    +GetSellerByID(ctx, id): Seller, error
+    +GetSellerByUserID(ctx, uid): Seller, error
+    +GetSellerStats(ctx, id, from, to): SellerStats, error
+    +CreateSeller(ctx, sc SellerCreate): int64, error
+    +UpdateSeller(ctx, id, su SellerUpdate): Seller, error
+    +DeleteSellerByID(ctx, id): error
+}
+interface ProductRepo {
+    +GetProducts(ctx, opts CatalogOptions): []Product, error
+    +GetProductByID(ctx, id): Product, error
+    +GetProductPriceHistory(ctx, pid, from, to): []ProductPriceHistory, error
+    +CreateProduct(ctx, pc ProductCreate): int64, error
+    +UpdateProduct(ctx, id, pu ProductUpdate): Product, error
+    +DeleteProductByID(ctx, id): error
+}
+interface ReviewRepo {
+    +GetReviewByID(ctx, id): Review, error
+    +GetReviewsByProductID(ctx, pid, opts): []Review, error
+    +CreateReview(ctx, rc ReviewCreate): int64, error
+    +UpdateReview(ctx, id, ru ReviewUpdate): Review, error
+    +DeleteReviewByID(ctx, id): error
+}
+interface AddressRepo {
+    +GetAddressByID(ctx, id): Address, error
+    +GetAddressesByUserID(ctx, uid): []Address, error
+    +CreateAddress(ctx, ac AddressCreate): int64, error
+    +UpdateAddress(ctx, id, au AddressUpdate): Address, error
+    +DeleteAddressByID(ctx, id): error
+}
+interface CategoryRepo {
+    +GetCategories(ctx, opts PaginationOpts): []Category, error
+    +GetCategoryByID(ctx, id): Category, error
+    +CreateCategory(ctx, cc CategoryCreate): int64, error
+    +UpdateCategory(ctx, id, cu CategoryUpdate): Category, error
+    +DeleteCategoryByID(ctx, id): error
+}
+interface OrderRepo {
+    +GetOrderByID(ctx, id): Order, error
+    +GetOrdersByUserID(ctx, uid): []Order, error
+    +CreateOrder(ctx, oc OrderCreate): int64, error
+    +UpdateOrder(ctx, id, ou OrderUpdate): Order, error
+    +DeleteOrderByID(ctx, id): error
+}
+interface OrderItemRepo {
+    +GetOrderItemByID(ctx, id): OrderItem, error
+    +GetOrderItemsByOrderID(ctx, oid): []OrderItem, error
+    +CreateOrderItem(ctx, oic OrderItemCreate): int64, error
+    +UpdateOrderItem(ctx, id, oiu OrderItemUpdate): OrderItem, error
+    +DeleteOrderItemByID(ctx, id): error
+}
+interface OrderProductRepo {
+    +GetProductByID(ctx, id): Product, error
+}
+
+@enduml

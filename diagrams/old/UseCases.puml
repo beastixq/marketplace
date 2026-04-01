@@ -1,0 +1,54 @@
+@startuml UseCases
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Покупатель" as buyer
+actor "Продавец" as seller
+actor "Аналитик" as analyst
+actor "Администратор" as admin
+
+' --- Наследование: Администратор может всё ---
+admin --|> buyer
+admin --|> seller
+admin --|> analyst
+
+rectangle "Онлайн-маркетплейс" {
+  usecase "Просмотр каталога" as browseCatalog
+  usecase "Просмотр истории цен" as viewPriceHistory
+  usecase "Оформление заказа" as placeOrder
+  usecase "Оставление отзыва" as leaveReview
+  usecase "Управление товарами" as manageProducts
+  usecase "Добавление товара" as addProduct
+  usecase "Редактирование товара" as editProduct
+  usecase "Удаление товара" as deleteProduct
+  usecase "Управление категориями" as manageCategories
+  usecase "Удаление пользователя" as deleteUser
+  usecase "Просмотр отчётов" as viewReports
+}
+
+' --- Покупатель ---
+buyer --> browseCatalog
+buyer --> viewPriceHistory
+buyer --> placeOrder
+buyer --> leaveReview
+
+' --- Аналитик ---
+analyst --> browseCatalog
+analyst --> viewPriceHistory
+analyst --> viewReports
+' --- Продавец ---
+seller --> browseCatalog
+seller --> viewPriceHistory
+seller --> manageProducts
+
+
+' --- Администратор (только уникальные) ---
+admin --> manageCategories
+admin --> deleteUser
+
+' --- Extend: Управление товарами ---
+manageProducts <.. addProduct : <<extend>>
+manageProducts <.. editProduct : <<extend>>
+manageProducts <.. deleteProduct : <<extend>>
+
+@enduml

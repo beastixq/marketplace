@@ -1,0 +1,122 @@
+Table users {
+  id bigserial [pk, increment]
+  email varchar(255) [not null, unique]
+  password_hash varchar(255) [not null]
+  full_name varchar(255) [not null]
+  phone varchar(20) [unique]
+  role varchar(20) [not null, note: 'buyer | seller | admin | analyst']
+  created_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+}
+
+Table sellers {
+  id bigserial [pk, increment]
+  user_id bigint [not null, unique]
+  company_name varchar(255) [not null]
+  description text
+  rating "numeric(3,2)" [note: '0.00 .. 5.00']
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table categories {
+  id bigserial [pk, increment]
+  parent_id bigint
+  name varchar(255) [not null, unique]
+  description text
+}
+
+Table products {
+  id bigserial [pk, increment]
+  seller_id bigint [not null]
+  name varchar(255) [not null]
+  description text
+  price "numeric(12,2)" [not null, note: '> 0']
+  stock_quantity integer [not null, default: 0, note: '>= 0']
+  created_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+}
+
+Table product_categories {
+  product_id bigint [not null]
+  category_id bigint [not null]
+
+  indexes {
+    (product_id, category_id) [pk]
+  }
+}
+
+Table addresses {
+  id bigserial [pk, increment]
+  user_id bigint [not null]
+  city varchar(100) [not null]
+  street varchar(255) [not null]
+  zip_code varchar(20) [not null]
+  is_default boolean [not null, default: false]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table orders {
+  id bigserial [pk, increment]
+  user_id bigint [not null]
+  address_id bigint
+  seller_id bigint
+  status varchar(30) [not null, note: 'draft | pending | paid | shipped | delivered | cancelled']
+  total_amount "numeric(12,2)" [not null, note: '>= 0']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+Table order_items {
+  id bigserial [pk, increment]
+  order_id bigint [not null]
+  product_id bigint [not null]
+  quantity integer [not null, note: '> 0']
+  price_at_purchase "numeric(12,2)" [not null, note: '> 0']
+}
+
+Table reviews {
+  id bigserial [pk, increment]
+  user_id bigint [not null]
+  product_id bigint [not null]
+  rating smallint [not null, note: '1 .. 5']
+  comment text
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id, product_id) [unique]
+  }
+}
+
+Table product_price_history {
+  id bigserial [pk, increment]
+  product_id bigint [not null]
+  old_price "numeric(12,2)" [not null]
+  new_price "numeric(12,2)" [not null]
+  changed_at timestamptz [not null, default: `now()`]
+  changed_by text [not null, default: `current_user`]
+}
+
+// --- Foreign Keys ---
+
+Ref: sellers.user_id > users.id [delete: restrict]
+
+Ref: categories.parent_id > categories.id [delete: set null]
+
+Ref: products.seller_id > sellers.id [delete: restrict]
+
+Ref: product_categories.product_id > products.id [delete: cascade]
+Ref: product_categories.category_id > categories.id [delete: cascade]
+
+Ref: addresses.user_id > users.id [delete: cascade]
+
+Ref: orders.user_id > users.id [delete: restrict]
+Ref: orders.address_id > addresses.id [delete: restrict]
+Ref: orders.seller_id > sellers.id [delete: restrict]
+
+Ref: order_items.order_id > orders.id [delete: restrict]
+Ref: order_items.product_id > products.id [delete: restrict]
+
+Ref: reviews.user_id > users.id [delete: cascade]
+Ref: reviews.product_id > products.id [delete: cascade]
+
+Ref: product_price_history.product_id > products.id [delete: cascade]

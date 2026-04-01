@@ -1,0 +1,23 @@
+@startuml C4_L2
+!include <C4/C4_Container>
+
+title Онлайн-маркетплейс — Контейнеры (C4 L2)
+
+Person(user, "Пользователь", "Гость, Покупатель, Продавец,\nАдминистратор, Аналитик")
+
+System_Ext(bank, "Платёжная система", "Обрабатывает платежи")
+
+System_Boundary(marketplace, "Онлайн-маркетплейс") {
+    Container(webapp, "Веб-приложение", "Go 1.24+, chi, html/template", "Обрабатывает HTTP-запросы,\nрендерит HTML-страницы,\nреализует бизнес-логику")
+    ContainerDb(postgres, "База данных", "PostgreSQL 16", "Хранит пользователей, товары,\nзаказы, отзывы")
+    ContainerDb(redis, "Кэш", "Redis 7", "Кэширует каталог и карточки товаров,\nхранит сессии")
+}
+
+Rel(user, webapp, "Использует", "HTTPS")
+Rel(webapp, postgres, "Читает и записывает данные", "pgx/v5")
+Rel(webapp, redis, "Кэширует, читает сессии", "go-redis/v9")
+Rel(webapp, bank, "Инициирует платёж", "HTTPS")
+
+LAYOUT_WITH_LEGEND()
+
+@enduml

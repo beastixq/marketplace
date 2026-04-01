@@ -1,0 +1,27 @@
+@startuml C4_L3
+!include <C4/C4_Component>
+
+title Онлайн-маркетплейс — Компоненты веб-приложения (C4 L3)
+
+Person(user, "Пользователь")
+
+Container_Boundary(webapp, "Веб-приложение") {
+    Component(handler, "Handler", "Go, chi, html/template", "HTTP-обработчики, рендеринг HTML-страниц")
+    Component(service, "Service", "Go", "Бизнес-логика приложения")
+    Component(repository, "Repository", "Go, pgx/v5", "Доступ к данным PostgreSQL")
+    Component(cache, "Cache", "Go, go-redis/v9", "Работа с Redis-кэшем")
+}
+
+ContainerDb(postgres, "База данных", "PostgreSQL 16", "")
+ContainerDb(redis, "Кэш", "Redis 7", "")
+
+Rel(user, handler, "HTTP-запросы", "HTTPS")
+Rel(handler, service, "Вызывает", "интерфейс")
+Rel(service, repository, "Читает / записывает", "интерфейс")
+Rel(service, cache, "Кэширует", "интерфейс")
+Rel(repository, postgres, "SQL-запросы", "pgx/v5")
+Rel(cache, redis, "GET / SET / DEL", "go-redis/v9")
+
+LAYOUT_WITH_LEGEND()
+
+@enduml
