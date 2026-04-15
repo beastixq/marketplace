@@ -85,7 +85,11 @@ func (pr ProductRepoImpl) GetProducts(ctx context.Context, options m.CatalogOpti
 
 func (pr ProductRepoImpl) GetProductByID(ctx context.Context, id int64) (p m.Product, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sql, args, err := psql.Select("id", "seller_id", "name", "description", "price", "stock_quantity", "rating", "created_at", "deleted_at").From("products").Where(sq.Eq{"id": id}).ToSql()
+	sql, args, err := psql.
+		Select("id", "seller_id", "name", "description", "price", "stock_quantity", "rating", "created_at", "deleted_at").
+		From("products").
+		Where(sq.Eq{"id": id}).
+		ToSql()
 	if err != nil {
 		return m.Product{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
