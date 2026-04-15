@@ -43,6 +43,7 @@ func NewWebRouter(wh *WebHandler) http.Handler {
 	// Addresses
 	r.Get("/addresses", wh.Addresses)
 	r.Post("/addresses", wh.AddressCreate)
+	r.Post("/addresses/{id}/default", wh.AddressSetDefault)
 	r.Post("/addresses/{id}/delete", wh.AddressDelete)
 
 	// Seller
@@ -60,6 +61,22 @@ func NewWebRouter(wh *WebHandler) http.Handler {
 
 	// Reviews
 	r.Post("/products/{id}/review", wh.ReviewSubmit)
+
+	// Admin
+	r.Get("/admin/users", wh.AdminUsers)
+	r.Get("/admin/users/{id}", wh.AdminUserEdit)
+	r.Post("/admin/users/{id}", wh.AdminUserEditSubmit)
+	r.Post("/admin/users/{id}/delete", wh.AdminUserDelete)
+	r.Get("/admin/categories", wh.AdminCategories)
+	r.Post("/admin/categories", wh.AdminCategoryCreate)
+	r.Post("/admin/categories/{id}/delete", wh.AdminCategoryDelete)
+	r.Get("/admin/orders", wh.AdminOrders)
+	r.Post("/admin/products/{id}/delete", wh.AdminProductDelete)
+	r.Post("/admin/sellers/{id}/delete", wh.AdminSellerDelete)
+	r.Post("/admin/reviews/{id}/delete", wh.AdminReviewDelete)
+
+	// Analyst
+	r.Get("/analyst", wh.AnalystDashboard)
 
 	return r
 }

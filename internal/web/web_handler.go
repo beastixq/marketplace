@@ -16,6 +16,7 @@ import (
 	"github.com/beastixq/marketplace/internal/service"
 	"github.com/beastixq/marketplace/internal/validators"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 )
 
@@ -45,6 +46,7 @@ type WebHandler struct {
 	addressService  service.AddressService
 	sellerService   service.SellerService
 	reviewService   service.ReviewService
+	dbPool          *pgxpool.Pool
 	templates       map[string]*template.Template
 }
 
@@ -57,8 +59,9 @@ func NewWebHandler(
 	addressSvc service.AddressService,
 	sellerSvc service.SellerService,
 	reviewSvc service.ReviewService,
+	dbPool *pgxpool.Pool,
 ) *WebHandler {
-	pages := []string{"catalog", "product", "login", "register", "categories", "profile", "orders", "cart", "addresses", "seller", "product-edit", "seller-profile", "order-detail", "seller-orders", "seller-products"}
+	pages := []string{"catalog", "product", "login", "register", "categories", "profile", "orders", "cart", "addresses", "seller", "product-edit", "seller-profile", "order-detail", "seller-orders", "seller-products", "admin-users", "admin-user-edit", "admin-categories", "admin-orders", "analyst"}
 	templates := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
 		templates[page] = template.Must(
@@ -78,6 +81,7 @@ func NewWebHandler(
 		addressService:  addressSvc,
 		sellerService:   sellerSvc,
 		reviewService:   reviewSvc,
+		dbPool:          dbPool,
 		templates:       templates,
 	}
 }
@@ -242,22 +246,57 @@ func (wh *WebHandler) ProductDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Price history for the last year
-	dateFrom := time.Now().AddDate(-1, 0, 0)
+	// Price history with configurable date range
 	dateTo := time.Now()
+	rangeParam := r.URL.Query().Get("range")
+	if rangeParam == "" {
+		rangeParam = "3m"
+	}
+	var dateFrom time.Time
+	switch rangeParam {
+	case "1w":
+		dateFrom = dateTo.AddDate(0, 0, -7)
+	case "1m":
+		dateFrom = dateTo.AddDate(0, -1, 0)
+	case "3m":
+		dateFrom = dateTo.AddDate(0, -3, 0)
+	case "6m":
+		dateFrom = dateTo.AddDate(0, -6, 0)
+	case "1y":
+		dateFrom = dateTo.AddDate(-1, 0, 0)
+	case "all":
+		dateFrom = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	default:
+		dateFrom = dateTo.AddDate(0, -3, 0)
+	}
 	priceHistory, _ := wh.productService.GetProductPriceHistory(r.Context(), id, dateFrom, dateTo)
 
 	reviews, _ := wh.productService.GetReviewsByProductID(r.Context(), id, model.PaginationOpts{Page: 1, Limit: 50})
 
+	// Build user names map for reviews
+	reviewUserNames := make(map[int64]string, len(reviews))
+	for _, rv := range reviews {
+		if _, ok := reviewUserNames[rv.UserID]; !ok {
+			u, err := wh.userService.GetUserByID(r.Context(), rv.UserID)
+			if err == nil {
+				reviewUserNames[rv.UserID] = u.FullName
+			} else {
+				reviewUserNames[rv.UserID] = fmt.Sprintf("User #%d", rv.UserID)
+			}
+		}
+	}
+
 	seller, _ := wh.sellerService.GetSellerByID(r.Context(), product.SellerID)
 
 	wh.render(w, "product", map[string]any{
-		"Product":      product,
-		"Seller":       seller,
-		"PriceHistory": priceHistory,
-		"Reviews":      reviews,
-		"User":         wh.userFromCookie(r),
-		"Notice":       r.URL.Query().Get("notice"),
+		"Product":         product,
+		"Seller":          seller,
+		"PriceHistory":    priceHistory,
+		"PriceRange":      rangeParam,
+		"Reviews":         reviews,
+		"ReviewUserNames": reviewUserNames,
+		"User":            wh.userFromCookie(r),
+		"Notice":          r.URL.Query().Get("notice"),
 	})
 }
 
@@ -721,7 +760,7 @@ func (wh *WebHandler) CartAdd(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Printf("CartAdd error: %v", err)
 	}
-	http.Redirect(w, r, "/cart", http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/products/%d?notice=added-to-cart", productID), http.StatusSeeOther)
 }
 
 func (wh *WebHandler) CartRemoveItem(w http.ResponseWriter, r *http.Request) {
@@ -883,6 +922,28 @@ func (wh *WebHandler) AddressCreate(w http.ResponseWriter, r *http.Request) {
 		"Error":     "",
 		"Success":   "Address added",
 	})
+}
+
+func (wh *WebHandler) AddressSetDefault(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/addresses", http.StatusSeeOther)
+		return
+	}
+
+	isDefault := true
+	_, err = wh.addressService.UpdateAddress(r.Context(), user.UserID, id, model.AddressUpdate{IsDefault: &isDefault})
+	if err != nil {
+		log.Printf("AddressSetDefault error: %v", err)
+	}
+	http.Redirect(w, r, "/addresses", http.StatusSeeOther)
 }
 
 func (wh *WebHandler) AddressDelete(w http.ResponseWriter, r *http.Request) {
@@ -1311,17 +1372,434 @@ func (wh *WebHandler) SellerProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allProducts, _ := wh.productService.GetProducts(r.Context(), model.CatalogOptions{})
-	var products []model.Product
-	for _, p := range allProducts {
-		if p.SellerID == seller.ID {
-			products = append(products, p)
+	sellerID := &seller.ID
+	allProducts, _ := wh.productService.GetProducts(r.Context(), model.CatalogOptions{SellerID: sellerID})
+
+	user := wh.userFromCookie(r)
+	var stats *model.SellerStats
+	if user != nil && user.Role == "admin" {
+		var s model.SellerStats
+		err := wh.dbPool.QueryRow(r.Context(),
+			"SELECT total_orders, total_revenue, avg_order_value, top_product_name FROM get_seller_statistics($1, $2, $3)",
+			seller.ID, time.Now().AddDate(-1, 0, 0), time.Now(),
+		).Scan(&s.TotalOrders, &s.TotalRevenue, &s.AvgOrderValue, &s.TopProductName)
+		if err == nil {
+			stats = &s
 		}
 	}
 
 	wh.render(w, "seller-profile", map[string]any{
 		"Seller":   seller,
-		"Products": products,
-		"User":     wh.userFromCookie(r),
+		"Products": allProducts,
+		"Stats":    stats,
+		"User":     user,
+	})
+}
+
+// --- Admin Pages ---
+
+func (wh *WebHandler) requireRole(w http.ResponseWriter, r *http.Request, roles ...string) *userInfo {
+	user := wh.userFromCookie(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return nil
+	}
+	for _, role := range roles {
+		if user.Role == role {
+			return user
+		}
+	}
+	http.Error(w, "Forbidden", http.StatusForbidden)
+	return nil
+}
+
+func (wh *WebHandler) AdminUsers(w http.ResponseWriter, r *http.Request) {
+	user := wh.requireRole(w, r, "admin")
+	if user == nil {
+		return
+	}
+
+	pageStr := r.URL.Query().Get("page")
+	page, _ := strconv.Atoi(pageStr)
+	if page < 1 {
+		page = 1
+	}
+	const perPage = 50
+
+	search := r.URL.Query().Get("search")
+	role := r.URL.Query().Get("role")
+
+	opts := model.UserListOptions{
+		Pagination: model.PaginationOpts{Page: page, Limit: perPage},
+	}
+	if search != "" {
+		opts.Search = &search
+	}
+	if role != "" {
+		opts.Role = &role
+	}
+
+	users, _ := wh.userService.GetUsers(r.Context(), opts)
+
+	wh.render(w, "admin-users", map[string]any{
+		"User":       user,
+		"Users":      users,
+		"Pagination": map[string]int{"Page": page},
+		"HasMore":    len(users) == perPage,
+		"Search":     search,
+		"Role":       role,
+		"Success":    r.URL.Query().Get("success"),
+		"Error":      r.URL.Query().Get("error"),
+	})
+}
+
+func (wh *WebHandler) AdminUserEdit(w http.ResponseWriter, r *http.Request) {
+	user := wh.requireRole(w, r, "admin")
+	if user == nil {
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+		return
+	}
+
+	editUser, err := wh.userService.GetUserByID(r.Context(), id)
+	if err != nil {
+		http.Redirect(w, r, "/admin/users?error=User+not+found", http.StatusSeeOther)
+		return
+	}
+
+	wh.render(w, "admin-user-edit", map[string]any{
+		"User":     user,
+		"EditUser": editUser,
+		"Success":  r.URL.Query().Get("success"),
+		"Error":    r.URL.Query().Get("error"),
+	})
+}
+
+func (wh *WebHandler) AdminUserEditSubmit(w http.ResponseWriter, r *http.Request) {
+	user := wh.requireRole(w, r, "admin")
+	if user == nil {
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+		return
+	}
+
+	email := r.FormValue("email")
+	fullName := r.FormValue("full_name")
+	phone := r.FormValue("phone")
+	roleStr := r.FormValue("role")
+	role := model.UserRole(roleStr)
+
+	uu := model.UserUpdate{
+		Email:    &email,
+		FullName: &fullName,
+		Role:     &role,
+	}
+	if phone != "" {
+		uu.Phone = &phone
+	}
+
+	_, err = wh.userService.UpdateUser(r.Context(), id, uu)
+	if err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/admin/users/%d?error=%s", id, url.QueryEscape(err.Error())), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/admin/users/%d?success=User+updated", id), http.StatusSeeOther)
+}
+
+func (wh *WebHandler) AdminUserDelete(w http.ResponseWriter, r *http.Request) {
+	user := wh.requireRole(w, r, "admin")
+	if user == nil {
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+		return
+	}
+
+	if err = wh.userService.DeleteUserByID(r.Context(), id); err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/admin/users/%d?error=%s", id, url.QueryEscape(err.Error())), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/admin/users?success=User+deleted", http.StatusSeeOther)
+}
+
+func (wh *WebHandler) AdminCategories(w http.ResponseWriter, r *http.Request) {
+	user := wh.requireRole(w, r, "admin")
+	if user == nil {
+		return
+	}
+
+	categories, _ := wh.categoryService.GetCategories(r.Context(), model.PaginationOpts{Page: 1, Limit: 500})
+
+	wh.render(w, "admin-categories", map[string]any{
+		"User":       user,
+		"Categories": categories,
+		"Success":    r.URL.Query().Get("success"),
+		"Error":      r.URL.Query().Get("error"),
+	})
+}
+
+func (wh *WebHandler) AdminCategoryCreate(w http.ResponseWriter, r *http.Request) {
+	user := wh.requireRole(w, r, "admin")
+	if user == nil {
+		return
+	}
+
+	name := r.FormValue("name")
+	description := r.FormValue("description")
+
+	cc := model.CategoryCreate{Name: name}
+	if description != "" {
+		cc.Description = &description
+	}
+
+	_, err := wh.categoryService.CreateCategory(r.Context(), cc)
+	if err != nil {
+		http.Redirect(w, r, "/admin/categories?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/admin/categories?success=Category+created", http.StatusSeeOther)
+}
+
+func (wh *WebHandler) AdminCategoryDelete(w http.ResponseWriter, r *http.Request) {
+	user := wh.requireRole(w, r, "admin")
+	if user == nil {
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/admin/categories", http.StatusSeeOther)
+		return
+	}
+
+	if err = wh.categoryService.DeleteCategoryByID(r.Context(), id); err != nil {
+		http.Redirect(w, r, "/admin/categories?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/admin/categories?success=Category+deleted", http.StatusSeeOther)
+}
+
+func (wh *WebHandler) AdminOrders(w http.ResponseWriter, r *http.Request) {
+	user := wh.requireRole(w, r, "admin")
+	if user == nil {
+		return
+	}
+
+	pageStr := r.URL.Query().Get("page")
+	page, _ := strconv.Atoi(pageStr)
+	if page < 1 {
+		page = 1
+	}
+	const perPage = 50
+	statusFilter := r.URL.Query().Get("status")
+
+	ctx := r.Context()
+	query := `SELECT id, user_id, address_id, seller_id, status, total_amount, created_at, updated_at
+		FROM orders WHERE status != 'draft'`
+	args := []any{}
+	if statusFilter != "" {
+		query += " AND status = $1"
+		args = append(args, statusFilter)
+	}
+	query += " ORDER BY created_at DESC LIMIT $" + strconv.Itoa(len(args)+1) + " OFFSET $" + strconv.Itoa(len(args)+2)
+	args = append(args, perPage, (page-1)*perPage)
+
+	rows, err := wh.dbPool.Query(ctx, query, args...)
+	var orders []model.Order
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var o model.Order
+			if rows.Scan(&o.ID, &o.UserID, &o.AddressID, &o.SellerID, &o.Status, &o.TotalAmount, &o.CreatedAt, &o.UpdatedAt) == nil {
+				orders = append(orders, o)
+			}
+		}
+	}
+
+	wh.render(w, "admin-orders", map[string]any{
+		"User":    user,
+		"Orders":  orders,
+		"Page":    page,
+		"HasMore": len(orders) == perPage,
+		"Status":  statusFilter,
+		"Success": r.URL.Query().Get("success"),
+	})
+}
+
+// Admin moderation: delete product (bypasses ownership check)
+func (wh *WebHandler) AdminProductDelete(w http.ResponseWriter, r *http.Request) {
+	user := wh.requireRole(w, r, "admin")
+	if user == nil {
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	_, err = wh.dbPool.Exec(r.Context(), "UPDATE products SET deleted_at = NOW() WHERE id = $1", id)
+	if err != nil {
+		log.Printf("AdminProductDelete error: %v", err)
+	}
+	http.Redirect(w, r, fmt.Sprintf("/products/%d", id), http.StatusSeeOther)
+}
+
+// Admin moderation: delete seller
+func (wh *WebHandler) AdminSellerDelete(w http.ResponseWriter, r *http.Request) {
+	user := wh.requireRole(w, r, "admin")
+	if user == nil {
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+		return
+	}
+
+	_, err = wh.dbPool.Exec(r.Context(), "DELETE FROM sellers WHERE id = $1", id)
+	if err != nil {
+		log.Printf("AdminSellerDelete error: %v", err)
+	}
+	http.Redirect(w, r, "/admin/users?success=Seller+deleted", http.StatusSeeOther)
+}
+
+// Admin moderation: delete review
+func (wh *WebHandler) AdminReviewDelete(w http.ResponseWriter, r *http.Request) {
+	user := wh.requireRole(w, r, "admin")
+	if user == nil {
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	// Get product ID for redirect
+	var productID int64
+	wh.dbPool.QueryRow(r.Context(), "SELECT product_id FROM reviews WHERE id = $1", id).Scan(&productID)
+
+	_, err = wh.dbPool.Exec(r.Context(), "DELETE FROM reviews WHERE id = $1", id)
+	if err != nil {
+		log.Printf("AdminReviewDelete error: %v", err)
+	}
+
+	if productID > 0 {
+		http.Redirect(w, r, fmt.Sprintf("/products/%d", productID), http.StatusSeeOther)
+	} else {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}
+}
+
+// --- Analyst Dashboard ---
+
+type platformStats struct {
+	TotalUsers    int
+	TotalSellers  int
+	TotalProducts int
+	TotalOrders   int
+	TotalRevenue  string
+	TotalReviews  int
+	UsersByRole   []roleCount
+	OrdersByStatus []statusCount
+	TopProducts   []topProduct
+}
+
+type roleCount struct {
+	Role  string
+	Count int
+}
+
+type statusCount struct {
+	Status string
+	Count  int
+}
+
+type topProduct struct {
+	ID       int64
+	Name     string
+	Revenue  string
+	UnitsSold int
+}
+
+func (wh *WebHandler) AnalystDashboard(w http.ResponseWriter, r *http.Request) {
+	user := wh.requireRole(w, r, "analyst", "admin")
+	if user == nil {
+		return
+	}
+
+	ctx := r.Context()
+	stats := platformStats{}
+
+	// Total counts
+	wh.dbPool.QueryRow(ctx, "SELECT count(*) FROM users WHERE deleted_at IS NULL").Scan(&stats.TotalUsers)
+	wh.dbPool.QueryRow(ctx, "SELECT count(*) FROM sellers").Scan(&stats.TotalSellers)
+	wh.dbPool.QueryRow(ctx, "SELECT count(*) FROM products WHERE deleted_at IS NULL").Scan(&stats.TotalProducts)
+	wh.dbPool.QueryRow(ctx, "SELECT count(*) FROM orders WHERE status != 'draft'").Scan(&stats.TotalOrders)
+	wh.dbPool.QueryRow(ctx, "SELECT count(*) FROM reviews").Scan(&stats.TotalReviews)
+	wh.dbPool.QueryRow(ctx, "SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE status IN ('paid','shipped','delivered')").Scan(&stats.TotalRevenue)
+
+	// Users by role
+	rows, err := wh.dbPool.Query(ctx, "SELECT role, count(*) FROM users WHERE deleted_at IS NULL GROUP BY role ORDER BY count(*) DESC")
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var rc roleCount
+			if rows.Scan(&rc.Role, &rc.Count) == nil {
+				stats.UsersByRole = append(stats.UsersByRole, rc)
+			}
+		}
+	}
+
+	// Orders by status
+	rows2, err := wh.dbPool.Query(ctx, "SELECT status, count(*) FROM orders GROUP BY status ORDER BY count(*) DESC")
+	if err == nil {
+		defer rows2.Close()
+		for rows2.Next() {
+			var sc statusCount
+			if rows2.Scan(&sc.Status, &sc.Count) == nil {
+				stats.OrdersByStatus = append(stats.OrdersByStatus, sc)
+			}
+		}
+	}
+
+	// Top 10 products by revenue
+	rows3, err := wh.dbPool.Query(ctx, `
+		SELECT p.id, p.name, COALESCE(SUM(oi.price_at_purchase * oi.quantity), 0) as revenue, COALESCE(SUM(oi.quantity), 0) as units
+		FROM products p
+		JOIN order_items oi ON oi.product_id = p.id
+		JOIN orders o ON o.id = oi.order_id AND o.status IN ('paid','shipped','delivered')
+		GROUP BY p.id, p.name
+		ORDER BY revenue DESC
+		LIMIT 10
+	`)
+	if err == nil {
+		defer rows3.Close()
+		for rows3.Next() {
+			var tp topProduct
+			if rows3.Scan(&tp.ID, &tp.Name, &tp.Revenue, &tp.UnitsSold) == nil {
+				stats.TopProducts = append(stats.TopProducts, tp)
+			}
+		}
+	}
+
+	wh.render(w, "analyst", map[string]any{
+		"User":  user,
+		"Stats": stats,
 	})
 }

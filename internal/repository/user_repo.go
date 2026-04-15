@@ -20,6 +20,45 @@ func NewUserRepo(pool *pgxpool.Pool) UserRepoImpl {
 	return UserRepoImpl{pool: pool}
 }
 
+func (ur UserRepoImpl) GetUsers(ctx context.Context, opts m.UserListOptions) (us []m.User, err error) {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	qb := psql.Select("id", "email", "password_hash", "full_name", "phone", "role", "created_at", "deleted_at").
+		From("users").
+		OrderBy("id ASC")
+	if opts.Search != nil && *opts.Search != "" {
+		like := "%" + *opts.Search + "%"
+		qb = qb.Where(sq.Or{sq.ILike{"email": like}, sq.ILike{"full_name": like}})
+	}
+	if opts.Role != nil && *opts.Role != "" {
+		qb = qb.Where(sq.Eq{"role": *opts.Role})
+	}
+	pg := opts.Pagination
+	if pg.Page > 0 && pg.Limit > 0 {
+		qb = qb.Offset(uint64(pg.Limit * (pg.Page - 1))).Limit(uint64(pg.Limit))
+	}
+	sql, args, err := qb.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	rows, err := getConn(ctx, ur.pool).Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
+	}
+	defer rows.Close()
+	us = make([]m.User, 0)
+	for rows.Next() {
+		var u userRow
+		if err = rows.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.FullName, &u.Phone, &u.Role, &u.CreatedAt, &u.DeletedAt); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrToScan, err)
+		}
+		us = append(us, u.toModel())
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrRowsIteration, err)
+	}
+	return us, nil
+}
+
 func (ur UserRepoImpl) GetUserByID(ctx context.Context, id int64) (u m.User, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.

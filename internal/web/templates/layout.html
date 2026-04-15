@@ -21,6 +21,8 @@
                     <a href="/addresses">Addresses</a>
                 {{end}}
                 {{if eq .User.Role "seller"}}<a href="/seller">Seller</a>{{end}}
+                {{if eq .User.Role "admin"}}<a href="/admin/users">Admin</a><a href="/analyst">Analytics</a>{{end}}
+                {{if eq .User.Role "analyst"}}<a href="/analyst">Analytics</a>{{end}}
                 <a href="/profile">{{.User.FullName}}</a>
                 <a href="/logout">Logout</a>
             {{else}}

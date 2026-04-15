@@ -23,6 +23,7 @@ var (
 	ErrUpdateUser                    = errors.New("Error occured when updating user")
 	ErrGetUserByID                   = errors.New("Error occured when getting user by id")
 	ErrGetUserByEmail                = errors.New("Error occured when getting user by email")
+	ErrGetUsers                      = errors.New("Error occured when getting users")
 	ErrDeleteUser                    = errors.New("Error occured when deleting user")
 	ErrChangePasswordUser            = errors.New("Error occured when changing user password")
 	ErrUserNotFound                  = errors.New("User not found")

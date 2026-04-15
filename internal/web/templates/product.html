@@ -4,6 +4,11 @@
 <div class="product-detail">
     <div class="product-detail__name">{{.Product.Name}}</div>
     <div class="product-detail__price">{{.Product.Price}} &#8381;</div>
+    {{with .Product.Rating}}
+    <div style="font-size: 1.1rem; color: #f59e0b; margin-bottom: 0.5rem;">
+        {{printf "%.1f" .}} &#9733; <span style="color: var(--text-muted); font-size: 0.9rem;">product rating</span>
+    </div>
+    {{end}}
     <div class="product-detail__meta">
         In stock: {{.Product.StockQuantity}} &bull;
         <a href="/sellers/{{.Seller.ID}}">{{.Seller.CompanyName}}</a> &bull;
@@ -16,6 +21,9 @@
     {{if eq .Notice "already-in-cart"}}
     <div class="alert alert--error" style="margin-bottom: 1rem;">This product is already in your cart. <a href="/cart">Go to cart</a> to change quantity.</div>
     {{end}}
+    {{if eq .Notice "added-to-cart"}}
+    <div class="alert alert--success" style="margin-bottom: 1rem;">Added to cart! <a href="/cart">Go to cart</a></div>
+    {{end}}
     <form method="POST" action="/cart/add" class="product-detail__cart-form">
         <input type="hidden" name="product_id" value="{{.Product.ID}}">
         <label for="quantity">Quantity:</label>
@@ -25,39 +33,62 @@
     {{end}}
 </div>
 
-{{if .PriceHistory}}
-<div class="price-chart-section">
-    <h2>Price History</h2>
-    <canvas id="priceChart" height="80"></canvas>
+{{if and .User (eq .User.Role "admin")}}
+<div style="margin-top: 1rem;">
+    <form method="POST" action="/admin/products/{{.Product.ID}}/delete" style="display: inline;">
+        <button type="submit" class="btn btn--danger btn--sm" onclick="return confirm('Delete this product?')">Delete Product (Admin)</button>
+    </form>
 </div>
-<script>
-    const ctx = document.getElementById('priceChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [{{range .PriceHistory}}"{{.ChangedAt.Format "02.01.2006"}}",{{end}}],
-            datasets: [{
-                label: 'Price (RUB)',
-                data: [{{range .PriceHistory}}{{.NewPrice}},{{end}}],
-                borderColor: '#2563eb',
-                backgroundColor: 'rgba(37,99,235,0.1)',
-                fill: true,
-                tension: 0.3,
-                pointRadius: 4,
-                pointHoverRadius: 6
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: { beginAtZero: false, ticks: { callback: v => v + ' \u20bd' } },
-                x: { ticks: { maxRotation: 45 } }
-            },
-            plugins: { legend: { display: false } }
-        }
-    });
-</script>
 {{end}}
+
+<div class="price-chart-section">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2 style="margin-bottom: 0;">Price History</h2>
+        <div class="price-range-btns">
+            {{$id := .Product.ID}}
+            {{$r := .PriceRange}}
+            <a href="/products/{{$id}}?range=1w" class="btn btn--sm{{if eq $r "1w"}} btn--primary{{end}}">1W</a>
+            <a href="/products/{{$id}}?range=1m" class="btn btn--sm{{if eq $r "1m"}} btn--primary{{end}}">1M</a>
+            <a href="/products/{{$id}}?range=3m" class="btn btn--sm{{if eq $r "3m"}} btn--primary{{end}}">3M</a>
+            <a href="/products/{{$id}}?range=6m" class="btn btn--sm{{if eq $r "6m"}} btn--primary{{end}}">6M</a>
+            <a href="/products/{{$id}}?range=1y" class="btn btn--sm{{if eq $r "1y"}} btn--primary{{end}}">1Y</a>
+            <a href="/products/{{$id}}?range=all" class="btn btn--sm{{if eq $r "all"}} btn--primary{{end}}">All</a>
+        </div>
+    </div>
+    {{if .PriceHistory}}
+    <canvas id="priceChart" height="80"></canvas>
+    <script>
+        const ctx = document.getElementById('priceChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [{{range .PriceHistory}}"{{.ChangedAt.Format "02.01.2006"}}",{{end}}],
+                datasets: [{
+                    label: 'Price (RUB)',
+                    data: [{{range .PriceHistory}}{{.NewPrice}},{{end}}],
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37,99,235,0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: false, ticks: { callback: v => v + ' \u20bd' } },
+                    x: { ticks: { maxRotation: 45 } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+    </script>
+    {{else}}
+    <div class="empty-state" style="padding: 1.5rem;">No price changes in this period</div>
+    {{end}}
+</div>
+
 
 {{if and .User (eq .User.Role "buyer")}}
 <div class="form-card" style="margin-top: 2rem; margin-bottom: 2rem;">
@@ -87,9 +118,16 @@
     <h2>Reviews ({{len .Reviews}})</h2>
     {{range .Reviews}}
     <div class="review-card">
-        <div class="review-card__rating">
-            {{range (starRange .Rating)}}&#9733;{{end}}{{range (emptyStarRange .Rating)}}&#9734;{{end}}
-            <span style="color:#666; font-weight:normal; margin-left:0.5rem;">User #{{.UserID}}</span>
+        <div class="review-card__rating" style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                {{range (starRange .Rating)}}&#9733;{{end}}{{range (emptyStarRange .Rating)}}&#9734;{{end}}
+                <span style="color:#666; font-weight:normal; margin-left:0.5rem;">{{index $.ReviewUserNames .UserID}}</span>
+            </div>
+            {{if and $.User (eq $.User.Role "admin")}}
+            <form method="POST" action="/admin/reviews/{{.ID}}/delete" style="margin:0;">
+                <button type="submit" class="btn btn--danger btn--sm" onclick="return confirm('Delete this review?')">Delete</button>
+            </form>
+            {{end}}
         </div>
         {{if .Comment}}
         <div class="review-card__comment">{{.Comment}}</div>

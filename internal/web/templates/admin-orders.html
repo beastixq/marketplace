@@ -1,0 +1,72 @@
+{{define "title"}}Admin — Orders{{end}}
+
+{{define "content"}}
+<h1 style="margin-bottom: 1.5rem;">Admin Panel — Orders</h1>
+
+<div style="display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border);">
+    <a href="/admin/users" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-muted);">Users</a>
+    <a href="/admin/categories" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--text-muted);">Categories</a>
+    <a href="/admin/orders" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid var(--primary); margin-bottom: -2px; color: var(--primary);">Orders</a>
+</div>
+
+<div class="filters" style="margin-bottom: 1.5rem;">
+    <form method="GET" action="/admin/orders" class="filters__form">
+        <div class="filters__group">
+            <label>Status</label>
+            <select name="status">
+                <option value="">All</option>
+                <option value="pending" {{if eq .Status "pending"}}selected{{end}}>Pending</option>
+                <option value="paid" {{if eq .Status "paid"}}selected{{end}}>Paid</option>
+                <option value="shipped" {{if eq .Status "shipped"}}selected{{end}}>Shipped</option>
+                <option value="delivered" {{if eq .Status "delivered"}}selected{{end}}>Delivered</option>
+                <option value="cancelled" {{if eq .Status "cancelled"}}selected{{end}}>Cancelled</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn--primary">Filter</button>
+        {{if .Status}}<a href="/admin/orders" class="btn btn--sm" style="background: var(--bg); border: 1px solid var(--border);">Clear</a>{{end}}
+    </form>
+</div>
+
+{{if .Success}}
+<div class="alert alert--success">{{.Success}}</div>
+{{end}}
+
+<div style="overflow-x: auto;">
+<table style="width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">
+    <thead>
+        <tr style="background: var(--bg); text-align: left;">
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">ID</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">Buyer ID</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">Seller ID</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">Status</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">Total</th>
+            <th style="padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">Created</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range .Orders}}
+        <tr style="border-top: 1px solid var(--border);">
+            <td style="padding: 0.75rem 1rem;"><a href="/orders/{{.ID}}">#{{.ID}}</a></td>
+            <td style="padding: 0.75rem 1rem;">{{.UserID}}</td>
+            <td style="padding: 0.75rem 1rem;">{{with .SellerID}}{{.}}{{else}}&mdash;{{end}}</td>
+            <td style="padding: 0.75rem 1rem;">
+                <span class="order-card__status order-card__status--{{.Status}}">{{.Status}}</span>
+            </td>
+            <td style="padding: 0.75rem 1rem; font-weight: 600;">{{.TotalAmount}} &#8381;</td>
+            <td style="padding: 0.75rem 1rem; color: var(--text-muted);">{{.CreatedAt.Format "02.01.2006 15:04"}}</td>
+        </tr>
+    {{end}}
+    </tbody>
+</table>
+</div>
+
+<div class="pagination">
+    {{if gt .Page 1}}
+    <a href="/admin/orders?page={{sub .Page 1}}{{if .Status}}&status={{.Status}}{{end}}">&laquo; Prev</a>
+    {{end}}
+    <span class="active">Page {{.Page}}</span>
+    {{if .HasMore}}
+    <a href="/admin/orders?page={{add .Page 1}}{{if .Status}}&status={{.Status}}{{end}}">Next &raquo;</a>
+    {{end}}
+</div>
+{{end}}
