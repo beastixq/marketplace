@@ -10,12 +10,12 @@ System_Ext(bank, "Платёжная система", "Обрабатывает 
 System_Boundary(marketplace, "Онлайн-маркетплейс") {
     Container(webapp, "Веб-приложение", "Go 1.24+, chi, html/template", "Обрабатывает HTTP-запросы,\nрендерит HTML-страницы,\nреализует бизнес-логику")
     ContainerDb(postgres, "База данных", "PostgreSQL 16", "Хранит пользователей, товары,\nзаказы, отзывы")
-    ContainerDb(redis, "Кэш", "Redis 7", "Кэширует каталог и карточки товаров,\nхранит сессии")
+    ContainerDb(redis, "Кэш", "Redis 7", "Кэширует каталог и карточки товаров,\nхранит блок-лист отозванных JWT-токенов")
 }
 
 Rel(user, webapp, "Использует", "HTTPS")
 Rel(webapp, postgres, "Читает и записывает данные", "pgx/v5")
-Rel(webapp, redis, "Кэширует, читает сессии", "go-redis/v9")
+Rel(webapp, redis, "Кэширует данные, проверяет блок-лист токенов", "go-redis/v9")
 Rel(webapp, bank, "Инициирует платёж", "HTTPS")
 
 LAYOUT_WITH_LEGEND()
