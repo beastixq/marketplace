@@ -2,6 +2,7 @@ package repository_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -46,7 +47,6 @@ func createTestSeller(t *testing.T) int64 {
 	return sellerID
 }
 
-// TestProductRepo_CreateAndGet проверяет сохранение товара и его извлечение по ID.
 func TestProductRepo_CreateAndGet(t *testing.T) {
 	sellerID := createTestSeller(t)
 	var r service.ProductRepo = repo.NewProductRepo(testPool)
@@ -93,7 +93,6 @@ func TestProductRepo_CreateAndGet(t *testing.T) {
 	}
 }
 
-// TestProductRepo_Update проверяет изменение названия и количества товара.
 func TestProductRepo_Update(t *testing.T) {
 	sellerID := createTestSeller(t)
 	var r service.ProductRepo = repo.NewProductRepo(testPool)
@@ -129,10 +128,19 @@ func TestProductRepo_Update(t *testing.T) {
 	if updated.StockQuantity != newQty {
 		t.Errorf("StockQuantity после Update: got %d, want %d", updated.StockQuantity, newQty)
 	}
+
+	fetched, err := r.GetProductByID(ctx, id)
+	if err != nil {
+		t.Fatalf("GetProductByID после Update: %v", err)
+	}
+	if fetched.Name != newName {
+		t.Errorf("Name в БД: got %q, want %q", fetched.Name, newName)
+	}
+	if fetched.StockQuantity != newQty {
+		t.Errorf("StockQuantity в БД: got %d, want %d", fetched.StockQuantity, newQty)
+	}
 }
 
-// TestProductRepo_GetProducts_BySeller проверяет выборку каталога с фильтром по продавцу.
-// Создаёт двух продавцов и товары, и убеждается что фильтрация возвращает только нужные.
 func TestProductRepo_GetProducts_BySeller(t *testing.T) {
 	sellerID := createTestSeller(t)
 	var r service.ProductRepo = repo.NewProductRepo(testPool)
@@ -172,5 +180,171 @@ func TestProductRepo_GetProducts_BySeller(t *testing.T) {
 		if p.DeletedAt != nil {
 			t.Errorf("в каталоге не должно быть мягко удалённых товаров (id=%d)", p.ID)
 		}
+	}
+}
+
+func TestProductRepo_GetProducts_Limit(t *testing.T) {
+	sellerID := createTestSeller(t)
+	var r service.ProductRepo = repo.NewProductRepo(testPool)
+	ctx := context.Background()
+
+	ids := make([]int64, 3)
+	for i := range 3 {
+		id, err := r.CreateProduct(ctx, m.ProductCreate{
+			SellerID: sellerID, Name: fmt.Sprintf("lim_%d_%d", time.Now().UnixNano(), i),
+			Price: decimal.NewFromFloat(10), StockQuantity: 1,
+		})
+		if err != nil {
+			t.Fatalf("CreateProduct %d: %v", i, err)
+		}
+		ids[i] = id
+	}
+	t.Cleanup(func() {
+		for _, id := range ids {
+			_, _ = testPool.Exec(context.Background(), "DELETE FROM products WHERE id = $1", id)
+		}
+	})
+
+	limit := 2
+	got, err := r.GetProducts(ctx, m.CatalogOptions{
+		SellerID:   &sellerID,
+		Pagination: &m.PaginationOpts{Page: 1, Limit: limit},
+	})
+	if err != nil {
+		t.Fatalf("GetProducts: %v", err)
+	}
+	if len(got) != limit {
+		t.Errorf("ожидается ровно %d, получено %d", limit, len(got))
+	}
+	for _, p := range got {
+		if p.ID == ids[2] {
+			t.Errorf("третий товар id=%d не должен попасть в страницу с limit=2", ids[2])
+		}
+	}
+}
+
+func TestProductRepo_Update_NotFound(t *testing.T) {
+	var r service.ProductRepo = repo.NewProductRepo(testPool)
+	ctx := context.Background()
+
+	name := "ghost"
+	_, err := r.UpdateProduct(ctx, 999999999, m.ProductUpdate{Name: &name})
+	if !errors.Is(err, service.ErrNotFound) {
+		t.Errorf("ожидалась ErrNotFound, получено: %v", err)
+	}
+}
+
+// Soft delete: DeletedAt nil→non-nil, запись остаётся в БД но уходит из каталога.
+func TestProductRepo_Delete(t *testing.T) {
+	sellerID := createTestSeller(t)
+	var r service.ProductRepo = repo.NewProductRepo(testPool)
+	ctx := context.Background()
+
+	id, err := r.CreateProduct(ctx, m.ProductCreate{
+		SellerID:      sellerID,
+		Name:          "To Delete",
+		Price:         decimal.NewFromFloat(100),
+		StockQuantity: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateProduct: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM product_price_history WHERE product_id = $1", id)
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM products WHERE id = $1", id)
+	})
+
+	// Pre-condition.
+	before, err := r.GetProductByID(ctx, id)
+	if err != nil {
+		t.Fatalf("GetProductByID до удаления: %v", err)
+	}
+	if before.DeletedAt != nil {
+		t.Fatal("некорректные данные теста: DeletedAt не nil до удаления")
+	}
+
+	// Act.
+	if err := r.DeleteProductByID(ctx, id); err != nil {
+		t.Fatalf("DeleteProductByID: %v", err)
+	}
+
+	// Post-condition: DeletedAt установлен.
+	after, err := r.GetProductByID(ctx, id)
+	if err != nil {
+		t.Fatalf("GetProductByID после удаления: %v", err)
+	}
+	if after.DeletedAt == nil {
+		t.Error("DeletedAt должен быть установлен после DeleteProductByID")
+	}
+
+	// Post-condition: товар не попадает в выборку каталога.
+	products, err := r.GetProducts(ctx, m.CatalogOptions{SellerID: &sellerID})
+	if err != nil {
+		t.Fatalf("GetProducts: %v", err)
+	}
+	for _, p := range products {
+		if p.ID == id {
+			t.Errorf("удалённый товар id=%d присутствует в каталоге", id)
+		}
+	}
+}
+
+func TestProductRepo_PriceHistory(t *testing.T) {
+	sellerID := createTestSeller(t)
+	var r service.ProductRepo = repo.NewProductRepo(testPool)
+	ctx := context.Background()
+
+	id, err := r.CreateProduct(ctx, m.ProductCreate{
+		SellerID:      sellerID,
+		Name:          "Price History Test",
+		Price:         decimal.NewFromFloat(100),
+		StockQuantity: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateProduct: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM product_price_history WHERE product_id = $1", id)
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM products WHERE id = $1", id)
+	})
+
+	// Pre-condition: истории нет.
+	from := time.Now().Add(-time.Hour)
+	to := time.Now().Add(time.Hour)
+	historyBefore, err := r.GetProductPriceHistory(ctx, id, from, to)
+	if err != nil {
+		t.Fatalf("GetProductPriceHistory до обновления цены: %v", err)
+	}
+	if len(historyBefore) != 0 {
+		t.Fatalf("история пуста до изменения цены, получено %d записей", len(historyBefore))
+	}
+
+	// Act: меняем цену с ChangedBy (триггер запишет в product_price_history).
+	newPrice := decimal.NewFromFloat(250)
+	changedBy := "test-actor"
+	if _, err := r.UpdateProduct(ctx, id, m.ProductUpdate{
+		Price:     &newPrice,
+		ChangedBy: &changedBy,
+	}); err != nil {
+		t.Fatalf("UpdateProduct: %v", err)
+	}
+
+	// Post-condition: в истории одна запись с правильными ценами.
+	historyAfter, err := r.GetProductPriceHistory(ctx, id, from, to)
+	if err != nil {
+		t.Fatalf("GetProductPriceHistory после обновления цены: %v", err)
+	}
+	if len(historyAfter) != 1 {
+		t.Fatalf("ожидается 1 запись истории, получено %d", len(historyAfter))
+	}
+	h := historyAfter[0]
+	if !h.OldPrice.Equal(decimal.NewFromFloat(100)) {
+		t.Errorf("OldPrice: got %s, want 100", h.OldPrice)
+	}
+	if !h.NewPrice.Equal(newPrice) {
+		t.Errorf("NewPrice: got %s, want %s", h.NewPrice, newPrice)
+	}
+	if h.ChangedBy != changedBy {
+		t.Errorf("ChangedBy: got %q, want %q", h.ChangedBy, changedBy)
 	}
 }

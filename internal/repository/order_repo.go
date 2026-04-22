@@ -113,6 +113,9 @@ func (or OrderRepoImpl) UpdateOrder(ctx context.Context, id int64, ou m.OrderUpd
 	row := getConn(ctx, or.pool).QueryRow(ctx, sql, args...)
 	var order orderRow
 	if err = row.Scan(&order.ID, &order.UserID, &order.AddressID, &order.SellerID, &order.Status, &order.TotalAmount, &order.CreatedAt, &order.UpdatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return m.Order{}, service.ErrNotFound
+		}
 		return m.Order{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return order.toModel(), nil

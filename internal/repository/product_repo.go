@@ -176,6 +176,9 @@ func (pr ProductRepoImpl) UpdateProduct(ctx context.Context, id int64, pu m.Prod
 	scanProduct := func(row pgx.Row) (m.Product, error) {
 		var product productRow
 		if err := row.Scan(&product.ID, &product.SellerID, &product.Name, &product.Description, &product.Price, &product.StockQuantity, &product.Rating, &product.CreatedAt, &product.DeletedAt); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return m.Product{}, service.ErrNotFound
+			}
 			return m.Product{}, fmt.Errorf("%w: %v", ErrToScan, err)
 		}
 		return product.toModel(), nil
@@ -184,8 +187,7 @@ func (pr ProductRepoImpl) UpdateProduct(ctx context.Context, id int64, pu m.Prod
 	if pu.ChangedBy != nil {
 		var result m.Product
 		err = pgx.BeginFunc(ctx, pr.pool, func(tx pgx.Tx) error {
-			// TODO: Failed to update: Failed to update product: Failed to Exec: ERROR: syntax error at or near "current_user" (SQLSTATE 42601)
-			if _, err := tx.Exec(ctx, "SET LOCAL app.current_user = $1", *pu.ChangedBy); err != nil {
+			if _, err := tx.Exec(ctx, "SELECT set_config('app.current_user', $1, true)", *pu.ChangedBy); err != nil {
 				return fmt.Errorf("%w: %v", ErrExec, err)
 			}
 			result, err = scanProduct(tx.QueryRow(ctx, updateSQL, args...))

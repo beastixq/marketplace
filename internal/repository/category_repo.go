@@ -109,6 +109,9 @@ func (cr CategoryRepoImpl) UpdateCategory(ctx context.Context, id int64, cu m.Ca
 	row := getConn(ctx, cr.pool).QueryRow(ctx, sql, args...)
 	var crow categoryRow
 	if err = row.Scan(&crow.ID, &crow.ParentID, &crow.Name, &crow.Description); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return m.Category{}, service.ErrNotFound
+		}
 		return m.Category{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return crow.toModel(), nil

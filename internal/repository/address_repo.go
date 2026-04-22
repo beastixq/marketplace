@@ -110,6 +110,9 @@ func (ar AddressRepoImpl) UpdateAddress(ctx context.Context, id int64, au m.Addr
 	row := getConn(ctx, ar.pool).QueryRow(ctx, sql, args...)
 	var address addressRow
 	if err = row.Scan(&address.ID, &address.UserID, &address.City, &address.Street, &address.ZipCode, &address.IsDefault, &address.CreatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return m.Address{}, service.ErrNotFound
+		}
 		return m.Address{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return address.toModel(), nil

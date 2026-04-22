@@ -114,6 +114,9 @@ func (sr SellerRepoImpl) UpdateSeller(ctx context.Context, id int64, su m.Seller
 	row := getConn(ctx, sr.pool).QueryRow(ctx, sql, args...)
 	var seller sellerRow
 	if err = row.Scan(&seller.ID, &seller.UserID, &seller.CompanyName, &seller.Description, &seller.Rating, &seller.CreatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return m.Seller{}, service.ErrNotFound
+		}
 		return m.Seller{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return seller.toModel(), nil
