@@ -13,5 +13,6 @@ requests.http
 docs/
 .vscode
 problems.md
-
+.codex
+prompts/
 internal/mocks
