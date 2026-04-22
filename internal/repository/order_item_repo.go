@@ -104,6 +104,9 @@ func (oir OrderItemRepoImpl) UpdateOrderItem(ctx context.Context, id int64, oiu 
 	row := getConn(ctx, oir.pool).QueryRow(ctx, sql, args...)
 	var ordItem orderItemRow
 	if err = row.Scan(&ordItem.ID, &ordItem.OrderID, &ordItem.ProductID, &ordItem.Quantity, &ordItem.PriceAtPurchase); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return m.OrderItem{}, service.ErrNotFound
+		}
 		return m.OrderItem{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return ordItem.toModel(), nil

@@ -100,6 +100,9 @@ func (ur UserRepoImpl) UpdateUser(ctx context.Context, id int64, uu m.UserUpdate
 	row := getConn(ctx, ur.pool).QueryRow(ctx, sql, args...)
 	var user userRow
 	if err = row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.FullName, &user.Phone, &user.Role, &user.CreatedAt, &user.DeletedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return m.User{}, service.ErrNotFound
+		}
 		return m.User{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return user.toModel(), nil

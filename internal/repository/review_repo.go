@@ -100,6 +100,9 @@ func (rr ReviewRepoImpl) UpdateReview(ctx context.Context, id int64, ru m.Review
 	row := getConn(ctx, rr.pool).QueryRow(ctx, sql, args...)
 	var review reviewRow
 	if err = row.Scan(&review.ID, &review.UserID, &review.ProductID, &review.Rating, &review.Comment, &review.CreatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return m.Review{}, service.ErrNotFound
+		}
 		return m.Review{}, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return review.toModel(), nil
