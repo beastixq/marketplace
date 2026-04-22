@@ -8,7 +8,38 @@
         {{with .Seller.Rating}}<span>Rating: {{.}} / 5 &#9733;</span>{{end}}
         <span>Seller since {{.Seller.CreatedAt.Format "January 2006"}}</span>
     </div>
+    {{if and $.User (eq $.User.Role "admin")}}
+    <div style="margin-top: 1rem;">
+        <form method="POST" action="/admin/sellers/{{.Seller.ID}}/delete" style="display: inline;">
+            <button type="submit" class="btn btn--danger btn--sm" onclick="return confirm('Delete this seller profile?')">Delete Seller (Admin)</button>
+        </form>
+    </div>
+    {{end}}
 </div>
+
+{{if .Stats}}
+<div style="margin-bottom: 2rem;">
+    <h2 style="margin-bottom: 1rem;">Seller Statistics (Admin view, last year)</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
+        <div class="card" style="padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); text-align: center;">
+            <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">{{.Stats.TotalOrders}}</div>
+            <div style="color: var(--text-muted); font-size: 0.85rem;">Total Orders</div>
+        </div>
+        <div class="card" style="padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); text-align: center;">
+            <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">{{.Stats.TotalRevenue}} &#8381;</div>
+            <div style="color: var(--text-muted); font-size: 0.85rem;">Total Revenue</div>
+        </div>
+        <div class="card" style="padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); text-align: center;">
+            <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">{{.Stats.AvgOrderValue}} &#8381;</div>
+            <div style="color: var(--text-muted); font-size: 0.85rem;">Avg Order Value</div>
+        </div>
+        <div class="card" style="padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); text-align: center;">
+            <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">{{.Stats.TopProductName}}</div>
+            <div style="color: var(--text-muted); font-size: 0.85rem;">Top Product</div>
+        </div>
+    </div>
+</div>
+{{end}}
 
 <h2 style="margin-bottom: 1rem;">Products ({{len .Products}})</h2>
 {{if .Products}}

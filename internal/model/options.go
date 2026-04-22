@@ -14,6 +14,12 @@ type PaginationOpts struct {
 	Limit int
 }
 
+type UserListOptions struct {
+	Search     *string
+	Role       *string
+	Pagination PaginationOpts
+}
+
 type CatalogOptions struct {
 	Categories   []string
 	MinPrice     *decimal.Decimal
