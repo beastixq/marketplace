@@ -90,28 +90,30 @@ func (sr sellerStatsRow) toModel() m.SellerStats {
 }
 
 type productRow struct {
-	ID            int64
-	SellerID      int64
-	Name          string
-	Description   *string
-	Price         decimal.Decimal
-	StockQuantity int
-	Rating        *float32
-	CreatedAt     time.Time
-	DeletedAt     *time.Time
+	ID               int64
+	SellerID         int64
+	Name             string
+	Description      *string
+	Price            decimal.Decimal
+	StockQuantity    int
+	ReservedQuantity int
+	Rating           *float32
+	CreatedAt        time.Time
+	DeletedAt        *time.Time
 }
 
 func (pr productRow) toModel() m.Product {
 	return m.Product{
-		ID:            pr.ID,
-		SellerID:      pr.SellerID,
-		Name:          pr.Name,
-		Description:   pr.Description,
-		Price:         pr.Price,
-		StockQuantity: pr.StockQuantity,
-		Rating:        pr.Rating,
-		CreatedAt:     pr.CreatedAt,
-		DeletedAt:     pr.DeletedAt,
+		ID:               pr.ID,
+		SellerID:         pr.SellerID,
+		Name:             pr.Name,
+		Description:      pr.Description,
+		Price:            pr.Price,
+		StockQuantity:    pr.StockQuantity,
+		ReservedQuantity: pr.ReservedQuantity,
+		Rating:           pr.Rating,
+		CreatedAt:        pr.CreatedAt,
+		DeletedAt:        pr.DeletedAt,
 	}
 }
 

@@ -13,9 +13,11 @@ import (
 type ProductRepo interface {
 	GetProducts(ctx context.Context, options m.CatalogOptions) (ps []m.Product, err error)
 	GetProductByID(ctx context.Context, id int64) (p m.Product, err error)
+	GetProductByIDForUpdate(ctx context.Context, id int64) (p m.Product, err error)
 	GetProductPriceHistory(ctx context.Context, pid int64, dateFrom time.Time, dateTo time.Time) (ph []m.ProductPriceHistory, err error)
 	CreateProduct(ctx context.Context, pc m.ProductCreate) (id int64, err error)
 	UpdateProduct(ctx context.Context, id int64, pu m.ProductUpdate) (p m.Product, err error)
+	ChangeStockAndReserved(ctx context.Context, productID int64, stockDelta int, reservedDelta int) (err error)
 	DeleteProductByID(ctx context.Context, id int64) (err error)
 }
 

@@ -31,32 +31,26 @@ type OrderRepo interface {
 	CancelExpiredPendingOrders(ctx context.Context, deadline time.Time) (err error)
 }
 
-//go:generate mockgen -package mock_service -destination ../mocks/service/mock_product_getter.go github.com/beastixq/marketplace/internal/service ProductGetter
-type ProductGetter interface {
-	GetProductByID(ctx context.Context, id int64) (p m.Product, err error)
-}
-
 //go:generate mockgen -package mock_service -destination ../mocks/service/mock_seller_getter.go github.com/beastixq/marketplace/internal/service SellerGetter
 type SellerGetter interface {
 	GetSellerByUserID(ctx context.Context, userID int64) (s m.Seller, err error)
 }
 
-//go:generate mockgen -package mock_service -destination ../mocks/service/mock_product_updater.go github.com/beastixq/marketplace/internal/service ProductUpdater
-type ProductUpdater interface {
-	UpdateProduct(ctx context.Context, id int64, pu m.ProductUpdate) (p m.Product, err error)
-}
-
 type OrderService struct {
-	orderRepo      OrderRepo
-	orderItemRepo  OrderItemRepo
-	productGetter  ProductGetter
-	productUpdater ProductUpdater
-	sellerGetter   SellerGetter
-	txManager      TxManager
+	orderRepo     OrderRepo
+	orderItemRepo OrderItemRepo
+	productRepo   ProductRepo
+	sellerGetter  SellerGetter
+	txManager     TxManager
 }
 
-func NewOrderService(or OrderRepo, oir OrderItemRepo, pr ProductGetter, pu ProductUpdater, sr SellerGetter, tx TxManager) OrderService {
-	return OrderService{orderRepo: or, orderItemRepo: oir, productGetter: pr, productUpdater: pu, sellerGetter: sr, txManager: tx}
+func NewOrderService(or OrderRepo, oir OrderItemRepo, pr ProductRepo, sr SellerGetter, tx TxManager) OrderService {
+	return OrderService{
+		orderRepo:     or,
+		orderItemRepo: oir,
+		productRepo:   pr,
+		sellerGetter:  sr,
+		txManager:     tx}
 }
 
 func (os OrderService) GetOrderByID(ctx context.Context, orderID int64) (order m.Order, err error) {
@@ -159,7 +153,7 @@ func (os OrderService) AddItemToCart(ctx context.Context, userID int64, productI
 		}
 	}
 
-	product, err := os.productGetter.GetProductByID(ctx, productID)
+	product, err := os.productRepo.GetProductByID(ctx, productID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return ErrProductNotFound
@@ -202,7 +196,7 @@ func (os OrderService) ChangeQuantityCartItem(ctx context.Context, itemID int64,
 		}
 		return fmt.Errorf("%w: %v", ErrGetOrderItemByID, err)
 	}
-	product, err := os.productGetter.GetProductByID(ctx, orderItem.ProductID)
+	product, err := os.productRepo.GetProductByID(ctx, orderItem.ProductID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return ErrProductNotFound
@@ -250,7 +244,7 @@ func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int
 
 	itemsBySellerIDs := make(map[int64][]m.OrderItem)
 	for _, item := range items {
-		product, err := os.productGetter.GetProductByID(ctx, item.ProductID)
+		product, err := os.productRepo.GetProductByID(ctx, item.ProductID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				return nil, ErrProductNotFound
@@ -383,7 +377,7 @@ func (os OrderService) ShipOrder(ctx context.Context, orderID int64, userID int6
 			return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
 		}
 		for _, item := range items {
-			product, err := os.productGetter.GetProductByID(ctx, item.ProductID)
+			product, err := os.productRepo.GetProductByID(ctx, item.ProductID)
 			if err != nil {
 				return fmt.Errorf("%w: %v", ErrGetProductByID, err)
 			}
@@ -392,7 +386,7 @@ func (os OrderService) ShipOrder(ctx context.Context, orderID int64, userID int6
 				return fmt.Errorf("%w: product %d has %d in stock but order requires %d",
 					ErrInsufficientStock, item.ProductID, product.StockQuantity, item.Quantity)
 			}
-			_, err = os.productUpdater.UpdateProduct(ctx, item.ProductID, m.ProductUpdate{StockQuantity: &newQty})
+			_, err = os.productRepo.UpdateProduct(ctx, item.ProductID, m.ProductUpdate{StockQuantity: &newQty})
 			if err != nil {
 				return fmt.Errorf("%w: %v", ErrUpdateProduct, err)
 			}

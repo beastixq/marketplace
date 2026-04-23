@@ -44,7 +44,7 @@ func main() {
 	addressService := svc.NewAddressService(addressRepo)
 	reviewService := svc.NewReviewService(reviewRepo)
 	productService := svc.NewProductService(productRepo, reviewRepo, sellerRepo)
-	orderService := svc.NewOrderService(orderRepo, orderItemRepo, productRepo, productRepo, sellerRepo, txManager)
+	orderService := svc.NewOrderService(orderRepo, orderItemRepo, productRepo, sellerRepo, txManager)
 	categoryService := svc.NewCategoryService(categoryRepo)
 	// TODO: replace with Redis TokenBlocklist implementation
 	authService := svc.NewAuthService(userService, nil, "TODO_SECRET", 24*time.Hour)

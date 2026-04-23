@@ -77,17 +77,16 @@ func newOrderService(ctrl *gomock.Controller) (
 	service.OrderService,
 	*mock_service.MockOrderRepo,
 	*mock_service.MockOrderItemRepo,
-	*mock_service.MockProductGetter,
+	*mock_service.MockProductRepo,
 	*mock_service.MockSellerGetter,
-	*mock_service.MockProductUpdater,
+	*mock_service.MockProductRepo,
 ) {
 	orderMock := mock_service.NewMockOrderRepo(ctrl)
 	itemMock := mock_service.NewMockOrderItemRepo(ctrl)
-	productMock := mock_service.NewMockProductGetter(ctrl)
-	productUpdaterMock := mock_service.NewMockProductUpdater(ctrl)
+	productMock := mock_service.NewMockProductRepo(ctrl)
 	sellerMock := mock_service.NewMockSellerGetter(ctrl)
-	svc := service.NewOrderService(orderMock, itemMock, productMock, productUpdaterMock, sellerMock, passThroughTxManager{})
-	return svc, orderMock, itemMock, productMock, sellerMock, productUpdaterMock
+	svc := service.NewOrderService(orderMock, itemMock, productMock, sellerMock, passThroughTxManager{})
+	return svc, orderMock, itemMock, productMock, sellerMock, productMock
 }
 
 func assertOrder(t *testing.T, got, want m.Order) {

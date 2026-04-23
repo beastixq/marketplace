@@ -72,13 +72,12 @@ var (
 	ErrProductAlreadyInCart   = errors.New("This product is already in the cart")
 	ErrSellerNotSet           = errors.New("Seller is not set for this order")
 	ErrOrderStatusInvalid     = errors.New("Invalid order status")
-	ErrInsufficientStock      = errors.New("Insufficient stock to ship order")
+	ErrInsufficientStock = errors.New("Insufficient stock to ship order")
 
 	// payments
 	ErrPaymentExpired       = errors.New("Payment period has expired")
 	ErrPaymentDeclined      = errors.New("Payment was declined by bank")
 	ErrInvalidPaymentAmount = errors.New("Payment amount does not match order total")
-
 
 	//categories
 	ErrGetCategories    = errors.New("Failed to get categories")
@@ -110,6 +109,8 @@ var (
 
 // For repos usage
 var (
-	ErrNotFound          = errors.New("Not found")
-	ErrNoChangesInUpdate = errors.New("All update fields are nil")
+	ErrNotFound               = errors.New("Not found")
+	ErrNoChangesInUpdate      = errors.New("All update fields are nil")
+	ErrMustBeInTransaction    = errors.New("This method must be called in transaction")
+	ErrStockInvariantViolated = errors.New("Stock invariant violated: reserved or stock quantity out of bounds")
 )
