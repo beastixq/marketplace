@@ -6,8 +6,12 @@ import (
 	"time"
 )
 
+type OrderExpirer interface {
+	ExpireOrders(ctx context.Context, deadline time.Time) error
+}
+
 type OrderExpirationWorker struct {
-	orderRepo  OrderRepo
+	expirer    OrderExpirer
 	interval   time.Duration
 	paymentTTL time.Duration
 	logger     *slog.Logger
@@ -15,13 +19,13 @@ type OrderExpirationWorker struct {
 }
 
 func NewOrderExpirationWorker(
-	orderRepo OrderRepo,
+	expirer OrderExpirer,
 	interval time.Duration,
 	paymentTTL time.Duration,
 	logger *slog.Logger,
 ) *OrderExpirationWorker {
 	return &OrderExpirationWorker{
-		orderRepo:  orderRepo,
+		expirer:    expirer,
 		interval:   interval,
 		paymentTTL: paymentTTL,
 		logger:     logger,
@@ -39,8 +43,8 @@ func (w *OrderExpirationWorker) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			deadline := w.Clock.Now().Add(-w.paymentTTL)
-			if err := w.orderRepo.CancelExpiredPendingOrders(ctx, deadline); err != nil {
-				w.logger.Error("failed to cancel expired pending orders", "err", err)
+			if err := w.expirer.ExpireOrders(ctx, deadline); err != nil {
+				w.logger.Error("failed to expire orders", "err", err)
 			}
 		}
 	}

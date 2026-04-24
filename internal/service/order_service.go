@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	m "github.com/beastixq/marketplace/internal/model"
@@ -25,10 +26,10 @@ type OrderRepo interface {
 	GetOrderByID(ctx context.Context, id int64) (o m.Order, err error)
 	GetOrdersByUserID(ctx context.Context, userID int64, pg m.PaginationOpts) (orders []m.Order, err error)
 	GetSellerOrdersBySellerID(ctx context.Context, sellerID int64, pg m.PaginationOpts) (orders []m.Order, err error)
+	GetExpiredPendingOrders(ctx context.Context, deadline time.Time) (orders []m.Order, err error)
 	CreateOrder(ctx context.Context, oc m.OrderCreate) (id int64, err error)
 	UpdateOrder(ctx context.Context, id int64, ou m.OrderUpdate) (o m.Order, err error)
 	DeleteOrderByID(ctx context.Context, id int64) (err error)
-	CancelExpiredPendingOrders(ctx context.Context, deadline time.Time) (err error)
 }
 
 //go:generate mockgen -package mock_service -destination ../mocks/service/mock_seller_getter.go github.com/beastixq/marketplace/internal/service SellerGetter
@@ -113,6 +114,7 @@ func (os OrderService) GetCart(ctx context.Context, userID int64) (order m.Order
 	if len(drafts) == 0 {
 		return m.Order{}, ErrCartNotFound
 	}
+	// defensive code: если вдруг по какой-то причине корзин в базе >0, возвращаем последнюю созданную
 	latest := drafts[0]
 	for _, idx := range drafts[1:] {
 		if orders[idx].CreatedAt.Compare(orders[latest].CreatedAt) > 0 {
@@ -160,7 +162,7 @@ func (os OrderService) AddItemToCart(ctx context.Context, userID int64, productI
 		}
 		return fmt.Errorf("%w: %v", ErrGetProductByID, err)
 	}
-	if product.StockQuantity < quantity {
+	if product.AvailableQuantity() < quantity {
 		return ErrQuantityTooBig
 	}
 
@@ -203,7 +205,7 @@ func (os OrderService) ChangeQuantityCartItem(ctx context.Context, itemID int64,
 		}
 		return fmt.Errorf("%w: %v", ErrGetProductByID, err)
 	}
-	if quantity > product.StockQuantity {
+	if quantity > product.AvailableQuantity() {
 		return ErrQuantityTooBig
 	}
 	_, err = os.orderItemRepo.UpdateOrderItem(ctx, itemID, m.OrderItemUpdate{Quantity: &quantity})
@@ -221,10 +223,6 @@ func (os OrderService) DeleteCartItem(ctx context.Context, itemID int64) (err er
 	return nil
 }
 
-// TODO: 1. N+1 products read. make less reads
-// 2. think about price at purchase. it item was added long ago and now it
-// has new price -> create with updated
-// 3. or think about cascade delete (already cascade order items delete on order delete. changed table FK constraint)
 func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int64) (orderIDs []int64, err error) {
 	cart, err := os.GetCart(ctx, userID)
 	if err != nil {
@@ -242,27 +240,89 @@ func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int
 		return nil, ErrEmptyCart
 	}
 
-	itemsBySellerIDs := make(map[int64][]m.OrderItem)
+	// суммируем qty по productID и строим отсортированный список ID —
+	// детерминированный порядок блокировок предотвращает deadlock
+	// (T1: lock 1→2, T2: lock 1→2 — очередь; без сортировки T1: lock 1, T2: lock 2 → deadlock)
+	qtyByProductID := make(map[int64]int, len(items))
 	for _, item := range items {
-		product, err := os.productRepo.GetProductByID(ctx, item.ProductID)
-		if err != nil {
-			if errors.Is(err, ErrNotFound) {
-				return nil, ErrProductNotFound
-			}
-			return nil, fmt.Errorf("%w: %v", ErrGetProductByID, err)
-		}
-		itemsBySellerIDs[product.SellerID] = append(itemsBySellerIDs[product.SellerID], item)
+		qtyByProductID[item.ProductID] += item.Quantity
 	}
+	productIDs := make([]int64, 0, len(qtyByProductID))
+	for id := range qtyByProductID {
+		productIDs = append(productIDs, id)
+	}
+	slices.Sort(productIDs)
 
 	var createdOrdersIDs []int64
 	err = os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
-		createdOrdersIDs = make([]int64, 0, len(itemsBySellerIDs))
-		for sellerID, sellerItems := range itemsBySellerIDs {
+		// FOR UPDATE в отсортированном порядке: lock → validate → reserve
+		products := make(map[int64]m.Product, len(productIDs))
+		for _, productID := range productIDs {
+			product, err := os.productRepo.GetProductByIDForUpdate(ctx, productID)
+			if err != nil {
+				if errors.Is(err, ErrNotFound) {
+					return ErrProductNotFound
+				}
+				return fmt.Errorf("%w: %v", ErrGetProductByID, err)
+			}
+			qty := qtyByProductID[productID]
+			if product.AvailableQuantity() < qty {
+				return fmt.Errorf("%w: product %d: available %d, required %d",
+					ErrInsufficientStock, productID, product.AvailableQuantity(), qty)
+			}
+			if err := os.productRepo.ChangeStockAndReserved(ctx, productID, 0, qty); err != nil {
+				return fmt.Errorf("%w: %v", ErrUpdateProduct, err)
+			}
+			products[productID] = product
+		}
+
+		itemsBySellerID := make(map[int64][]m.OrderItem)
+		for _, item := range items {
+			product := products[item.ProductID]
+			item.PriceAtPurchase = product.Price
+			itemsBySellerID[product.SellerID] = append(itemsBySellerID[product.SellerID], item)
+		}
+
+		// single seller optimization
+		if len(itemsBySellerID) == 1 {
+			var onlySellerID int64
+			for id := range itemsBySellerID {
+				onlySellerID = id
+			}
+			sellerItems := itemsBySellerID[onlySellerID]
+			for _, item := range sellerItems {
+				_, err = os.orderItemRepo.UpdateOrderItem(ctx, item.ID, m.OrderItemUpdate{
+					PriceAtPurchase: &item.PriceAtPurchase,
+				})
+				if err != nil {
+					return fmt.Errorf("%w: %v", ErrUpdateOrderItem, err)
+				}
+			}
+			createdOrdersIDs = []int64{cart.ID}
+
 			totalAmount := decimal.Zero
 			for _, item := range sellerItems {
 				totalAmount = totalAmount.Add(item.PriceAtPurchase.Mul(decimal.NewFromInt(int64(item.Quantity))))
 			}
+			statusPending := m.StatusPending
+			_, err := os.orderRepo.UpdateOrder(ctx, cart.ID, m.OrderUpdate{
+				SellerID:    &onlySellerID,
+				AddressID:   &addressID,
+				Status:      &statusPending,
+				TotalAmount: &totalAmount,
+			})
+			if err != nil {
+				return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
+			}
+			return nil
+		}
 
+		createdOrdersIDs = make([]int64, 0, len(itemsBySellerID))
+		for sellerID, sellerItems := range itemsBySellerID {
+			totalAmount := decimal.Zero
+			for _, item := range sellerItems {
+				totalAmount = totalAmount.Add(item.PriceAtPurchase.Mul(decimal.NewFromInt(int64(item.Quantity))))
+			}
 			orderID, err := os.orderRepo.CreateOrder(ctx, m.OrderCreate{
 				UserID:      userID,
 				AddressID:   &addressID,
@@ -273,7 +333,6 @@ func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int
 			if err != nil {
 				return fmt.Errorf("%w: %v", ErrCreateOrder, err)
 			}
-
 			for _, item := range sellerItems {
 				_, err = os.orderItemRepo.CreateOrderItem(ctx, m.OrderItemCreate{
 					OrderID:         orderID,
@@ -335,10 +394,65 @@ func (os OrderService) CancelOrder(ctx context.Context, orderID int64, userID in
 	if order.Status != m.StatusPending && order.Status != m.StatusPaid {
 		return fmt.Errorf("%w: can only cancel pending or paid orders", ErrOrderStatusInvalid)
 	}
-	statusCancelled := m.StatusCancelled
-	_, err = os.orderRepo.UpdateOrder(ctx, orderID, m.OrderUpdate{Status: &statusCancelled})
+
+	items, err := os.orderItemRepo.GetOrderItemsByOrderID(ctx, orderID)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
+		return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
+	}
+
+	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
+		statusCancelled := m.StatusCancelled
+		_, err = os.orderRepo.UpdateOrder(ctx, orderID, m.OrderUpdate{Status: &statusCancelled})
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
+		}
+		for _, item := range items {
+			err = os.productRepo.ChangeStockAndReserved(ctx, item.ProductID, 0, -item.Quantity)
+			if errors.Is(err, ErrNotFound) {
+				return fmt.Errorf("%w: %v", ErrProductNotFound, err)
+			}
+			if errors.Is(err, ErrStockInvariantViolated) {
+				return fmt.Errorf("%w: %v", ErrInsufficientStock, err)
+			}
+			if err != nil {
+				return fmt.Errorf("%w: %v", ErrChangeStockAndReserved, err)
+			}
+		}
+		return nil
+	})
+}
+
+func (os OrderService) ExpireOrders(ctx context.Context, deadline time.Time) error {
+	orders, err := os.orderRepo.GetExpiredPendingOrders(ctx, deadline)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrGetOrdersByUserID, err)
+	}
+	for _, order := range orders {
+		items, err := os.orderItemRepo.GetOrderItemsByOrderID(ctx, order.ID)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
+		}
+		if err = os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
+			statusCancelled := m.StatusCancelled
+			if _, err = os.orderRepo.UpdateOrder(ctx, order.ID, m.OrderUpdate{Status: &statusCancelled}); err != nil {
+				return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
+			}
+			for _, item := range items {
+				err = os.productRepo.ChangeStockAndReserved(ctx, item.ProductID, 0, -item.Quantity)
+				if errors.Is(err, ErrNotFound) {
+					return fmt.Errorf("%w: %v", ErrProductNotFound, err)
+				}
+				if errors.Is(err, ErrStockInvariantViolated) {
+					return fmt.Errorf("%w: %v", ErrInsufficientStock, err)
+				}
+				if err != nil {
+					return fmt.Errorf("%w: %v", ErrChangeStockAndReserved, err)
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -377,18 +491,15 @@ func (os OrderService) ShipOrder(ctx context.Context, orderID int64, userID int6
 			return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
 		}
 		for _, item := range items {
-			product, err := os.productRepo.GetProductByID(ctx, item.ProductID)
-			if err != nil {
-				return fmt.Errorf("%w: %v", ErrGetProductByID, err)
+			err = os.productRepo.ChangeStockAndReserved(ctx, item.ProductID, -item.Quantity, -item.Quantity)
+			if errors.Is(err, ErrNotFound) {
+				return fmt.Errorf("%w: %v", ErrProductNotFound, err)
 			}
-			newQty := product.StockQuantity - item.Quantity
-			if newQty < 0 {
-				return fmt.Errorf("%w: product %d has %d in stock but order requires %d",
-					ErrInsufficientStock, item.ProductID, product.StockQuantity, item.Quantity)
+			if errors.Is(err, ErrStockInvariantViolated) {
+				return fmt.Errorf("%w: %v", ErrInsufficientStock, err)
 			}
-			_, err = os.productRepo.UpdateProduct(ctx, item.ProductID, m.ProductUpdate{StockQuantity: &newQty})
 			if err != nil {
-				return fmt.Errorf("%w: %v", ErrUpdateProduct, err)
+				return fmt.Errorf("%w: %v", ErrChangeStockAndReserved, err)
 			}
 		}
 		return nil

@@ -54,7 +54,7 @@ func main() {
 	paymentService := svc.NewPaymentService(orderRepo, gateway, paymentTTL)
 
 	logger := slog.Default()
-	worker := svc.NewOrderExpirationWorker(orderRepo, 1*time.Minute, paymentTTL, logger)
+	worker := svc.NewOrderExpirationWorker(orderService, 1*time.Minute, paymentTTL, logger)
 	go worker.Run(context.Background())
 
 	authHandler := handler.NewAuthHandler(authService)

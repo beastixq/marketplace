@@ -59,6 +59,7 @@ type OrderCreate struct {
 }
 type OrderUpdate struct {
 	UserID      *int64
+	SellerID    *int64
 	AddressID   *int64
 	Status      *OrderStatus
 	TotalAmount *decimal.Decimal

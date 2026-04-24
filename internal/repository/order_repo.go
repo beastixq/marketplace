@@ -73,6 +73,36 @@ func (or OrderRepoImpl) GetOrdersByUserID(ctx context.Context, userID int64, pg 
 	return orders, nil
 }
 
+func (or OrderRepoImpl) GetExpiredPendingOrders(ctx context.Context, deadline time.Time) ([]m.Order, error) {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.
+		Select("id", "user_id", "address_id", "seller_id", "status", "total_amount", "created_at", "updated_at").
+		From("orders").
+		Where(sq.Eq{"status": "pending"}).
+		Where(sq.LtOrEq{"created_at": deadline}).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	rows, err := getConn(ctx, or.pool).Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
+	}
+	defer rows.Close()
+	orders := make([]m.Order, 0)
+	var orow orderRow
+	for rows.Next() {
+		if err = rows.Scan(&orow.ID, &orow.UserID, &orow.AddressID, &orow.SellerID, &orow.Status, &orow.TotalAmount, &orow.CreatedAt, &orow.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrToScan, err)
+		}
+		orders = append(orders, orow.toModel())
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrRowsIteration, err)
+	}
+	return orders, nil
+}
+
 func (or OrderRepoImpl) CreateOrder(ctx context.Context, oc m.OrderCreate) (id int64, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Insert("orders").Columns("user_id", "address_id", "seller_id", "status", "total_amount").Values(oc.UserID, oc.AddressID, oc.SellerID, oc.Status, oc.TotalAmount).Suffix("RETURNING id").ToSql()
@@ -95,6 +125,9 @@ func (or OrderRepoImpl) UpdateOrder(ctx context.Context, id int64, ou m.OrderUpd
 	ub := psql.Update("orders").Where(sq.Eq{"id": id})
 	if ou.UserID != nil {
 		ub = ub.Set("user_id", *ou.UserID)
+	}
+	if ou.SellerID != nil {
+		ub = ub.Set("seller_id", *ou.SellerID)
 	}
 	if ou.AddressID != nil {
 		ub = ub.Set("address_id", *ou.AddressID)
@@ -136,23 +169,6 @@ func (or OrderRepoImpl) DeleteOrderByID(ctx context.Context, id int64) (err erro
 	return nil
 }
 
-func (or OrderRepoImpl) CancelExpiredPendingOrders(ctx context.Context, deadline time.Time) error {
-	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sql, args, err := psql.
-		Update("orders").
-		Set("status", "cancelled").
-		Set("updated_at", sq.Expr("now()")).
-		Where(sq.Eq{"status": "pending"}).
-		Where(sq.LtOrEq{"created_at": deadline}).
-		ToSql()
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrToSql, err)
-	}
-	if _, err = getConn(ctx, or.pool).Exec(ctx, sql, args...); err != nil {
-		return fmt.Errorf("%w: %v", ErrExec, err)
-	}
-	return nil
-}
 
 func (or OrderRepoImpl) GetSellerOrdersBySellerID(ctx context.Context, sellerID int64, pg m.PaginationOpts) (orders []m.Order, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)

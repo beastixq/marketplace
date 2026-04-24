@@ -63,6 +63,7 @@ var (
 	ErrUpdateOrderItem        = errors.New("Failed to update order item")
 	ErrDeleteOrderByID        = errors.New("Failed to delete order by id")
 	ErrDeleteOrderItemByID    = errors.New("Failed to delete order item by id")
+	ErrChangeStockAndReserved = errors.New("Failed to change stock and reserved")
 	ErrNoOrders               = errors.New("User does not have orders")
 	ErrOrderNotFound          = errors.New("Order not found")
 	ErrOrderItemNotFound      = errors.New("Order item not found")
@@ -72,7 +73,7 @@ var (
 	ErrProductAlreadyInCart   = errors.New("This product is already in the cart")
 	ErrSellerNotSet           = errors.New("Seller is not set for this order")
 	ErrOrderStatusInvalid     = errors.New("Invalid order status")
-	ErrInsufficientStock = errors.New("Insufficient stock to ship order")
+	ErrInsufficientStock      = errors.New("Insufficient stock to ship order")
 
 	// payments
 	ErrPaymentExpired       = errors.New("Payment period has expired")
