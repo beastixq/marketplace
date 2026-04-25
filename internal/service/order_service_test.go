@@ -679,17 +679,21 @@ func TestDeleteCartItem(t *testing.T) {
 func TestCheckout(t *testing.T) {
 	ctx := context.Background()
 
-	product1 := m.Product{ID: 200, SellerID: 10, Price: decimal.NewFromFloat(50.00)}
-	product2 := m.Product{ID: 201, SellerID: 20, Price: decimal.NewFromFloat(30.00)}
+	product1 := m.Product{ID: 200, SellerID: 10, Price: decimal.NewFromFloat(50.00), StockQuantity: 10}
+	product2 := m.Product{ID: 201, SellerID: 20, Price: decimal.NewFromFloat(30.00), StockQuantity: 10}
 
 	item1 := m.OrderItem{ID: 300, OrderID: someOrderID, ProductID: 200, Quantity: 2, PriceAtPurchase: product1.Price}
 	item2 := m.OrderItem{ID: 301, OrderID: someOrderID, ProductID: 201, Quantity: 1, PriceAtPurchase: product2.Price}
 
 	type testCase struct {
-		Description    string
-		MockGetOrders  MockOrderListReturn
-		MockGetItems   *MockOrderItemListReturn
-		MockProducts   map[int64]MockProductReturn
+		Description         string
+		MockGetOrders       MockOrderListReturn
+		MockGetItems        *MockOrderItemListReturn
+		MockProductsForLock map[int64]MockProductReturn
+		// single seller path
+		MockUpdateItemErr *error
+		MockUpdateOrder   *MockOrderReturn
+		// multi seller path
 		MockCreateOrds []MockCreateReturn
 		MockCreateItem *error
 		MockDeleteCart *error
@@ -702,19 +706,18 @@ func TestCheckout(t *testing.T) {
 			Description:   "Success single seller",
 			MockGetOrders: MockOrderListReturn{Orders: []m.Order{someDraftOrder}},
 			MockGetItems:  &MockOrderItemListReturn{Items: []m.OrderItem{item1}},
-			MockProducts: map[int64]MockProductReturn{
+			MockProductsForLock: map[int64]MockProductReturn{
 				200: {Product: product1},
 			},
-			MockCreateOrds: []MockCreateReturn{{ID: 600}},
-			MockCreateItem: ptrErr(nil),
-			MockDeleteCart: ptrErr(nil),
-			ExpectedCount:  1,
+			MockUpdateItemErr: ptrErr(nil),
+			MockUpdateOrder:   &MockOrderReturn{},
+			ExpectedCount:     1,
 		},
 		{
 			Description:   "Success two sellers splits orders",
 			MockGetOrders: MockOrderListReturn{Orders: []m.Order{someDraftOrder}},
 			MockGetItems:  &MockOrderItemListReturn{Items: []m.OrderItem{item1, item2}},
-			MockProducts: map[int64]MockProductReturn{
+			MockProductsForLock: map[int64]MockProductReturn{
 				200: {Product: product1},
 				201: {Product: product2},
 			},
@@ -749,40 +752,54 @@ func TestCheckout(t *testing.T) {
 			Description:   "Product not found during checkout",
 			MockGetOrders: MockOrderListReturn{Orders: []m.Order{someDraftOrder}},
 			MockGetItems:  &MockOrderItemListReturn{Items: []m.OrderItem{item1}},
-			MockProducts: map[int64]MockProductReturn{
+			MockProductsForLock: map[int64]MockProductReturn{
 				200: {Error: service.ErrNotFound},
 			},
 			ExpectedErr: service.ErrProductNotFound,
 		},
 		{
-			Description:   "CreateOrder fails",
+			Description:   "UpdateOrder fails (single seller)",
 			MockGetOrders: MockOrderListReturn{Orders: []m.Order{someDraftOrder}},
 			MockGetItems:  &MockOrderItemListReturn{Items: []m.OrderItem{item1}},
-			MockProducts: map[int64]MockProductReturn{
+			MockProductsForLock: map[int64]MockProductReturn{
 				200: {Product: product1},
+			},
+			MockUpdateItemErr: ptrErr(nil),
+			MockUpdateOrder:   &MockOrderReturn{Error: errors.New("db error")},
+			ExpectedErr:       service.ErrUpdateOrder,
+		},
+		{
+			Description:   "CreateOrder fails (two sellers)",
+			MockGetOrders: MockOrderListReturn{Orders: []m.Order{someDraftOrder}},
+			MockGetItems:  &MockOrderItemListReturn{Items: []m.OrderItem{item1, item2}},
+			MockProductsForLock: map[int64]MockProductReturn{
+				200: {Product: product1},
+				201: {Product: product2},
 			},
 			MockCreateOrds: []MockCreateReturn{{Error: errors.New("db error")}},
 			ExpectedErr:    service.ErrCreateOrder,
 		},
 		{
-			Description:   "CreateOrderItem fails during checkout",
+			Description:   "CreateOrderItem fails during checkout (two sellers)",
 			MockGetOrders: MockOrderListReturn{Orders: []m.Order{someDraftOrder}},
-			MockGetItems:  &MockOrderItemListReturn{Items: []m.OrderItem{item1}},
-			MockProducts: map[int64]MockProductReturn{
+			MockGetItems:  &MockOrderItemListReturn{Items: []m.OrderItem{item1, item2}},
+			MockProductsForLock: map[int64]MockProductReturn{
 				200: {Product: product1},
+				201: {Product: product2},
 			},
 			MockCreateOrds: []MockCreateReturn{{ID: 600}},
 			MockCreateItem: ptrErr(errors.New("db error")),
 			ExpectedErr:    service.ErrCreateOrderItem,
 		},
 		{
-			Description:   "DeleteCart fails after orders created",
+			Description:   "DeleteCart fails after orders created (two sellers)",
 			MockGetOrders: MockOrderListReturn{Orders: []m.Order{someDraftOrder}},
-			MockGetItems:  &MockOrderItemListReturn{Items: []m.OrderItem{item1}},
-			MockProducts: map[int64]MockProductReturn{
+			MockGetItems:  &MockOrderItemListReturn{Items: []m.OrderItem{item1, item2}},
+			MockProductsForLock: map[int64]MockProductReturn{
 				200: {Product: product1},
+				201: {Product: product2},
 			},
-			MockCreateOrds: []MockCreateReturn{{ID: 600}},
+			MockCreateOrds: []MockCreateReturn{{ID: 600}, {ID: 601}},
 			MockCreateItem: ptrErr(nil),
 			MockDeleteCart: ptrErr(errors.New("db error")),
 			ExpectedErr:    service.ErrDeleteOrderByID,
@@ -813,8 +830,23 @@ func TestCheckout(t *testing.T) {
 			if tCase.MockGetItems != nil {
 				itemMock.EXPECT().GetOrderItemsByOrderID(ctx, someDraftOrder.ID).Return(tCase.MockGetItems.Items, tCase.MockGetItems.Error)
 			}
-			for pid, ret := range tCase.MockProducts {
-				productMock.EXPECT().GetProductByID(ctx, pid).Return(ret.Product, ret.Error)
+			for pid, ret := range tCase.MockProductsForLock {
+				productMock.EXPECT().GetProductByIDForUpdate(ctx, pid).Return(ret.Product, ret.Error)
+				if ret.Error == nil {
+					qty := 0
+					for _, item := range tCase.MockGetItems.Items {
+						if item.ProductID == pid {
+							qty += item.Quantity
+						}
+					}
+					productMock.EXPECT().ChangeStockAndReserved(ctx, pid, 0, qty).Return(nil)
+				}
+			}
+			if tCase.MockUpdateItemErr != nil {
+				itemMock.EXPECT().UpdateOrderItem(ctx, gomock.Any(), gomock.Any()).Return(m.OrderItem{}, *tCase.MockUpdateItemErr).AnyTimes()
+			}
+			if tCase.MockUpdateOrder != nil {
+				orderMock.EXPECT().UpdateOrder(ctx, someDraftOrder.ID, gomock.Any()).Return(tCase.MockUpdateOrder.Order, tCase.MockUpdateOrder.Error)
 			}
 			for _, cr := range tCase.MockCreateOrds {
 				orderMock.EXPECT().CreateOrder(ctx, gomock.Any()).Return(cr.ID, cr.Error)
@@ -910,7 +942,7 @@ func TestPayOrder(t *testing.T) {
 
 func TestCancelOrder(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	svc, orderMock, _, _, _, _ := newOrderService(ctrl)
+	svc, orderMock, itemMock, productMock, _, _ := newOrderService(ctrl)
 	ctx := context.Background()
 
 	pendingOrder := someOrder
@@ -921,23 +953,33 @@ func TestCancelOrder(t *testing.T) {
 	otherUsersOrder := m.Order{ID: someOrderID, UserID: otherUserID, Status: m.StatusPending}
 	cancelledResult := m.Order{ID: someOrderID, UserID: someID, Status: m.StatusCancelled}
 
+	cancelItems := []m.OrderItem{
+		{ID: 1, OrderID: someOrderID, ProductID: someProductID, Quantity: 2},
+	}
+
 	type testCase struct {
-		Description string
-		MockGet     MockOrderReturn
-		MockUpdate  *MockOrderReturn
-		ExpectedErr error
+		Description  string
+		MockGet      MockOrderReturn
+		MockGetItems bool
+		MockUpdate   *MockOrderReturn
+		MockRelease  bool
+		ExpectedErr  error
 	}
 
 	tCases := []testCase{
 		{
-			Description: "Success cancel pending",
-			MockGet:     MockOrderReturn{Order: pendingOrder},
-			MockUpdate:  &MockOrderReturn{Order: cancelledResult},
+			Description:  "Success cancel pending",
+			MockGet:      MockOrderReturn{Order: pendingOrder},
+			MockGetItems: true,
+			MockUpdate:   &MockOrderReturn{Order: cancelledResult},
+			MockRelease:  true,
 		},
 		{
-			Description: "Success cancel paid",
-			MockGet:     MockOrderReturn{Order: paidOrder},
-			MockUpdate:  &MockOrderReturn{Order: cancelledResult},
+			Description:  "Success cancel paid",
+			MockGet:      MockOrderReturn{Order: paidOrder},
+			MockGetItems: true,
+			MockUpdate:   &MockOrderReturn{Order: cancelledResult},
+			MockRelease:  true,
 		},
 		{
 			Description: "Order not found",
@@ -970,10 +1012,11 @@ func TestCancelOrder(t *testing.T) {
 			ExpectedErr: service.ErrOrderStatusInvalid,
 		},
 		{
-			Description: "UpdateOrder fails",
-			MockGet:     MockOrderReturn{Order: pendingOrder},
-			MockUpdate:  &MockOrderReturn{Error: errors.New("db error")},
-			ExpectedErr: service.ErrUpdateOrder,
+			Description:  "UpdateOrder fails",
+			MockGet:      MockOrderReturn{Order: pendingOrder},
+			MockGetItems: true,
+			MockUpdate:   &MockOrderReturn{Error: errors.New("db error")},
+			ExpectedErr:  service.ErrUpdateOrder,
 		},
 	}
 
@@ -981,8 +1024,14 @@ func TestCancelOrder(t *testing.T) {
 		t.Run(tCase.Description, func(t *testing.T) {
 			orderMock.EXPECT().GetOrderByID(ctx, someOrderID).Return(tCase.MockGet.Order, tCase.MockGet.Error)
 
+			if tCase.MockGetItems {
+				itemMock.EXPECT().GetOrderItemsByOrderID(ctx, someOrderID).Return(cancelItems, nil)
+			}
 			if tCase.MockUpdate != nil {
 				orderMock.EXPECT().UpdateOrder(ctx, someOrderID, gomock.Any()).Return(tCase.MockUpdate.Order, tCase.MockUpdate.Error)
+			}
+			if tCase.MockRelease {
+				productMock.EXPECT().ChangeStockAndReserved(ctx, someProductID, 0, -cancelItems[0].Quantity).Return(nil)
 			}
 
 			err := svc.CancelOrder(ctx, someOrderID, someID)
@@ -995,7 +1044,7 @@ func TestCancelOrder(t *testing.T) {
 
 func TestShipOrder(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	svc, orderMock, itemMock, productMock, sellerMock, productUpdaterMock := newOrderService(ctrl)
+	svc, orderMock, itemMock, productMock, sellerMock, _ := newOrderService(ctrl)
 	ctx := context.Background()
 
 	seller := m.Seller{ID: someSellerID, UserID: someID}
@@ -1011,31 +1060,25 @@ func TestShipOrder(t *testing.T) {
 	someOrderItems := []m.OrderItem{
 		{ID: 1, OrderID: someOrderID, ProductID: someProductID, Quantity: 2, PriceAtPurchase: someProductPrice},
 	}
-	someProduct := m.Product{ID: someProductID, StockQuantity: 10, Price: someProductPrice}
-	updatedProduct := someProduct
-	newQty := someProduct.StockQuantity - someOrderItems[0].Quantity
-	updatedProduct.StockQuantity = newQty
 
 	type testCase struct {
-		Description    string
-		MockSeller     *MockSellerReturn
-		MockGet        *MockOrderReturn
-		MockUpdate     *MockOrderReturn
-		MockItems      bool
-		MockProduct    bool
-		MockProductUpd bool
-		ExpectedErr    error
+		Description     string
+		MockSeller      *MockSellerReturn
+		MockGet         *MockOrderReturn
+		MockUpdate      *MockOrderReturn
+		MockItems       bool
+		MockChangeStock bool
+		ExpectedErr     error
 	}
 
 	tCases := []testCase{
 		{
-			Description:    "Success",
-			MockSeller:     &MockSellerReturn{Seller: seller},
-			MockGet:        &MockOrderReturn{Order: paidOrderWithSeller},
-			MockUpdate:     &MockOrderReturn{Order: shippedResult},
-			MockItems:      true,
-			MockProduct:    true,
-			MockProductUpd: true,
+			Description:     "Success",
+			MockSeller:      &MockSellerReturn{Seller: seller},
+			MockGet:         &MockOrderReturn{Order: paidOrderWithSeller},
+			MockUpdate:      &MockOrderReturn{Order: shippedResult},
+			MockItems:       true,
+			MockChangeStock: true,
 		},
 		{
 			Description: "Seller not found",
@@ -1112,11 +1155,8 @@ func TestShipOrder(t *testing.T) {
 			if tCase.MockItems {
 				itemMock.EXPECT().GetOrderItemsByOrderID(ctx, someOrderID).Return(someOrderItems, nil)
 			}
-			if tCase.MockProduct {
-				productMock.EXPECT().GetProductByID(ctx, someProductID).Return(someProduct, nil)
-			}
-			if tCase.MockProductUpd {
-				productUpdaterMock.EXPECT().UpdateProduct(ctx, someProductID, m.ProductUpdate{StockQuantity: &newQty}).Return(updatedProduct, nil)
+			if tCase.MockChangeStock {
+				productMock.EXPECT().ChangeStockAndReserved(ctx, someProductID, -someOrderItems[0].Quantity, -someOrderItems[0].Quantity).Return(nil)
 			}
 
 			err := svc.ShipOrder(ctx, someOrderID, someID)

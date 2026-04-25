@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_order_expirer.go github.com/beastixq/marketplace/internal/service OrderExpirer
 type OrderExpirer interface {
 	ExpireOrders(ctx context.Context, deadline time.Time) error
 }

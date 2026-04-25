@@ -184,7 +184,7 @@ func TestOrderRepo_Delete(t *testing.T) {
 	}
 }
 
-func TestOrderRepo_CancelExpiredPendingOrders(t *testing.T) {
+func TestOrderRepo_GetExpiredPendingOrders(t *testing.T) {
 	buyerID := createTestUser(t)
 	sellerID := createTestSeller(t)
 	var r service.OrderRepo = repo.NewOrderRepo(testPool)
@@ -201,16 +201,19 @@ func TestOrderRepo_CancelExpiredPendingOrders(t *testing.T) {
 		_, _ = testPool.Exec(context.Background(), "DELETE FROM orders WHERE id = $1", id)
 	})
 
-	// deadline в будущем → наш pending заказ попадает под отмену.
-	if err := r.CancelExpiredPendingOrders(ctx, time.Now().Add(time.Hour)); err != nil {
-		t.Fatalf("CancelExpiredPendingOrders: %v", err)
-	}
-
-	got, err := r.GetOrderByID(ctx, id)
+	// deadline в будущем → наш pending заказ попадает в результат
+	orders, err := r.GetExpiredPendingOrders(ctx, time.Now().Add(time.Hour))
 	if err != nil {
-		t.Fatalf("GetOrderByID: %v", err)
+		t.Fatalf("GetExpiredPendingOrders: %v", err)
 	}
-	if got.Status != m.StatusCancelled {
-		t.Errorf("Status: got %q, want %q", got.Status, m.StatusCancelled)
+	found := false
+	for _, o := range orders {
+		if o.ID == id {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("order %d not found in expired pending orders", id)
 	}
 }
