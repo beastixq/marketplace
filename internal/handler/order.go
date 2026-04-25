@@ -159,6 +159,12 @@ func (ur UpdateCartItemRequest) Validate() error {
 
 // PATCH /api/v1/cart/items/:id
 func (oh OrderHandler) UpdateCartItem(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, ErrInvalidIDParam.Error())
@@ -175,7 +181,7 @@ func (oh OrderHandler) UpdateCartItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := oh.orderService.ChangeQuantityCartItem(r.Context(), id, req.Quantity); err != nil {
+	if err := oh.orderService.ChangeQuantityCartItem(r.Context(), claims.UserID, id, req.Quantity); err != nil {
 		if errors.Is(err, service.ErrQuantityTooBig) {
 			writeError(w, http.StatusBadRequest, service.ErrQuantityTooBig.Error())
 			return
@@ -188,13 +194,19 @@ func (oh OrderHandler) UpdateCartItem(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/cart/items/:id
 func (oh OrderHandler) DeleteCartItem(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, ErrInvalidIDParam.Error())
 		return
 	}
 
-	if err := oh.orderService.DeleteCartItem(r.Context(), id); err != nil {
+	if err := oh.orderService.DeleteCartItem(r.Context(), claims.UserID, id); err != nil {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}

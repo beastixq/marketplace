@@ -781,7 +781,7 @@ func (wh *WebHandler) CartRemoveItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = wh.orderService.DeleteCartItem(r.Context(), id)
+	_ = wh.orderService.DeleteCartItem(r.Context(), user.UserID, id)
 	http.Redirect(w, r, "/cart", http.StatusSeeOther)
 }
 
@@ -810,7 +810,7 @@ func (wh *WebHandler) CartUpdateQuantity(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err = wh.orderService.ChangeQuantityCartItem(r.Context(), id, quantity); err != nil {
+	if err = wh.orderService.ChangeQuantityCartItem(r.Context(), user.UserID, id, quantity); err != nil {
 		log.Printf("CartUpdateQuantity error: %v", err)
 	}
 	http.Redirect(w, r, "/cart", http.StatusSeeOther)

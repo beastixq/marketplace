@@ -86,8 +86,8 @@ type Cart interface {
 	GetCart(ctx context.Context, userID int64) (m.Order, error)
 	GetOrderItemsByOrderID(ctx context.Context, orderID int64) ([]m.OrderItem, error)
 	AddItemToCart(ctx context.Context, userID int64, productID int64, quantity int) error
-	ChangeQuantityCartItem(ctx context.Context, itemID int64, quantity int) error
-	DeleteCartItem(ctx context.Context, itemID int64) error
+	ChangeQuantityCartItem(ctx context.Context, userID int64, itemID int64, quantity int) error
+	DeleteCartItem(ctx context.Context, userID int64, itemID int64) error
 	Checkout(ctx context.Context, userID int64, addressID int64) ([]int64, error)
 }
 
@@ -990,6 +990,10 @@ func (a *App) addCartItem(ctx context.Context) error {
 }
 
 func (a *App) changeCartItem(ctx context.Context) error {
+	claims, ok := a.requireAuth()
+	if !ok {
+		return nil
+	}
 	itemID, err := a.readInt64("Order item ID")
 	if err != nil {
 		return err
@@ -998,15 +1002,19 @@ func (a *App) changeCartItem(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.Cart.ChangeQuantityCartItem(ctx, itemID, quantity)
+	return a.servicePorts.Cart.ChangeQuantityCartItem(ctx, claims.UserID, itemID, quantity)
 }
 
 func (a *App) deleteCartItem(ctx context.Context) error {
+	claims, ok := a.requireAuth()
+	if !ok {
+		return nil
+	}
 	itemID, err := a.readInt64("Order item ID")
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.Cart.DeleteCartItem(ctx, itemID)
+	return a.servicePorts.Cart.DeleteCartItem(ctx, claims.UserID, itemID)
 }
 
 func (a *App) checkout(ctx context.Context) error {

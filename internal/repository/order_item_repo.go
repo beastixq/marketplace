@@ -112,6 +112,53 @@ func (oir OrderItemRepoImpl) UpdateOrderItem(ctx context.Context, id int64, oiu 
 	return ordItem.toModel(), nil
 }
 
+// UpdateOrderItemQtyIfDraft updates an order item's quantity only when the
+// owning order belongs to userID and is still in draft status. The conditional
+// EXISTS clause enforces ownership + status invariants atomically at SQL level.
+func (oir OrderItemRepoImpl) UpdateOrderItemQtyIfDraft(ctx context.Context, id int64, userID int64, qty int) error {
+	const sql = `
+UPDATE order_items oi
+SET quantity = $2
+WHERE oi.id = $1
+  AND EXISTS (
+    SELECT 1 FROM orders o
+    WHERE o.id = oi.order_id
+      AND o.user_id = $3
+      AND o.status = 'draft'
+  )
+RETURNING id`
+	var updatedID int64
+	if err := getConn(ctx, oir.pool).QueryRow(ctx, sql, id, qty, userID).Scan(&updatedID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return service.ErrNotFound
+		}
+		return fmt.Errorf("%w: %v", ErrToScan, err)
+	}
+	return nil
+}
+
+// DeleteOrderItemIfDraft deletes an order item only when the owning order
+// belongs to userID and is still in draft status.
+func (oir OrderItemRepoImpl) DeleteOrderItemIfDraft(ctx context.Context, id int64, userID int64) error {
+	const sql = `
+DELETE FROM order_items oi
+WHERE oi.id = $1
+  AND EXISTS (
+    SELECT 1 FROM orders o
+    WHERE o.id = oi.order_id
+      AND o.user_id = $2
+      AND o.status = 'draft'
+  )`
+	res, err := getConn(ctx, oir.pool).Exec(ctx, sql, id, userID)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrExec, err)
+	}
+	if res.RowsAffected() == 0 {
+		return service.ErrNotFound
+	}
+	return nil
+}
+
 func (oir OrderItemRepoImpl) DeleteOrderItemByID(ctx context.Context, id int64) (err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Delete("order_items").Where(sq.Eq{"id": id}).ToSql()

@@ -191,6 +191,28 @@ func (or OrderRepoImpl) DeleteOrderByID(ctx context.Context, id int64) (err erro
 	return nil
 }
 
+// cartLockNamespace separates cart advisory locks from any other use of
+// pg_advisory_xact_lock in the system.
+const cartLockNamespace int64 = 1_000_000_000_000
+
+func cartLockKey(userID int64) int64 {
+	return cartLockNamespace + userID
+}
+
+// LockUserCart serializes cart mutations for one user via PostgreSQL advisory
+// lock held for the duration of the current transaction. Caller MUST be inside
+// a transaction.
+func (or OrderRepoImpl) LockUserCart(ctx context.Context, userID int64) error {
+	tx, ok := service.GetTxFromCtx(ctx)
+	if !ok {
+		return service.ErrMustBeInTransaction
+	}
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", cartLockKey(userID)); err != nil {
+		return fmt.Errorf("%w: %v", ErrExec, err)
+	}
+	return nil
+}
+
 func (or OrderRepoImpl) GetSellerOrdersBySellerID(ctx context.Context, sellerID int64, pg m.PaginationOpts) (orders []m.Order, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	qb := psql.

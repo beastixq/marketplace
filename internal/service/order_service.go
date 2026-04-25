@@ -18,7 +18,9 @@ type OrderItemRepo interface {
 	GetOrderItemsByOrderID(ctx context.Context, orderID int64) (ois []m.OrderItem, err error)
 	CreateOrderItem(ctx context.Context, oic m.OrderItemCreate) (id int64, err error)
 	UpdateOrderItem(ctx context.Context, id int64, oiu m.OrderItemUpdate) (oi m.OrderItem, err error)
+	UpdateOrderItemQtyIfDraft(ctx context.Context, id int64, userID int64, qty int) error
 	DeleteOrderItemByID(ctx context.Context, id int64) (err error)
+	DeleteOrderItemIfDraft(ctx context.Context, id int64, userID int64) error
 }
 
 //go:generate mockgen -package mock_service -destination ../mocks/service/mock_order_repo.go github.com/beastixq/marketplace/internal/service OrderRepo
@@ -32,6 +34,9 @@ type OrderRepo interface {
 	// UpdateOrderStatus atomically transitions status only if current status is in `from`.
 	// Returns ErrNotFound if no row matched (concurrent transition already happened).
 	UpdateOrderStatus(ctx context.Context, id int64, from []m.OrderStatus, to m.OrderStatus) error
+	// LockUserCart acquires a transaction-scoped advisory lock that serializes
+	// cart mutations and Checkout for one user. Caller must be inside a tx.
+	LockUserCart(ctx context.Context, userID int64) error
 	DeleteOrderByID(ctx context.Context, id int64) (err error)
 }
 
@@ -140,36 +145,41 @@ func (os OrderService) GetCart(ctx context.Context, userID int64) (order m.Order
 }
 
 func (os OrderService) AddItemToCart(ctx context.Context, userID int64, productID int64, quantity int) error {
-	var cartOrderID int64
-	cartOrder, err := os.GetCart(ctx, userID)
-	if err != nil && !errors.Is(err, ErrCartNotFound) {
-		return fmt.Errorf("%w: %v", ErrGetCart, err)
-	}
-	if err == nil {
-		cartOrderID = cartOrder.ID
-		existingItems, err := os.orderItemRepo.GetOrderItemsByOrderID(ctx, cartOrderID)
-		if err != nil {
-			return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
+	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
+		// Advisory lock serializes cart mutations and Checkout for this user.
+		if err := os.orderRepo.LockUserCart(ctx, userID); err != nil {
+			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
 		}
-		for _, item := range existingItems {
-			if item.ProductID == productID {
-				return ErrProductAlreadyInCart
+
+		var cartOrderID int64
+		cartOrder, err := os.GetCart(ctx, userID)
+		if err != nil && !errors.Is(err, ErrCartNotFound) {
+			return fmt.Errorf("%w: %v", ErrGetCart, err)
+		}
+		if err == nil {
+			cartOrderID = cartOrder.ID
+			existingItems, err := os.orderItemRepo.GetOrderItemsByOrderID(ctx, cartOrderID)
+			if err != nil {
+				return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
+			}
+			for _, item := range existingItems {
+				if item.ProductID == productID {
+					return ErrProductAlreadyInCart
+				}
 			}
 		}
-	}
 
-	product, err := os.productRepo.GetProductByID(ctx, productID)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return ErrProductNotFound
+		product, err := os.productRepo.GetProductByID(ctx, productID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return ErrProductNotFound
+			}
+			return fmt.Errorf("%w: %v", ErrGetProductByID, err)
 		}
-		return fmt.Errorf("%w: %v", ErrGetProductByID, err)
-	}
-	if product.AvailableQuantity() < quantity {
-		return ErrQuantityTooBig
-	}
+		if product.AvailableQuantity() < quantity {
+			return ErrQuantityTooBig
+		}
 
-	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
 		if cartOrderID == 0 {
 			cartOrderID, err = os.orderRepo.CreateOrder(ctx, m.OrderCreate{
 				UserID:      userID,
@@ -193,71 +203,105 @@ func (os OrderService) AddItemToCart(ctx context.Context, userID int64, productI
 	})
 }
 
-func (os OrderService) ChangeQuantityCartItem(ctx context.Context, itemID int64, quantity int) (err error) {
-	orderItem, err := os.orderItemRepo.GetOrderItemByID(ctx, itemID)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return ErrOrderItemNotFound
+func (os OrderService) ChangeQuantityCartItem(ctx context.Context, userID int64, itemID int64, quantity int) (err error) {
+	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
+		if err := os.orderRepo.LockUserCart(ctx, userID); err != nil {
+			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
 		}
-		return fmt.Errorf("%w: %v", ErrGetOrderItemByID, err)
-	}
-	product, err := os.productRepo.GetProductByID(ctx, orderItem.ProductID)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return ErrProductNotFound
+
+		orderItem, err := os.orderItemRepo.GetOrderItemByID(ctx, itemID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return ErrOrderItemNotFound
+			}
+			return fmt.Errorf("%w: %v", ErrGetOrderItemByID, err)
 		}
-		return fmt.Errorf("%w: %v", ErrGetProductByID, err)
-	}
-	if quantity > product.AvailableQuantity() {
-		return ErrQuantityTooBig
-	}
-	_, err = os.orderItemRepo.UpdateOrderItem(ctx, itemID, m.OrderItemUpdate{Quantity: &quantity})
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrUpdateOrderItem, err)
-	}
-	return nil
+		product, err := os.productRepo.GetProductByID(ctx, orderItem.ProductID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return ErrProductNotFound
+			}
+			return fmt.Errorf("%w: %v", ErrGetProductByID, err)
+		}
+		if quantity > product.AvailableQuantity() {
+			return ErrQuantityTooBig
+		}
+
+		// Conditional UPDATE atomically enforces ownership + status=draft;
+		// 0 rows affected means another tx claimed the cart or it isn't this user's.
+		if err := os.orderItemRepo.UpdateOrderItemQtyIfDraft(ctx, itemID, userID, quantity); err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return ErrOrderStatusInvalid
+			}
+			return fmt.Errorf("%w: %v", ErrUpdateOrderItem, err)
+		}
+		return nil
+	})
 }
 
-func (os OrderService) DeleteCartItem(ctx context.Context, itemID int64) (err error) {
-	err = os.orderItemRepo.DeleteOrderItemByID(ctx, itemID)
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrDeleteOrderItemByID, err)
-	}
-	return nil
+func (os OrderService) DeleteCartItem(ctx context.Context, userID int64, itemID int64) (err error) {
+	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
+		if err := os.orderRepo.LockUserCart(ctx, userID); err != nil {
+			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
+		}
+		if err := os.orderItemRepo.DeleteOrderItemIfDraft(ctx, itemID, userID); err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return ErrOrderItemNotFound
+			}
+			return fmt.Errorf("%w: %v", ErrDeleteOrderItemByID, err)
+		}
+		return nil
+	})
 }
 
 func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int64) (orderIDs []int64, err error) {
-	cart, err := os.GetCart(ctx, userID)
-	if err != nil {
-		if errors.Is(err, ErrCartNotFound) {
-			return nil, ErrCartNotFound
-		}
-		return nil, fmt.Errorf("%w: %v", ErrGetCart, err)
-	}
-
-	items, err := os.orderItemRepo.GetOrderItemsByOrderID(ctx, cart.ID)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
-	}
-	if len(items) == 0 {
-		return nil, ErrEmptyCart
-	}
-
-	// суммируем qty по productID и строим отсортированный список ID —
-	// детерминированный порядок блокировок предотвращает deadlock
-	// (T1: lock 1→2, T2: lock 1→2 — очередь; без сортировки T1: lock 1, T2: lock 2 → deadlock)
-	qtyByProductID := make(map[int64]int, len(items))
-	for _, item := range items {
-		qtyByProductID[item.ProductID] += item.Quantity
-	}
-	productIDs := make([]int64, 0, len(qtyByProductID))
-	for id := range qtyByProductID {
-		productIDs = append(productIDs, id)
-	}
-	slices.Sort(productIDs)
-
 	var createdOrdersIDs []int64
 	err = os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
+		// Advisory lock serializes Checkout with parallel cart mutations of the same user.
+		if err := os.orderRepo.LockUserCart(ctx, userID); err != nil {
+			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
+		}
+
+		cart, err := os.GetCart(ctx, userID)
+		if err != nil {
+			if errors.Is(err, ErrCartNotFound) {
+				return ErrCartNotFound
+			}
+			return fmt.Errorf("%w: %v", ErrGetCart, err)
+		}
+
+		// claim cart — atomic draft→pending prevents concurrent double-checkout;
+		// 0 rows affected means another tx already claimed it
+		if err := os.orderRepo.UpdateOrderStatus(ctx, cart.ID,
+			[]m.OrderStatus{m.StatusDraft}, m.StatusPending); err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return ErrCartNotFound
+			}
+			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
+		}
+
+		// re-read items inside tx — consistent with claim, no stale add/remove races
+		items, err := os.orderItemRepo.GetOrderItemsByOrderID(ctx, cart.ID)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
+		}
+		if len(items) == 0 {
+			return ErrEmptyCart
+		}
+
+		// суммируем qty по productID и строим отсортированный список ID —
+		// детерминированный порядок блокировок предотвращает deadlock
+		// (T1: lock 1→2, T2: lock 1→2 — очередь; без сортировки T1: lock 1, T2: lock 2 → deadlock)
+		qtyByProductID := make(map[int64]int, len(items))
+		for _, item := range items {
+			qtyByProductID[item.ProductID] += item.Quantity
+		}
+		productIDs := make([]int64, 0, len(qtyByProductID))
+		for id := range qtyByProductID {
+			productIDs = append(productIDs, id)
+		}
+		slices.Sort(productIDs)
+
 		// FOR UPDATE в отсортированном порядке: lock → validate → reserve
 		products := make(map[int64]m.Product, len(productIDs))
 		for _, productID := range productIDs {
@@ -307,11 +351,9 @@ func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int
 			for _, item := range sellerItems {
 				totalAmount = totalAmount.Add(item.PriceAtPurchase.Mul(decimal.NewFromInt(int64(item.Quantity))))
 			}
-			statusPending := m.StatusPending
 			_, err := os.orderRepo.UpdateOrder(ctx, cart.ID, m.OrderUpdate{
 				SellerID:    &onlySellerID,
 				AddressID:   &addressID,
-				Status:      &statusPending,
 				TotalAmount: &totalAmount,
 			})
 			if err != nil {
