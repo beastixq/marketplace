@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/beastixq/marketplace/internal/middleware"
 	"github.com/beastixq/marketplace/internal/model"
 	"github.com/beastixq/marketplace/internal/service"
 	"github.com/go-chi/chi/v5"
@@ -22,13 +21,13 @@ func NewAddressHandler(addressSvc service.AddressService) AddressHandler {
 
 // GET /api/v1/addresses
 func (ah AddressHandler) GetAddresses(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
 	}
 
-	addrs, err := ah.addressService.GetAddressesByUserID(r.Context(), claims.UserID)
+	addrs, err := ah.addressService.GetAddressesByUserID(r.Context(), actor)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
@@ -62,7 +61,7 @@ func (cr CreateAddressRequest) Validate() error {
 
 // POST /api/v1/addresses
 func (ah AddressHandler) CreateAddress(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -78,8 +77,7 @@ func (ah AddressHandler) CreateAddress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := ah.addressService.CreateAddress(r.Context(), model.AddressCreate{
-		UserID:    claims.UserID,
+	id, err := ah.addressService.CreateAddress(r.Context(), actor, model.AddressCreate{
 		City:      req.City,
 		Street:    req.Street,
 		ZipCode:   req.ZipCode,
@@ -117,7 +115,7 @@ func (ur UpdateAddressRequest) Validate() error {
 
 // PATCH /api/v1/addresses/:id
 func (ah AddressHandler) UpdateAddress(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -138,7 +136,7 @@ func (ah AddressHandler) UpdateAddress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addr, err := ah.addressService.UpdateAddress(r.Context(), claims.UserID, id, model.AddressUpdate{
+	addr, err := ah.addressService.UpdateAddress(r.Context(), actor, id, model.AddressUpdate{
 		City:      req.City,
 		Street:    req.Street,
 		ZipCode:   req.ZipCode,
@@ -161,7 +159,7 @@ func (ah AddressHandler) UpdateAddress(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/addresses/:id
 func (ah AddressHandler) DeleteAddress(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -172,7 +170,7 @@ func (ah AddressHandler) DeleteAddress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ah.addressService.DeleteAddressByID(r.Context(), claims.UserID, id); err != nil {
+	if err := ah.addressService.DeleteAddressByID(r.Context(), actor, id); err != nil {
 		if errors.Is(err, service.ErrAddressNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrAddressNotFound.Error())
 			return

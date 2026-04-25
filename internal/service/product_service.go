@@ -87,7 +87,7 @@ func (ps ProductService) GetReviewsByProductID(ctx context.Context, pid int64, o
 	return rs, nil
 }
 
-func (ps ProductService) CreateProduct(ctx context.Context, userID int64, pc m.ProductCreate) (id int64, err error) {
+func (ps ProductService) CreateProduct(ctx context.Context, actor Actor, pc m.ProductCreate) (id int64, err error) {
 	s, err := ps.sellerRepo.GetSellerByID(ctx, pc.SellerID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -95,7 +95,7 @@ func (ps ProductService) CreateProduct(ctx context.Context, userID int64, pc m.P
 		}
 		return 0, fmt.Errorf("%w: %v", ErrGetSellerByID, err)
 	}
-	if s.UserID != userID {
+	if !actor.IsAdmin() && s.UserID != actor.UserID {
 		return 0, ErrNotYourSeller
 	}
 
@@ -106,7 +106,7 @@ func (ps ProductService) CreateProduct(ctx context.Context, userID int64, pc m.P
 	return id, nil
 }
 
-func (ps ProductService) UpdateProduct(ctx context.Context, userID, id int64, pu m.ProductUpdate) (p m.Product, err error) {
+func (ps ProductService) UpdateProduct(ctx context.Context, actor Actor, id int64, pu m.ProductUpdate) (p m.Product, err error) {
 	p, err = ps.productRepo.GetProductByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -122,7 +122,7 @@ func (ps ProductService) UpdateProduct(ctx context.Context, userID, id int64, pu
 		}
 		return m.Product{}, fmt.Errorf("%w: %v", ErrGetSellerByID, err)
 	}
-	if s.UserID != userID {
+	if !actor.IsAdmin() && s.UserID != actor.UserID {
 		return m.Product{}, ErrNotYourSeller
 	}
 
@@ -133,7 +133,7 @@ func (ps ProductService) UpdateProduct(ctx context.Context, userID, id int64, pu
 	return p, nil
 }
 
-func (ps ProductService) DeleteProductByID(ctx context.Context, userID, id int64) (err error) {
+func (ps ProductService) DeleteProductByID(ctx context.Context, actor Actor, id int64) (err error) {
 	p, err := ps.productRepo.GetProductByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -149,7 +149,7 @@ func (ps ProductService) DeleteProductByID(ctx context.Context, userID, id int64
 		}
 		return fmt.Errorf("%w: %v", ErrGetSellerByID, err)
 	}
-	if s.UserID != userID {
+	if !actor.IsAdmin() && s.UserID != actor.UserID {
 		return ErrNotYourSeller
 	}
 

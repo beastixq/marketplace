@@ -31,7 +31,10 @@ func NewUserService(ur UserRepo, bcryptCost int) UserService {
 	return UserService{repo: ur, bcryptCost: bcryptCost}
 }
 
-func (us UserService) GetUsers(ctx context.Context, opts m.UserListOptions) (users []m.User, err error) {
+func (us UserService) GetUsers(ctx context.Context, actor Actor, opts m.UserListOptions) (users []m.User, err error) {
+	if !actor.IsAdmin() {
+		return nil, ErrNotYourUser
+	}
 	users, err = us.repo.GetUsers(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrGetUsers, err)
@@ -60,7 +63,13 @@ func (us UserService) CreateUser(ctx context.Context, uc m.UserCreate) (id int64
 	return id, nil
 }
 
-func (us UserService) UpdateUser(ctx context.Context, id int64, uu m.UserUpdate) (u m.User, err error) {
+func (us UserService) UpdateUser(ctx context.Context, actor Actor, id int64, uu m.UserUpdate) (u m.User, err error) {
+	if !actor.IsAdmin() && actor.UserID != id {
+		return m.User{}, ErrNotYourUser
+	}
+	if !actor.IsAdmin() && uu.Role != nil {
+		return m.User{}, ErrNotYourUser
+	}
 	_, err = us.repo.GetUserByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -85,7 +94,14 @@ func (us UserService) UpdateUser(ctx context.Context, id int64, uu m.UserUpdate)
 	return user, nil
 }
 
-func (us UserService) GetUserByID(ctx context.Context, id int64) (u m.User, err error) {
+func (us UserService) GetUserByID(ctx context.Context, actor Actor, id int64) (u m.User, err error) {
+	if !actor.IsAdmin() && actor.UserID != id {
+		return m.User{}, ErrNotYourUser
+	}
+	return us.GetAuthUserByID(ctx, id)
+}
+
+func (us UserService) GetAuthUserByID(ctx context.Context, id int64) (u m.User, err error) {
 	user, err := us.repo.GetUserByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -107,15 +123,18 @@ func (us UserService) GetUserByEmail(ctx context.Context, email string) (u m.Use
 	return user, nil
 }
 
-func (us UserService) DeleteUserByID(ctx context.Context, id int64) (err error) {
+func (us UserService) DeleteUserByID(ctx context.Context, actor Actor, id int64) (err error) {
+	if !actor.IsAdmin() && actor.UserID != id {
+		return ErrNotYourUser
+	}
 	if err := us.repo.DeleteUserByID(ctx, id); err != nil {
 		return fmt.Errorf("%w: %v", ErrDeleteUser, err)
 	}
 	return nil
 }
 
-func (us UserService) ChangePasswordUser(ctx context.Context, id int64, oldPass, newPass string) (err error) {
-	user, err := us.repo.GetUserByID(ctx, id)
+func (us UserService) ChangePasswordUser(ctx context.Context, actor Actor, oldPass, newPass string) (err error) {
+	user, err := us.repo.GetUserByID(ctx, actor.UserID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return ErrUserNotFound
@@ -130,7 +149,7 @@ func (us UserService) ChangePasswordUser(ctx context.Context, id int64, oldPass,
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrHashingPassword, err)
 	}
-	if err := us.repo.ChangePasswordUser(ctx, id, string(newPassHash)); err != nil {
+	if err := us.repo.ChangePasswordUser(ctx, actor.UserID, string(newPassHash)); err != nil {
 		return fmt.Errorf("%w: %v", ErrChangePasswordUser, err)
 	}
 	return nil

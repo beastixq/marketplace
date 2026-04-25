@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/beastixq/marketplace/internal/middleware"
 	"github.com/beastixq/marketplace/internal/model"
 	"github.com/beastixq/marketplace/internal/service"
 )
@@ -28,12 +27,12 @@ type UserProfile struct {
 }
 
 func (uh UserHandler) GetMyProfile(w http.ResponseWriter, r *http.Request) {
-	tokenClaims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
 	}
-	user, err := uh.userService.GetUserByID(r.Context(), tokenClaims.UserID)
+	user, err := uh.userService.GetUserByID(r.Context(), actor, actor.UserID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
@@ -76,7 +75,7 @@ func (ur UpdateProfileRequest) Validate() error {
 }
 
 func (uh UserHandler) UpdateMyProfile(w http.ResponseWriter, r *http.Request) {
-	tokenClaims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -90,7 +89,7 @@ func (uh UserHandler) UpdateMyProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	user, err := uh.userService.UpdateUser(r.Context(), tokenClaims.UserID, model.UserUpdate{
+	user, err := uh.userService.UpdateUser(r.Context(), actor, actor.UserID, model.UserUpdate{
 		FullName: req.FullName,
 		Email:    req.Email,
 		Phone:    req.Phone,
@@ -103,12 +102,12 @@ func (uh UserHandler) UpdateMyProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (uh UserHandler) DeleteMyAccount(w http.ResponseWriter, r *http.Request) {
-	tokenClaims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
 	}
-	if err := uh.userService.DeleteUserByID(r.Context(), tokenClaims.UserID); err != nil {
+	if err := uh.userService.DeleteUserByID(r.Context(), actor, actor.UserID); err != nil {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -125,7 +124,7 @@ func (cr ChangePasswordRequest) Validate() error {
 }
 
 func (uh UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
-	tokenClaims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -139,7 +138,7 @@ func (uh UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := uh.userService.ChangePasswordUser(r.Context(), tokenClaims.UserID, req.OldPassword, req.NewPassword); err != nil {
+	if err := uh.userService.ChangePasswordUser(r.Context(), actor, req.OldPassword, req.NewPassword); err != nil {
 		if errors.Is(err, service.ErrWrongPassword) {
 			writeError(w, http.StatusUnauthorized, service.ErrWrongPassword.Error())
 			return

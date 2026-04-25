@@ -130,7 +130,7 @@ func TestGetOrderByID(t *testing.T) {
 		t.Run(tCase.Description, func(t *testing.T) {
 			orderMock.EXPECT().GetOrderByID(ctx, someOrderID).Return(tCase.MockReturn.Order, tCase.MockReturn.Error)
 
-			order, err := svc.GetOrderByID(ctx, someOrderID)
+			order, err := svc.GetOrderByID(ctx, testActor(someID, m.RoleBuyer), someOrderID)
 			assertError(t, err, tCase.ExpectedErr)
 			if tCase.ExpectedErr == nil {
 				assertOrder(t, order, someOrder)
@@ -175,7 +175,7 @@ func TestGetOrdersByUserID(t *testing.T) {
 		t.Run(tCase.Description, func(t *testing.T) {
 			orderMock.EXPECT().GetOrdersByUserID(ctx, someID, m.PaginationOpts{}).Return(tCase.MockReturn.Orders, tCase.MockReturn.Error)
 
-			orders, err := svc.GetOrdersByUserID(ctx, someID, m.PaginationOpts{})
+			orders, err := svc.GetOrdersByUserID(ctx, testActor(someID, m.RoleBuyer), m.PaginationOpts{})
 			assertError(t, err, tCase.ExpectedErr)
 			if tCase.ExpectedErr == nil && len(orders) != tCase.ExpectedLength {
 				t.Fatalf("expected %d orders, got %d", tCase.ExpectedLength, len(orders))
@@ -188,7 +188,7 @@ func TestGetOrdersByUserID(t *testing.T) {
 
 func TestGetOrderItemsByOrderID(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	svc, _, itemMock, _, _, _ := newOrderService(ctrl)
+	svc, orderMock, itemMock, _, _, _ := newOrderService(ctrl)
 	ctx := context.Background()
 
 	type testCase struct {
@@ -218,9 +218,10 @@ func TestGetOrderItemsByOrderID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			orderMock.EXPECT().GetOrderByID(ctx, someOrderID).Return(someOrder, nil)
 			itemMock.EXPECT().GetOrderItemsByOrderID(ctx, someOrderID).Return(tCase.MockReturn.Items, tCase.MockReturn.Error)
 
-			items, err := svc.GetOrderItemsByOrderID(ctx, someOrderID)
+			items, err := svc.GetOrderItemsByOrderID(ctx, testActor(someID, m.RoleBuyer), someOrderID)
 			assertError(t, err, tCase.ExpectedErr)
 			if tCase.ExpectedErr == nil && len(items) != tCase.ExpectedLength {
 				t.Fatalf("expected %d items, got %d", tCase.ExpectedLength, len(items))
@@ -288,7 +289,7 @@ func TestGetSellerOrdersByUserID(t *testing.T) {
 				orderMock.EXPECT().GetSellerOrdersBySellerID(ctx, seller.ID, pg).Return(tCase.MockOrders.Orders, tCase.MockOrders.Error)
 			}
 
-			orders, err := svc.GetSellerOrdersByUserID(ctx, someID, pg)
+			orders, err := svc.GetSellerOrdersByUserID(ctx, testActor(someID, m.RoleSeller), pg)
 			assertError(t, err, tCase.ExpectedErr)
 			if tCase.ExpectedErr == nil && len(orders) != tCase.ExpectedLength {
 				t.Fatalf("expected %d orders, got %d", tCase.ExpectedLength, len(orders))
@@ -392,7 +393,7 @@ func TestGetCart(t *testing.T) {
 				itemMock.EXPECT().GetOrderItemsByOrderID(ctx, gomock.Any()).Return(tCase.MockItems.Items, tCase.MockItems.Error)
 			}
 
-			cart, err := svc.GetCart(ctx, someID)
+			cart, err := svc.GetCart(ctx, testActor(someID, m.RoleBuyer))
 			assertError(t, err, tCase.ExpectedErr)
 			if tCase.ExpectedOrderID != nil {
 				if cart.ID != *tCase.ExpectedOrderID {
@@ -550,7 +551,7 @@ func TestAddItemToCart(t *testing.T) {
 				itemMock.EXPECT().CreateOrderItem(ctx, gomock.Any()).Return(tCase.MockCreateItem.ID, tCase.MockCreateItem.Error)
 			}
 
-			err := svc.AddItemToCart(ctx, someID, someProductID, quantity)
+			err := svc.AddItemToCart(ctx, testActor(someID, m.RoleBuyer), someProductID, quantity)
 			assertError(t, err, tCase.ExpectedErr)
 		})
 	}
@@ -653,7 +654,7 @@ func TestChangeQuantityCartItem(t *testing.T) {
 				itemMock.EXPECT().UpdateOrderItemQtyIfDraft(ctx, someItemID, someID, newQuantity).Return(*tCase.MockUpdateErr)
 			}
 
-			err := svc.ChangeQuantityCartItem(ctx, someID, someItemID, newQuantity)
+			err := svc.ChangeQuantityCartItem(ctx, testActor(someID, m.RoleBuyer), someItemID, newQuantity)
 			assertError(t, err, tCase.ExpectedErr)
 		})
 	}
@@ -708,7 +709,7 @@ func TestDeleteCartItem(t *testing.T) {
 				itemMock.EXPECT().DeleteOrderItemIfDraft(ctx, someItemID, someID).Return(*tCase.MockDeleteErr)
 			}
 
-			err := svc.DeleteCartItem(ctx, someID, someItemID)
+			err := svc.DeleteCartItem(ctx, testActor(someID, m.RoleBuyer), someItemID)
 			assertError(t, err, tCase.ExpectedErr)
 		})
 	}
@@ -919,7 +920,7 @@ func TestCheckout(t *testing.T) {
 				orderMock.EXPECT().DeleteOrderByID(ctx, someDraftOrder.ID).Return(*tCase.MockDeleteCart)
 			}
 
-			orderIDs, err := svc.Checkout(ctx, someID, someAddressID)
+			orderIDs, err := svc.Checkout(ctx, testActor(someID, m.RoleBuyer), someAddressID)
 			assertError(t, err, tCase.ExpectedErr)
 			if tCase.ExpectedErr == nil && len(orderIDs) != tCase.ExpectedCount {
 				t.Fatalf("expected %d order IDs, got %d", tCase.ExpectedCount, len(orderIDs))
@@ -1000,7 +1001,7 @@ func TestPayOrder(t *testing.T) {
 					Return(*tCase.MockUpdateStatus)
 			}
 
-			err := svc.PayOrder(ctx, someOrderID, someID)
+			err := svc.PayOrder(ctx, testActor(someID, m.RoleBuyer), someOrderID)
 			assertError(t, err, tCase.ExpectedErr)
 		})
 	}
@@ -1107,7 +1108,7 @@ func TestCancelOrder(t *testing.T) {
 				productMock.EXPECT().ChangeStockAndReserved(ctx, someProductID, 0, -cancelItems[0].Quantity).Return(nil)
 			}
 
-			err := svc.CancelOrder(ctx, someOrderID, someID)
+			err := svc.CancelOrder(ctx, testActor(someID, m.RoleBuyer), someOrderID)
 			assertError(t, err, tCase.ExpectedErr)
 		})
 	}
@@ -1237,7 +1238,7 @@ func TestShipOrder(t *testing.T) {
 				productMock.EXPECT().ChangeStockAndReserved(ctx, someProductID, -someOrderItems[0].Quantity, -someOrderItems[0].Quantity).Return(nil)
 			}
 
-			err := svc.ShipOrder(ctx, someOrderID, someID)
+			err := svc.ShipOrder(ctx, testActor(someID, m.RoleSeller), someOrderID)
 			assertError(t, err, tCase.ExpectedErr)
 		})
 	}
@@ -1355,7 +1356,7 @@ func TestDeliverOrder(t *testing.T) {
 					Return(*tCase.MockUpdateStatus)
 			}
 
-			err := svc.DeliverOrder(ctx, someOrderID, someID)
+			err := svc.DeliverOrder(ctx, testActor(someID, m.RoleSeller), someOrderID)
 			assertError(t, err, tCase.ExpectedErr)
 		})
 	}

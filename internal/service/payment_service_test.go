@@ -135,7 +135,7 @@ func TestGetOrderPaymentURL(t *testing.T) {
 				gwMock.EXPECT().GetPaymentURL(ctx, gomock.Any()).Return(url, tCase.MockGWErr)
 			}
 
-			resultURL, expiresAt, err := ps.GetOrderPaymentURL(ctx, tCase.OrderID, tCase.UserID)
+			resultURL, expiresAt, err := ps.GetOrderPaymentURL(ctx, testActor(tCase.UserID, m.RoleBuyer), tCase.OrderID)
 			if tCase.ExpectedErr != nil {
 				if err == nil {
 					t.Fatalf("expected error %v, got nil", tCase.ExpectedErr)

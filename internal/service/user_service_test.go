@@ -99,7 +99,7 @@ func TestGetUserByID(t *testing.T) {
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
 			mock.EXPECT().GetUserByID(ctx, tCase.UserID).Return(tCase.MockReturn.User, tCase.MockReturn.Error)
-			user, err := svc.GetUserByID(ctx, tCase.UserID)
+			user, err := svc.GetUserByID(ctx, testActor(tCase.UserID, m.RoleBuyer), tCase.UserID)
 			assertError(t, err, tCase.ExpectedErr)
 			assertUser(t, user, tCase.ExpectedUser)
 		})
@@ -330,7 +330,7 @@ func TestUpdateUser(t *testing.T) {
 			if tCase.MockUpdate != nil {
 				mock.EXPECT().UpdateUser(ctx, tCase.UserID, tCase.Update).Return(tCase.MockUpdate.User, tCase.MockUpdate.Error)
 			}
-			user, err := svc.UpdateUser(ctx, tCase.UserID, tCase.Update)
+			user, err := svc.UpdateUser(ctx, testActor(someID, m.RoleAdmin), tCase.UserID, tCase.Update)
 			assertError(t, err, tCase.ExpectedErr)
 			assertUser(t, user, tCase.ExpectedUser)
 		})
@@ -404,7 +404,7 @@ func TestChangePasswordUser(t *testing.T) {
 			if tCase.MockChangePass != nil {
 				mock.EXPECT().ChangePasswordUser(ctx, tCase.UserID, gomock.Any()).Return(*tCase.MockChangePass)
 			}
-			err := svc.ChangePasswordUser(ctx, tCase.UserID, tCase.OldPassword, tCase.NewPassword)
+			err := svc.ChangePasswordUser(ctx, testActor(tCase.UserID, m.RoleBuyer), tCase.OldPassword, tCase.NewPassword)
 			assertError(t, err, tCase.ExpectedErr)
 		})
 	}
@@ -438,7 +438,7 @@ func TestDeleteUserByID(t *testing.T) {
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
 			mock.EXPECT().DeleteUserByID(ctx, tCase.UserID).Return(tCase.MockError)
-			err := svc.DeleteUserByID(ctx, tCase.UserID)
+			err := svc.DeleteUserByID(ctx, testActor(tCase.UserID, m.RoleBuyer), tCase.UserID)
 			assertError(t, err, tCase.ExpectedErr)
 		})
 	}

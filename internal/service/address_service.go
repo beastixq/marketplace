@@ -25,15 +25,16 @@ func NewAddressService(addressRepo AddressRepo) AddressService {
 	return AddressService{addrRepo: addressRepo}
 }
 
-func (as AddressService) GetAddressesByUserID(ctx context.Context, userID int64) (addrs []m.Address, err error) {
-	addrs, err = as.addrRepo.GetAddressesByUserID(ctx, userID)
+func (as AddressService) GetAddressesByUserID(ctx context.Context, actor Actor) (addrs []m.Address, err error) {
+	addrs, err = as.addrRepo.GetAddressesByUserID(ctx, actor.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrGetAddressesByUserID, err)
 	}
 	return addrs, nil
 }
 
-func (as AddressService) CreateAddress(ctx context.Context, ac m.AddressCreate) (id int64, err error) {
+func (as AddressService) CreateAddress(ctx context.Context, actor Actor, ac m.AddressCreate) (id int64, err error) {
+	ac.UserID = actor.UserID
 	id, err = as.addrRepo.CreateAddress(ctx, ac)
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrCreateAddress, err)
@@ -41,7 +42,7 @@ func (as AddressService) CreateAddress(ctx context.Context, ac m.AddressCreate) 
 	return id, nil
 }
 
-func (as AddressService) UpdateAddress(ctx context.Context, userID, id int64, au m.AddressUpdate) (a m.Address, err error) {
+func (as AddressService) UpdateAddress(ctx context.Context, actor Actor, id int64, au m.AddressUpdate) (a m.Address, err error) {
 	a, err = as.addrRepo.GetAddressByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -49,7 +50,7 @@ func (as AddressService) UpdateAddress(ctx context.Context, userID, id int64, au
 		}
 		return m.Address{}, fmt.Errorf("%w: %v", ErrGetAddressByID, err)
 	}
-	if a.UserID != userID {
+	if a.UserID != actor.UserID {
 		return m.Address{}, ErrNotYourAddress
 	}
 
@@ -60,7 +61,7 @@ func (as AddressService) UpdateAddress(ctx context.Context, userID, id int64, au
 	return a, nil
 }
 
-func (as AddressService) DeleteAddressByID(ctx context.Context, userID, id int64) (err error) {
+func (as AddressService) DeleteAddressByID(ctx context.Context, actor Actor, id int64) (err error) {
 	a, err := as.addrRepo.GetAddressByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -68,7 +69,7 @@ func (as AddressService) DeleteAddressByID(ctx context.Context, userID, id int64
 		}
 		return fmt.Errorf("%w: %v", ErrGetAddressByID, err)
 	}
-	if a.UserID != userID {
+	if a.UserID != actor.UserID {
 		return ErrNotYourAddress
 	}
 

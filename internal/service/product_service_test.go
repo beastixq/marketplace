@@ -331,7 +331,7 @@ func TestCreateProduct(t *testing.T) {
 				productMock.EXPECT().CreateProduct(ctx, productCreate).Return(tCase.MockCreate.ID, tCase.MockCreate.Error)
 			}
 
-			id, err := svc.CreateProduct(ctx, tCase.UserID, productCreate)
+			id, err := svc.CreateProduct(ctx, testActor(tCase.UserID, m.RoleSeller), productCreate)
 			assertError(t, err, tCase.ExpectedErr)
 			if tCase.ExpectedErr == nil && id != tCase.MockCreate.ID {
 				t.Fatalf("expected id %d, got %d", tCase.MockCreate.ID, id)
@@ -420,7 +420,7 @@ func TestUpdateProduct(t *testing.T) {
 				productMock.EXPECT().UpdateProduct(ctx, someID, productUpdate).Return(tCase.MockUpdate.Product, tCase.MockUpdate.Error)
 			}
 
-			product, err := svc.UpdateProduct(ctx, tCase.UserID, someID, productUpdate)
+			product, err := svc.UpdateProduct(ctx, testActor(tCase.UserID, m.RoleSeller), someID, productUpdate)
 			assertError(t, err, tCase.ExpectedErr)
 			if tCase.ExpectedErr == nil {
 				assertProduct(t, product, tCase.MockUpdate.Product)
@@ -504,7 +504,7 @@ func TestDeleteProduct(t *testing.T) {
 				productMock.EXPECT().DeleteProductByID(ctx, someID).Return(*tCase.MockDelete)
 			}
 
-			err := svc.DeleteProductByID(ctx, tCase.UserID, someID)
+			err := svc.DeleteProductByID(ctx, testActor(tCase.UserID, m.RoleSeller), someID)
 			assertError(t, err, tCase.ExpectedErr)
 		})
 	}

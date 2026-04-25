@@ -118,7 +118,7 @@ func TestCreateReview(t *testing.T) {
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
 			mock.EXPECT().CreateReview(ctx, tCase.Create).Return(tCase.MockReturn.ID, tCase.MockReturn.Error)
-			id, err := svc.CreateReview(ctx, tCase.Create)
+			id, err := svc.CreateReview(ctx, testActor(tCase.Create.UserID, m.RoleBuyer), tCase.Create)
 			assertError(t, err, tCase.ExpectedErr)
 			if id != tCase.ExpectedID {
 				t.Fatalf("invalid id. expected: %v, got: %v", tCase.ExpectedID, id)
@@ -210,7 +210,7 @@ func TestUpdateReview(t *testing.T) {
 			if tCase.MockUpdate != nil {
 				mock.EXPECT().UpdateReview(ctx, tCase.ReviewID, tCase.Update).Return(tCase.MockUpdate.Review, tCase.MockUpdate.Error)
 			}
-			r, err := svc.UpdateReview(ctx, tCase.UserID, tCase.ReviewID, tCase.Update)
+			r, err := svc.UpdateReview(ctx, testActor(tCase.UserID, m.RoleBuyer), tCase.ReviewID, tCase.Update)
 			assertError(t, err, tCase.ExpectedErr)
 			assertReview(t, r, tCase.ExpectedReview)
 		})
@@ -276,7 +276,7 @@ func TestDeleteReviewByID(t *testing.T) {
 			if tCase.MockDelete != nil {
 				mock.EXPECT().DeleteReviewByID(ctx, tCase.ReviewID).Return(*tCase.MockDelete)
 			}
-			err := svc.DeleteReviewByID(ctx, tCase.UserID, tCase.ReviewID)
+			err := svc.DeleteReviewByID(ctx, testActor(tCase.UserID, m.RoleBuyer), tCase.ReviewID)
 			assertError(t, err, tCase.ExpectedErr)
 		})
 	}

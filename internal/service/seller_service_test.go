@@ -135,7 +135,7 @@ func TestGetSellerByUserID(t *testing.T) {
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
 			mock.EXPECT().GetSellerByUserID(ctx, tCase.UserID).Return(tCase.MockReturn.Seller, tCase.MockReturn.Error)
-			seller, err := svc.GetSellerByUserID(ctx, tCase.UserID)
+			seller, err := svc.GetSellerByUserID(ctx, testActor(tCase.UserID, m.RoleSeller))
 			assertError(t, err, tCase.ExpectedErr)
 			assertSeller(t, seller, tCase.ExpectedSeller)
 		})
@@ -179,7 +179,7 @@ func TestCreateSeller(t *testing.T) {
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
 			mock.EXPECT().CreateSeller(ctx, tCase.Create).Return(tCase.MockReturn.ID, tCase.MockReturn.Error)
-			id, err := svc.CreateSeller(ctx, tCase.Create)
+			id, err := svc.CreateSeller(ctx, testActor(tCase.Create.UserID, m.RoleSeller), tCase.Create)
 			assertError(t, err, tCase.ExpectedErr)
 			if id != tCase.ExpectedID {
 				t.Fatalf("invalid id. expected: %v, got: %v", tCase.ExpectedID, id)
@@ -271,7 +271,7 @@ func TestUpdateSeller(t *testing.T) {
 			if tCase.MockUpdate != nil {
 				mock.EXPECT().UpdateSeller(ctx, tCase.SellerID, tCase.Update).Return(tCase.MockUpdate.Seller, tCase.MockUpdate.Error)
 			}
-			seller, err := svc.UpdateSeller(ctx, tCase.UserID, tCase.SellerID, tCase.Update)
+			seller, err := svc.UpdateSeller(ctx, testActor(tCase.UserID, m.RoleSeller), tCase.SellerID, tCase.Update)
 			assertError(t, err, tCase.ExpectedErr)
 			assertSeller(t, seller, tCase.ExpectedSeller)
 		})
@@ -337,7 +337,7 @@ func TestDeleteSellerByID(t *testing.T) {
 			if tCase.MockDelete != nil {
 				mock.EXPECT().DeleteSellerByID(ctx, tCase.SellerID).Return(*tCase.MockDelete)
 			}
-			err := svc.DeleteSellerByID(ctx, tCase.UserID, tCase.SellerID)
+			err := svc.DeleteSellerByID(ctx, testActor(tCase.UserID, m.RoleSeller), tCase.SellerID)
 			assertError(t, err, tCase.ExpectedErr)
 		})
 	}
@@ -428,7 +428,7 @@ func TestGetSellerStats(t *testing.T) {
 			if tCase.MockStats != nil {
 				mock.EXPECT().GetSellerStats(ctx, tCase.SellerID, tCase.DateFrom, tCase.DateTo).Return(tCase.MockStats.Stats, tCase.MockStats.Error)
 			}
-			stats, err := svc.GetSellerStats(ctx, tCase.UserID, tCase.SellerID, tCase.DateFrom, tCase.DateTo)
+			stats, err := svc.GetSellerStats(ctx, testActor(tCase.UserID, m.RoleSeller), tCase.SellerID, tCase.DateFrom, tCase.DateTo)
 			assertError(t, err, tCase.ExpectedErr)
 			assertSellerStats(t, stats, tCase.ExpectedStats)
 		})

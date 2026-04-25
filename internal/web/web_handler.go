@@ -117,6 +117,10 @@ type userInfo struct {
 	FullName string
 }
 
+func (u *userInfo) actor() service.Actor {
+	return service.Actor{UserID: u.UserID, Role: model.UserRole(u.Role)}
+}
+
 // --- Catalog ---
 
 type catalogData struct {
@@ -277,7 +281,7 @@ func (wh *WebHandler) ProductDetail(w http.ResponseWriter, r *http.Request) {
 	reviewUserNames := make(map[int64]string, len(reviews))
 	for _, rv := range reviews {
 		if _, ok := reviewUserNames[rv.UserID]; !ok {
-			u, err := wh.userService.GetUserByID(r.Context(), rv.UserID)
+			u, err := wh.userService.GetAuthUserByID(r.Context(), rv.UserID)
 			if err == nil {
 				reviewUserNames[rv.UserID] = u.FullName
 			} else {
@@ -446,7 +450,8 @@ func (wh *WebHandler) Profile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := wh.userService.GetUserByID(r.Context(), user.UserID)
+	actor := user.actor()
+	u, err := wh.userService.GetUserByID(r.Context(), actor, user.UserID)
 	if err != nil {
 		http.Error(w, "Failed to load profile", http.StatusInternalServerError)
 		return
@@ -474,7 +479,7 @@ func (wh *WebHandler) ProfileUpdate(w http.ResponseWriter, r *http.Request) {
 	update := model.UserUpdate{}
 	if fullName != "" {
 		if err := validators.ValidateFullName(fullName); err != nil {
-			u, _ := wh.userService.GetUserByID(r.Context(), user.UserID)
+			u, _ := wh.userService.GetUserByID(r.Context(), user.actor(), user.UserID)
 			wh.render(w, "profile", map[string]any{
 				"User":    user,
 				"Profile": u,
@@ -487,7 +492,7 @@ func (wh *WebHandler) ProfileUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if email != "" {
 		if err := validators.ValidateEmail(email); err != nil {
-			u, _ := wh.userService.GetUserByID(r.Context(), user.UserID)
+			u, _ := wh.userService.GetUserByID(r.Context(), user.actor(), user.UserID)
 			wh.render(w, "profile", map[string]any{
 				"User":    user,
 				"Profile": u,
@@ -500,7 +505,7 @@ func (wh *WebHandler) ProfileUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if phone != "" {
 		if err := validators.ValidatePhone(phone); err != nil {
-			u, _ := wh.userService.GetUserByID(r.Context(), user.UserID)
+			u, _ := wh.userService.GetUserByID(r.Context(), user.actor(), user.UserID)
 			wh.render(w, "profile", map[string]any{
 				"User":    user,
 				"Profile": u,
@@ -512,9 +517,10 @@ func (wh *WebHandler) ProfileUpdate(w http.ResponseWriter, r *http.Request) {
 		update.Phone = &phone
 	}
 
-	_, err := wh.userService.UpdateUser(r.Context(), user.UserID, update)
+	actor := user.actor()
+	_, err := wh.userService.UpdateUser(r.Context(), actor, user.UserID, update)
 
-	u, _ := wh.userService.GetUserByID(r.Context(), user.UserID)
+	u, _ := wh.userService.GetUserByID(r.Context(), actor, user.UserID)
 
 	if err != nil {
 		errMsg := "Failed to update profile"
@@ -554,7 +560,7 @@ func (wh *WebHandler) Orders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orders, _ := wh.orderService.GetOrdersByUserID(r.Context(), user.UserID, model.PaginationOpts{})
+	orders, _ := wh.orderService.GetOrdersByUserID(r.Context(), user.actor(), model.PaginationOpts{})
 
 	// Split into current (pending, paid, shipped) and completed (delivered, cancelled), skip drafts
 	var currentOrders, completedOrders []model.Order
@@ -598,13 +604,14 @@ func (wh *WebHandler) OrderDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err := wh.orderService.GetOrderByID(r.Context(), id)
-	if err != nil || order.UserID != user.UserID {
+	actor := user.actor()
+	order, err := wh.orderService.GetOrderByID(r.Context(), actor, id)
+	if err != nil {
 		http.Error(w, "Order not found", http.StatusNotFound)
 		return
 	}
 
-	items, _ := wh.orderService.GetOrderItemsByOrderID(r.Context(), order.ID)
+	items, _ := wh.orderService.GetOrderItemsByOrderID(r.Context(), actor, order.ID)
 	displayItems := wh.buildCartDisplay(r.Context(), items)
 
 	var seller *model.Seller
@@ -617,7 +624,7 @@ func (wh *WebHandler) OrderDetail(w http.ResponseWriter, r *http.Request) {
 
 	var address *model.Address
 	if order.AddressID != nil {
-		addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), user.UserID)
+		addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), actor)
 		for _, a := range addresses {
 			if a.ID == *order.AddressID {
 				address = &a
@@ -653,7 +660,7 @@ func (wh *WebHandler) OrderPay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = wh.orderService.PayOrder(r.Context(), id, user.UserID)
+	_ = wh.orderService.PayOrder(r.Context(), user.actor(), id)
 	http.Redirect(w, r, "/orders", http.StatusSeeOther)
 }
 
@@ -675,7 +682,7 @@ func (wh *WebHandler) OrderCancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = wh.orderService.CancelOrder(r.Context(), id, user.UserID)
+	_ = wh.orderService.CancelOrder(r.Context(), user.actor(), id)
 	http.Redirect(w, r, "/orders", http.StatusSeeOther)
 }
 
@@ -711,19 +718,20 @@ func (wh *WebHandler) Cart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cart, err := wh.orderService.GetCart(r.Context(), user.UserID)
+	actor := user.actor()
+	cart, err := wh.orderService.GetCart(r.Context(), actor)
 	var items []model.OrderItem
 	if err == nil {
-		items, _ = wh.orderService.GetOrderItemsByOrderID(r.Context(), cart.ID)
+		items, _ = wh.orderService.GetOrderItemsByOrderID(r.Context(), actor, cart.ID)
 	}
 
-	addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), user.UserID)
+	addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), actor)
 
 	wh.render(w, "cart", map[string]any{
 		"User":      user,
 		"Cart":      cart,
 		"Items":     wh.buildCartDisplay(r.Context(), items),
-		"HasCart":    err == nil,
+		"HasCart":   err == nil,
 		"Addresses": addresses,
 		"Error":     "",
 	})
@@ -753,7 +761,7 @@ func (wh *WebHandler) CartAdd(w http.ResponseWriter, r *http.Request) {
 		quantity = 1
 	}
 
-	if err = wh.orderService.AddItemToCart(r.Context(), user.UserID, productID, quantity); err != nil {
+	if err = wh.orderService.AddItemToCart(r.Context(), user.actor(), productID, quantity); err != nil {
 		if errors.Is(err, service.ErrProductAlreadyInCart) {
 			http.Redirect(w, r, fmt.Sprintf("/products/%d?notice=already-in-cart", productID), http.StatusSeeOther)
 			return
@@ -781,7 +789,7 @@ func (wh *WebHandler) CartRemoveItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = wh.orderService.DeleteCartItem(r.Context(), user.UserID, id)
+	_ = wh.orderService.DeleteCartItem(r.Context(), user.actor(), id)
 	http.Redirect(w, r, "/cart", http.StatusSeeOther)
 }
 
@@ -810,7 +818,7 @@ func (wh *WebHandler) CartUpdateQuantity(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err = wh.orderService.ChangeQuantityCartItem(r.Context(), user.UserID, id, quantity); err != nil {
+	if err = wh.orderService.ChangeQuantityCartItem(r.Context(), user.actor(), id, quantity); err != nil {
 		log.Printf("CartUpdateQuantity error: %v", err)
 	}
 	http.Redirect(w, r, "/cart", http.StatusSeeOther)
@@ -834,20 +842,21 @@ func (wh *WebHandler) CartCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = wh.orderService.Checkout(r.Context(), user.UserID, addressID)
+	actor := user.actor()
+	_, err = wh.orderService.Checkout(r.Context(), actor, addressID)
 	if err != nil {
 		// Reload cart with error
-		cart, cartErr := wh.orderService.GetCart(r.Context(), user.UserID)
+		cart, cartErr := wh.orderService.GetCart(r.Context(), actor)
 		var items []model.OrderItem
 		if cartErr == nil {
-			items, _ = wh.orderService.GetOrderItemsByOrderID(r.Context(), cart.ID)
+			items, _ = wh.orderService.GetOrderItemsByOrderID(r.Context(), actor, cart.ID)
 		}
-		addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), user.UserID)
+		addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), actor)
 		wh.render(w, "cart", map[string]any{
 			"User":      user,
 			"Cart":      cart,
 			"Items":     wh.buildCartDisplay(r.Context(), items),
-			"HasCart":    cartErr == nil,
+			"HasCart":   cartErr == nil,
 			"Addresses": addresses,
 			"Error":     "Checkout failed: " + err.Error(),
 		})
@@ -870,7 +879,7 @@ func (wh *WebHandler) Addresses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), user.UserID)
+	addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), user.actor())
 
 	wh.render(w, "addresses", map[string]any{
 		"User":      user,
@@ -896,15 +905,15 @@ func (wh *WebHandler) AddressCreate(w http.ResponseWriter, r *http.Request) {
 	zipCode := r.FormValue("zip_code")
 	isDefault := r.FormValue("is_default") == "on"
 
-	_, err := wh.addressService.CreateAddress(r.Context(), model.AddressCreate{
-		UserID:    user.UserID,
+	actor := user.actor()
+	_, err := wh.addressService.CreateAddress(r.Context(), actor, model.AddressCreate{
 		City:      city,
 		Street:    street,
 		ZipCode:   zipCode,
 		IsDefault: isDefault,
 	})
 
-	addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), user.UserID)
+	addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), actor)
 
 	if err != nil {
 		wh.render(w, "addresses", map[string]any{
@@ -939,7 +948,7 @@ func (wh *WebHandler) AddressSetDefault(w http.ResponseWriter, r *http.Request) 
 	}
 
 	isDefault := true
-	_, err = wh.addressService.UpdateAddress(r.Context(), user.UserID, id, model.AddressUpdate{IsDefault: &isDefault})
+	_, err = wh.addressService.UpdateAddress(r.Context(), user.actor(), id, model.AddressUpdate{IsDefault: &isDefault})
 	if err != nil {
 		log.Printf("AddressSetDefault error: %v", err)
 	}
@@ -964,7 +973,7 @@ func (wh *WebHandler) AddressDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = wh.addressService.DeleteAddressByID(r.Context(), user.UserID, id)
+	_ = wh.addressService.DeleteAddressByID(r.Context(), user.actor(), id)
 	http.Redirect(w, r, "/addresses", http.StatusSeeOther)
 }
 
@@ -974,7 +983,7 @@ func (wh *WebHandler) sellerFromUser(r *http.Request, user *userInfo) (model.Sel
 	if user == nil || user.Role != "seller" {
 		return model.Seller{}, false
 	}
-	seller, err := wh.sellerService.GetSellerByUserID(r.Context(), user.UserID)
+	seller, err := wh.sellerService.GetSellerByUserID(r.Context(), user.actor())
 	if err != nil {
 		return model.Seller{}, false
 	}
@@ -992,12 +1001,13 @@ func (wh *WebHandler) SellerDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	seller, err := wh.sellerService.GetSellerByUserID(r.Context(), user.UserID)
+	actor := user.actor()
+	seller, err := wh.sellerService.GetSellerByUserID(r.Context(), actor)
 	hasSeller := err == nil
 
 	var stats *model.SellerStats
 	if hasSeller {
-		s, statsErr := wh.sellerService.GetSellerStats(r.Context(), user.UserID, seller.ID, time.Now().AddDate(-1, 0, 0), time.Now())
+		s, statsErr := wh.sellerService.GetSellerStats(r.Context(), actor, seller.ID, time.Now().AddDate(-1, 0, 0), time.Now())
 		if statsErr == nil {
 			stats = &s
 		}
@@ -1030,7 +1040,7 @@ func (wh *WebHandler) SellerUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	su.Description = &description
 
-	_, err := wh.sellerService.UpdateSeller(r.Context(), user.UserID, seller.ID, su)
+	_, err := wh.sellerService.UpdateSeller(r.Context(), user.actor(), seller.ID, su)
 	if err != nil {
 		http.Redirect(w, r, "/seller?error=Failed+to+update+profile", http.StatusSeeOther)
 		return
@@ -1049,13 +1059,14 @@ func (wh *WebHandler) SellerOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := wh.sellerService.GetSellerByUserID(r.Context(), user.UserID)
+	actor := user.actor()
+	_, err := wh.sellerService.GetSellerByUserID(r.Context(), actor)
 	if err != nil {
 		http.Redirect(w, r, "/seller", http.StatusSeeOther)
 		return
 	}
 
-	orders, _ := wh.orderService.GetSellerOrdersByUserID(r.Context(), user.UserID, model.PaginationOpts{Page: 1, Limit: 50})
+	orders, _ := wh.orderService.GetSellerOrdersByUserID(r.Context(), actor, model.PaginationOpts{Page: 1, Limit: 50})
 
 	wh.render(w, "seller-orders", map[string]any{
 		"User":   user,
@@ -1074,7 +1085,8 @@ func (wh *WebHandler) SellerProducts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	seller, err := wh.sellerService.GetSellerByUserID(r.Context(), user.UserID)
+	actor := user.actor()
+	seller, err := wh.sellerService.GetSellerByUserID(r.Context(), actor)
 	if err != nil {
 		http.Redirect(w, r, "/seller", http.StatusSeeOther)
 		return
@@ -1109,14 +1121,13 @@ func (wh *WebHandler) SellerCreate(w http.ResponseWriter, r *http.Request) {
 	description := r.FormValue("description")
 
 	sc := model.SellerCreate{
-		UserID:      user.UserID,
 		CompanyName: companyName,
 	}
 	if description != "" {
 		sc.Description = &description
 	}
 
-	_, err := wh.sellerService.CreateSeller(r.Context(), sc)
+	_, err := wh.sellerService.CreateSeller(r.Context(), user.actor(), sc)
 	if err != nil {
 		wh.render(w, "seller", map[string]any{
 			"User":      user,
@@ -1165,7 +1176,7 @@ func (wh *WebHandler) SellerProductCreate(w http.ResponseWriter, r *http.Request
 		pc.Description = &description
 	}
 
-	_, err = wh.productService.CreateProduct(r.Context(), user.UserID, pc)
+	_, err = wh.productService.CreateProduct(r.Context(), user.actor(), pc)
 	if err != nil {
 		log.Printf("SellerProductCreate error: %v", err)
 	}
@@ -1240,7 +1251,7 @@ func (wh *WebHandler) SellerProductEditSubmit(w http.ResponseWriter, r *http.Req
 
 	changedBy := fmt.Sprintf("%s:%d", user.Role, user.UserID)
 	pu.ChangedBy = &changedBy
-	_, err = wh.productService.UpdateProduct(r.Context(), user.UserID, id, pu)
+	_, err = wh.productService.UpdateProduct(r.Context(), user.actor(), id, pu)
 	if err != nil {
 		wh.render(w, "product-edit", map[string]any{
 			"User":    user,
@@ -1274,7 +1285,7 @@ func (wh *WebHandler) SellerProductDelete(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	_ = wh.productService.DeleteProductByID(r.Context(), user.UserID, id)
+	_ = wh.productService.DeleteProductByID(r.Context(), user.actor(), id)
 	http.Redirect(w, r, "/seller/products", http.StatusSeeOther)
 }
 
@@ -1294,7 +1305,7 @@ func (wh *WebHandler) SellerOrderShip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = wh.orderService.ShipOrder(r.Context(), id, user.UserID)
+	_ = wh.orderService.ShipOrder(r.Context(), user.actor(), id)
 	http.Redirect(w, r, "/seller/orders", http.StatusSeeOther)
 }
 
@@ -1312,7 +1323,7 @@ func (wh *WebHandler) SellerOrderDeliver(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	_ = wh.orderService.DeliverOrder(r.Context(), id, user.UserID)
+	_ = wh.orderService.DeliverOrder(r.Context(), user.actor(), id)
 	http.Redirect(w, r, "/seller/orders", http.StatusSeeOther)
 }
 
@@ -1341,7 +1352,6 @@ func (wh *WebHandler) ReviewSubmit(w http.ResponseWriter, r *http.Request) {
 	comment := r.FormValue("comment")
 
 	rc := model.ReviewCreate{
-		UserID:    user.UserID,
 		ProductID: productID,
 		Rating:    int8(rating),
 	}
@@ -1349,7 +1359,7 @@ func (wh *WebHandler) ReviewSubmit(w http.ResponseWriter, r *http.Request) {
 		rc.Comment = &comment
 	}
 
-	if _, err = wh.reviewService.CreateReview(r.Context(), rc); err != nil {
+	if _, err = wh.reviewService.CreateReview(r.Context(), user.actor(), rc); err != nil {
 		log.Printf("ReviewSubmit error: %v", err)
 	}
 
@@ -1439,7 +1449,7 @@ func (wh *WebHandler) AdminUsers(w http.ResponseWriter, r *http.Request) {
 		opts.Role = &role
 	}
 
-	users, _ := wh.userService.GetUsers(r.Context(), opts)
+	users, _ := wh.userService.GetUsers(r.Context(), user.actor(), opts)
 
 	wh.render(w, "admin-users", map[string]any{
 		"User":       user,
@@ -1465,7 +1475,7 @@ func (wh *WebHandler) AdminUserEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	editUser, err := wh.userService.GetUserByID(r.Context(), id)
+	editUser, err := wh.userService.GetUserByID(r.Context(), user.actor(), id)
 	if err != nil {
 		http.Redirect(w, r, "/admin/users?error=User+not+found", http.StatusSeeOther)
 		return
@@ -1506,7 +1516,7 @@ func (wh *WebHandler) AdminUserEditSubmit(w http.ResponseWriter, r *http.Request
 		uu.Phone = &phone
 	}
 
-	_, err = wh.userService.UpdateUser(r.Context(), id, uu)
+	_, err = wh.userService.UpdateUser(r.Context(), user.actor(), id, uu)
 	if err != nil {
 		http.Redirect(w, r, fmt.Sprintf("/admin/users/%d?error=%s", id, url.QueryEscape(err.Error())), http.StatusSeeOther)
 		return
@@ -1526,7 +1536,7 @@ func (wh *WebHandler) AdminUserDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = wh.userService.DeleteUserByID(r.Context(), id); err != nil {
+	if err = wh.userService.DeleteUserByID(r.Context(), user.actor(), id); err != nil {
 		http.Redirect(w, r, fmt.Sprintf("/admin/users/%d?error=%s", id, url.QueryEscape(err.Error())), http.StatusSeeOther)
 		return
 	}
@@ -1709,15 +1719,15 @@ func (wh *WebHandler) AdminReviewDelete(w http.ResponseWriter, r *http.Request) 
 // --- Analyst Dashboard ---
 
 type platformStats struct {
-	TotalUsers    int
-	TotalSellers  int
-	TotalProducts int
-	TotalOrders   int
-	TotalRevenue  string
-	TotalReviews  int
-	UsersByRole   []roleCount
+	TotalUsers     int
+	TotalSellers   int
+	TotalProducts  int
+	TotalOrders    int
+	TotalRevenue   string
+	TotalReviews   int
+	UsersByRole    []roleCount
 	OrdersByStatus []statusCount
-	TopProducts   []topProduct
+	TopProducts    []topProduct
 }
 
 type roleCount struct {
@@ -1731,9 +1741,9 @@ type statusCount struct {
 }
 
 type topProduct struct {
-	ID       int64
-	Name     string
-	Revenue  string
+	ID        int64
+	Name      string
+	Revenue   string
 	UnitsSold int
 }
 

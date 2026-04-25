@@ -28,16 +28,26 @@ func (ah AdminHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/admin/users/:id
 func (ah AdminHandler) GetUser(w http.ResponseWriter, r *http.Request) {
+	actor, ok := actorFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, ErrInvalidIDParam.Error())
 		return
 	}
 
-	user, err := ah.userService.GetUserByID(r.Context(), id)
+	user, err := ah.userService.GetUserByID(r.Context(), actor, id)
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrUserNotFound.Error())
+			return
+		}
+		if errors.Is(err, service.ErrNotYourUser) {
+			writeError(w, http.StatusForbidden, service.ErrNotYourUser.Error())
 			return
 		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
@@ -62,6 +72,12 @@ func (ur AdminUpdateUserRequest) Validate() error {
 
 // PATCH /api/v1/admin/users/:id
 func (ah AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	actor, ok := actorFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, ErrInvalidIDParam.Error())
@@ -78,7 +94,7 @@ func (ah AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := ah.userService.UpdateUser(r.Context(), id, model.UserUpdate{
+	user, err := ah.userService.UpdateUser(r.Context(), actor, id, model.UserUpdate{
 		Email:    req.Email,
 		FullName: req.FullName,
 		Phone:    req.Phone,
@@ -89,6 +105,10 @@ func (ah AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, service.ErrUserNotFound.Error())
 			return
 		}
+		if errors.Is(err, service.ErrNotYourUser) {
+			writeError(w, http.StatusForbidden, service.ErrNotYourUser.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -97,15 +117,25 @@ func (ah AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/admin/users/:id
 func (ah AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	actor, ok := actorFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, ErrInvalidIDParam.Error())
 		return
 	}
 
-	if err := ah.userService.DeleteUserByID(r.Context(), id); err != nil {
+	if err := ah.userService.DeleteUserByID(r.Context(), actor, id); err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrUserNotFound.Error())
+			return
+		}
+		if errors.Is(err, service.ErrNotYourUser) {
+			writeError(w, http.StatusForbidden, service.ErrNotYourUser.Error())
 			return
 		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
@@ -116,15 +146,19 @@ func (ah AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/admin/sellers/:id
 func (ah AdminHandler) DeleteSeller(w http.ResponseWriter, r *http.Request) {
+	actor, ok := actorFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, ErrInvalidIDParam.Error())
 		return
 	}
 
-	// admin bypasses ownership check — pass 0 as userID, service needs adjustment
-	// TODO: add AdminDeleteSeller to SellerService that skips ownership check
-	if err := ah.sellerService.DeleteSellerByID(r.Context(), 0, id); err != nil {
+	if err := ah.sellerService.DeleteSellerByID(r.Context(), actor, id); err != nil {
 		if errors.Is(err, service.ErrSellerNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrSellerNotFound.Error())
 			return

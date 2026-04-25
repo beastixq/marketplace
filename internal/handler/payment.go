@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/beastixq/marketplace/internal/middleware"
 	"github.com/beastixq/marketplace/internal/service"
 	"github.com/go-chi/chi/v5"
 )
@@ -21,7 +20,7 @@ func NewPaymentHandler(ps *service.PaymentService) PaymentHandler {
 
 // POST /api/v1/orders/:id/payment-link
 func (ph PaymentHandler) GetPaymentLink(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -33,7 +32,7 @@ func (ph PaymentHandler) GetPaymentLink(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	paymentURL, expiresAt, err := ph.paymentService.GetOrderPaymentURL(r.Context(), id, claims.UserID)
+	paymentURL, expiresAt, err := ph.paymentService.GetOrderPaymentURL(r.Context(), actor, id)
 	if err != nil {
 		if errors.Is(err, service.ErrOrderNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrOrderNotFound.Error())

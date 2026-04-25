@@ -88,7 +88,7 @@ func TestRegister(t *testing.T) {
 		t.Run(tCase.Description, func(t *testing.T) {
 			userMock.EXPECT().CreateUser(ctx, tCase.Create).Return(tCase.MockCreate.ID, tCase.MockCreate.Error)
 			if tCase.MockGetByID != nil {
-				userMock.EXPECT().GetUserByID(ctx, someID).Return(tCase.MockGetByID.User, tCase.MockGetByID.Error)
+				userMock.EXPECT().GetAuthUserByID(ctx, someID).Return(tCase.MockGetByID.User, tCase.MockGetByID.Error)
 			}
 
 			token, err := svc.Register(ctx, tCase.Create)

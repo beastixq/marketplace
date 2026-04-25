@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/beastixq/marketplace/internal/middleware"
 	"github.com/beastixq/marketplace/internal/model"
 	"github.com/beastixq/marketplace/internal/service"
 	"github.com/go-chi/chi/v5"
@@ -35,7 +34,7 @@ func (cr CreateReviewRequest) Validate() error {
 
 // POST /api/v1/reviews
 func (rh ReviewHandler) CreateReview(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -51,8 +50,7 @@ func (rh ReviewHandler) CreateReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := rh.reviewService.CreateReview(r.Context(), model.ReviewCreate{
-		UserID:    claims.UserID,
+	id, err := rh.reviewService.CreateReview(r.Context(), actor, model.ReviewCreate{
 		ProductID: req.ProductID,
 		Rating:    req.Rating,
 		Comment:   req.Comment,
@@ -81,7 +79,7 @@ func (ur UpdateReviewRequest) Validate() error {
 
 // PATCH /api/v1/reviews/:id
 func (rh ReviewHandler) UpdateReview(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -102,7 +100,7 @@ func (rh ReviewHandler) UpdateReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	review, err := rh.reviewService.UpdateReview(r.Context(), claims.UserID, id, model.ReviewUpdate{
+	review, err := rh.reviewService.UpdateReview(r.Context(), actor, id, model.ReviewUpdate{
 		Rating:  req.Rating,
 		Comment: req.Comment,
 	})
@@ -123,7 +121,7 @@ func (rh ReviewHandler) UpdateReview(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/reviews/:id
 func (rh ReviewHandler) DeleteReview(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -134,7 +132,7 @@ func (rh ReviewHandler) DeleteReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := rh.reviewService.DeleteReviewByID(r.Context(), claims.UserID, id); err != nil {
+	if err := rh.reviewService.DeleteReviewByID(r.Context(), actor, id); err != nil {
 		if errors.Is(err, service.ErrReviewNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrReviewNotFound.Error())
 			return

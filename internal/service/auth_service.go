@@ -19,7 +19,7 @@ import (
 //go:generate mockgen -package mock_service -destination ../mocks/service/mock_auth_user_provider.go github.com/beastixq/marketplace/internal/service AuthUserProvider
 type AuthUserProvider interface {
 	CreateUser(ctx context.Context, uc m.UserCreate) (id int64, err error)
-	GetUserByID(ctx context.Context, id int64) (u m.User, err error)
+	GetAuthUserByID(ctx context.Context, id int64) (u m.User, err error)
 	GetUserByEmail(ctx context.Context, email string) (u m.User, err error)
 }
 
@@ -77,7 +77,7 @@ func (as AuthService) Register(ctx context.Context, uc m.UserCreate) (token stri
 		return "", fmt.Errorf("%w: %v", ErrCreateUser, err)
 	}
 
-	user, err := as.userProvider.GetUserByID(ctx, userID)
+	user, err := as.userProvider.GetAuthUserByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return "", ErrRegistration

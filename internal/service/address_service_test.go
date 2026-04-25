@@ -79,7 +79,7 @@ func TestGetAddressesByUserID(t *testing.T) {
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
 			mock.EXPECT().GetAddressesByUserID(ctx, tCase.UserID).Return(tCase.MockReturn.Addresses, tCase.MockReturn.Error)
-			addrs, err := svc.GetAddressesByUserID(ctx, tCase.UserID)
+			addrs, err := svc.GetAddressesByUserID(ctx, testActor(tCase.UserID, m.RoleBuyer))
 			assertError(t, err, tCase.ExpectedErr)
 			if !reflect.DeepEqual(addrs, tCase.ExpectedAddresses) {
 				t.Fatalf("invalid addresses. expected: %v, got: %v", tCase.ExpectedAddresses, addrs)
@@ -127,7 +127,7 @@ func TestCreateAddress(t *testing.T) {
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
 			mock.EXPECT().CreateAddress(ctx, tCase.Create).Return(tCase.MockReturn.ID, tCase.MockReturn.Error)
-			id, err := svc.CreateAddress(ctx, tCase.Create)
+			id, err := svc.CreateAddress(ctx, testActor(tCase.Create.UserID, m.RoleBuyer), tCase.Create)
 			assertError(t, err, tCase.ExpectedErr)
 			if id != tCase.ExpectedID {
 				t.Fatalf("invalid id. expected: %v, got: %v", tCase.ExpectedID, id)
@@ -220,7 +220,7 @@ func TestUpdateAddress(t *testing.T) {
 			if tCase.MockUpdate != nil {
 				mock.EXPECT().UpdateAddress(ctx, tCase.AddressID, tCase.Update).Return(tCase.MockUpdate.Address, tCase.MockUpdate.Error)
 			}
-			addr, err := svc.UpdateAddress(ctx, tCase.UserID, tCase.AddressID, tCase.Update)
+			addr, err := svc.UpdateAddress(ctx, testActor(tCase.UserID, m.RoleBuyer), tCase.AddressID, tCase.Update)
 			assertError(t, err, tCase.ExpectedErr)
 			assertAddress(t, addr, tCase.ExpectedAddress)
 		})
@@ -286,7 +286,7 @@ func TestDeleteAddressByID(t *testing.T) {
 			if tCase.MockDelete != nil {
 				mock.EXPECT().DeleteAddressByID(ctx, tCase.AddressID).Return(*tCase.MockDelete)
 			}
-			err := svc.DeleteAddressByID(ctx, tCase.UserID, tCase.AddressID)
+			err := svc.DeleteAddressByID(ctx, testActor(tCase.UserID, m.RoleBuyer), tCase.AddressID)
 			assertError(t, err, tCase.ExpectedErr)
 		})
 	}

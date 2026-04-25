@@ -38,8 +38,8 @@ func (ss SellerService) GetSellerByID(ctx context.Context, id int64) (s m.Seller
 	return s, nil
 }
 
-func (ss SellerService) GetSellerByUserID(ctx context.Context, userID int64) (s m.Seller, err error) {
-	s, err = ss.sellerRepo.GetSellerByUserID(ctx, userID)
+func (ss SellerService) GetSellerByUserID(ctx context.Context, actor Actor) (s m.Seller, err error) {
+	s, err = ss.sellerRepo.GetSellerByUserID(ctx, actor.UserID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return m.Seller{}, ErrSellerNotFound
@@ -49,7 +49,8 @@ func (ss SellerService) GetSellerByUserID(ctx context.Context, userID int64) (s 
 	return s, nil
 }
 
-func (ss SellerService) CreateSeller(ctx context.Context, sc m.SellerCreate) (id int64, err error) {
+func (ss SellerService) CreateSeller(ctx context.Context, actor Actor, sc m.SellerCreate) (id int64, err error) {
+	sc.UserID = actor.UserID
 	id, err = ss.sellerRepo.CreateSeller(ctx, sc)
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrCreateSeller, err)
@@ -57,7 +58,7 @@ func (ss SellerService) CreateSeller(ctx context.Context, sc m.SellerCreate) (id
 	return id, nil
 }
 
-func (ss SellerService) UpdateSeller(ctx context.Context, userID, id int64, su m.SellerUpdate) (s m.Seller, err error) {
+func (ss SellerService) UpdateSeller(ctx context.Context, actor Actor, id int64, su m.SellerUpdate) (s m.Seller, err error) {
 	s, err = ss.sellerRepo.GetSellerByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -65,7 +66,7 @@ func (ss SellerService) UpdateSeller(ctx context.Context, userID, id int64, su m
 		}
 		return m.Seller{}, fmt.Errorf("%w: %v", ErrGetSellerByID, err)
 	}
-	if s.UserID != userID {
+	if !actor.IsAdmin() && s.UserID != actor.UserID {
 		return m.Seller{}, ErrNotYourSeller
 	}
 
@@ -76,7 +77,7 @@ func (ss SellerService) UpdateSeller(ctx context.Context, userID, id int64, su m
 	return s, nil
 }
 
-func (ss SellerService) DeleteSellerByID(ctx context.Context, userID, id int64) (err error) {
+func (ss SellerService) DeleteSellerByID(ctx context.Context, actor Actor, id int64) (err error) {
 	s, err := ss.sellerRepo.GetSellerByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -84,7 +85,7 @@ func (ss SellerService) DeleteSellerByID(ctx context.Context, userID, id int64) 
 		}
 		return fmt.Errorf("%w: %v", ErrGetSellerByID, err)
 	}
-	if s.UserID != userID {
+	if !actor.IsAdmin() && s.UserID != actor.UserID {
 		return ErrNotYourSeller
 	}
 
@@ -95,7 +96,7 @@ func (ss SellerService) DeleteSellerByID(ctx context.Context, userID, id int64) 
 	return nil
 }
 
-func (ssvc SellerService) GetSellerStats(ctx context.Context, userID, sellerID int64, dateFrom time.Time, dateTo time.Time) (ss m.SellerStats, err error) {
+func (ssvc SellerService) GetSellerStats(ctx context.Context, actor Actor, sellerID int64, dateFrom time.Time, dateTo time.Time) (ss m.SellerStats, err error) {
 	s, err := ssvc.sellerRepo.GetSellerByID(ctx, sellerID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -103,7 +104,7 @@ func (ssvc SellerService) GetSellerStats(ctx context.Context, userID, sellerID i
 		}
 		return m.SellerStats{}, fmt.Errorf("%w: %v", ErrGetSellerByID, err)
 	}
-	if s.UserID != userID {
+	if !actor.IsAdmin() && s.UserID != actor.UserID {
 		return m.SellerStats{}, ErrNotYourSeller
 	}
 

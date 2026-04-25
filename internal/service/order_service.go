@@ -62,7 +62,7 @@ func NewOrderService(or OrderRepo, oir OrderItemRepo, pr ProductRepo, sr SellerG
 		txManager:     tx}
 }
 
-func (os OrderService) GetOrderByID(ctx context.Context, orderID int64) (order m.Order, err error) {
+func (os OrderService) GetOrderByID(ctx context.Context, actor Actor, orderID int64) (order m.Order, err error) {
 	order, err = os.orderRepo.GetOrderByID(ctx, orderID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -70,19 +70,22 @@ func (os OrderService) GetOrderByID(ctx context.Context, orderID int64) (order m
 		}
 		return m.Order{}, fmt.Errorf("%w: %v", ErrGetOrderByID, err)
 	}
+	if !actor.IsAdmin() && order.UserID != actor.UserID {
+		return m.Order{}, ErrNotYourOrder
+	}
 	return order, nil
 }
 
-func (os OrderService) GetOrdersByUserID(ctx context.Context, userID int64, pg m.PaginationOpts) (orders []m.Order, err error) {
-	orders, err = os.orderRepo.GetOrdersByUserID(ctx, userID, pg)
+func (os OrderService) GetOrdersByUserID(ctx context.Context, actor Actor, pg m.PaginationOpts) (orders []m.Order, err error) {
+	orders, err = os.orderRepo.GetOrdersByUserID(ctx, actor.UserID, pg)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrGetOrdersByUserID, err)
 	}
 	return orders, nil
 }
 
-func (os OrderService) GetSellerOrdersByUserID(ctx context.Context, userID int64, pg m.PaginationOpts) (orders []m.Order, err error) {
-	seller, err := os.sellerGetter.GetSellerByUserID(ctx, userID)
+func (os OrderService) GetSellerOrdersByUserID(ctx context.Context, actor Actor, pg m.PaginationOpts) (orders []m.Order, err error) {
+	seller, err := os.sellerGetter.GetSellerByUserID(ctx, actor.UserID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return nil, ErrSellerNotFound
@@ -97,7 +100,10 @@ func (os OrderService) GetSellerOrdersByUserID(ctx context.Context, userID int64
 	return orders, nil
 }
 
-func (os OrderService) GetOrderItemsByOrderID(ctx context.Context, orderID int64) (ois []m.OrderItem, err error) {
+func (os OrderService) GetOrderItemsByOrderID(ctx context.Context, actor Actor, orderID int64) (ois []m.OrderItem, err error) {
+	if _, err = os.GetOrderByID(ctx, actor, orderID); err != nil {
+		return nil, err
+	}
 	ois, err = os.orderItemRepo.GetOrderItemsByOrderID(ctx, orderID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
@@ -105,8 +111,8 @@ func (os OrderService) GetOrderItemsByOrderID(ctx context.Context, orderID int64
 	return ois, nil
 }
 
-func (os OrderService) GetCart(ctx context.Context, userID int64) (order m.Order, err error) {
-	orders, err := os.orderRepo.GetOrdersByUserID(ctx, userID, m.PaginationOpts{})
+func (os OrderService) GetCart(ctx context.Context, actor Actor) (order m.Order, err error) {
+	orders, err := os.orderRepo.GetOrdersByUserID(ctx, actor.UserID, m.PaginationOpts{})
 	if err != nil {
 		return m.Order{}, fmt.Errorf("%w: %v", ErrGetCart, err)
 	}
@@ -144,15 +150,15 @@ func (os OrderService) GetCart(ctx context.Context, userID int64) (order m.Order
 	return cart, nil
 }
 
-func (os OrderService) AddItemToCart(ctx context.Context, userID int64, productID int64, quantity int) error {
+func (os OrderService) AddItemToCart(ctx context.Context, actor Actor, productID int64, quantity int) error {
 	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
 		// Advisory lock serializes cart mutations and Checkout for this user.
-		if err := os.orderRepo.LockUserCart(ctx, userID); err != nil {
+		if err := os.orderRepo.LockUserCart(ctx, actor.UserID); err != nil {
 			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
 		}
 
 		var cartOrderID int64
-		cartOrder, err := os.GetCart(ctx, userID)
+		cartOrder, err := os.GetCart(ctx, actor)
 		if err != nil && !errors.Is(err, ErrCartNotFound) {
 			return fmt.Errorf("%w: %v", ErrGetCart, err)
 		}
@@ -182,7 +188,7 @@ func (os OrderService) AddItemToCart(ctx context.Context, userID int64, productI
 
 		if cartOrderID == 0 {
 			cartOrderID, err = os.orderRepo.CreateOrder(ctx, m.OrderCreate{
-				UserID:      userID,
+				UserID:      actor.UserID,
 				Status:      m.StatusDraft,
 				TotalAmount: decimal.Zero,
 			})
@@ -203,9 +209,9 @@ func (os OrderService) AddItemToCart(ctx context.Context, userID int64, productI
 	})
 }
 
-func (os OrderService) ChangeQuantityCartItem(ctx context.Context, userID int64, itemID int64, quantity int) (err error) {
+func (os OrderService) ChangeQuantityCartItem(ctx context.Context, actor Actor, itemID int64, quantity int) (err error) {
 	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
-		if err := os.orderRepo.LockUserCart(ctx, userID); err != nil {
+		if err := os.orderRepo.LockUserCart(ctx, actor.UserID); err != nil {
 			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
 		}
 
@@ -229,7 +235,7 @@ func (os OrderService) ChangeQuantityCartItem(ctx context.Context, userID int64,
 
 		// Conditional UPDATE atomically enforces ownership + status=draft;
 		// 0 rows affected means another tx claimed the cart or it isn't this user's.
-		if err := os.orderItemRepo.UpdateOrderItemQtyIfDraft(ctx, itemID, userID, quantity); err != nil {
+		if err := os.orderItemRepo.UpdateOrderItemQtyIfDraft(ctx, itemID, actor.UserID, quantity); err != nil {
 			if errors.Is(err, ErrNotFound) {
 				return ErrOrderStatusInvalid
 			}
@@ -239,12 +245,12 @@ func (os OrderService) ChangeQuantityCartItem(ctx context.Context, userID int64,
 	})
 }
 
-func (os OrderService) DeleteCartItem(ctx context.Context, userID int64, itemID int64) (err error) {
+func (os OrderService) DeleteCartItem(ctx context.Context, actor Actor, itemID int64) (err error) {
 	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
-		if err := os.orderRepo.LockUserCart(ctx, userID); err != nil {
+		if err := os.orderRepo.LockUserCart(ctx, actor.UserID); err != nil {
 			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
 		}
-		if err := os.orderItemRepo.DeleteOrderItemIfDraft(ctx, itemID, userID); err != nil {
+		if err := os.orderItemRepo.DeleteOrderItemIfDraft(ctx, itemID, actor.UserID); err != nil {
 			if errors.Is(err, ErrNotFound) {
 				return ErrOrderItemNotFound
 			}
@@ -254,15 +260,15 @@ func (os OrderService) DeleteCartItem(ctx context.Context, userID int64, itemID 
 	})
 }
 
-func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int64) (orderIDs []int64, err error) {
+func (os OrderService) Checkout(ctx context.Context, actor Actor, addressID int64) (orderIDs []int64, err error) {
 	var createdOrdersIDs []int64
 	err = os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
 		// Advisory lock serializes Checkout with parallel cart mutations of the same user.
-		if err := os.orderRepo.LockUserCart(ctx, userID); err != nil {
+		if err := os.orderRepo.LockUserCart(ctx, actor.UserID); err != nil {
 			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
 		}
 
-		cart, err := os.GetCart(ctx, userID)
+		cart, err := os.GetCart(ctx, actor)
 		if err != nil {
 			if errors.Is(err, ErrCartNotFound) {
 				return ErrCartNotFound
@@ -369,7 +375,7 @@ func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int
 				totalAmount = totalAmount.Add(item.PriceAtPurchase.Mul(decimal.NewFromInt(int64(item.Quantity))))
 			}
 			orderID, err := os.orderRepo.CreateOrder(ctx, m.OrderCreate{
-				UserID:      userID,
+				UserID:      actor.UserID,
 				AddressID:   &addressID,
 				SellerID:    &sellerID,
 				Status:      m.StatusPending,
@@ -403,7 +409,7 @@ func (os OrderService) Checkout(ctx context.Context, userID int64, addressID int
 	return createdOrdersIDs, nil
 }
 
-func (os OrderService) PayOrder(ctx context.Context, orderID int64, userID int64) (err error) {
+func (os OrderService) PayOrder(ctx context.Context, actor Actor, orderID int64) (err error) {
 	order, err := os.orderRepo.GetOrderByID(ctx, orderID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -411,7 +417,7 @@ func (os OrderService) PayOrder(ctx context.Context, orderID int64, userID int64
 		}
 		return fmt.Errorf("%w: %v", ErrGetOrderByID, err)
 	}
-	if userID != order.UserID {
+	if !actor.IsAdmin() && actor.UserID != order.UserID {
 		return ErrNotYourOrder
 	}
 	if order.Status != m.StatusPending {
@@ -428,7 +434,7 @@ func (os OrderService) PayOrder(ctx context.Context, orderID int64, userID int64
 	return nil
 }
 
-func (os OrderService) CancelOrder(ctx context.Context, orderID int64, userID int64) (err error) {
+func (os OrderService) CancelOrder(ctx context.Context, actor Actor, orderID int64) (err error) {
 	order, err := os.orderRepo.GetOrderByID(ctx, orderID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -436,7 +442,7 @@ func (os OrderService) CancelOrder(ctx context.Context, orderID int64, userID in
 		}
 		return fmt.Errorf("%w: %v", ErrGetOrderByID, err)
 	}
-	if userID != order.UserID {
+	if !actor.IsAdmin() && actor.UserID != order.UserID {
 		return ErrNotYourOrder
 	}
 	if order.Status != m.StatusPending && order.Status != m.StatusPaid {
@@ -514,8 +520,8 @@ func (os OrderService) ExpireOrders(ctx context.Context, deadline time.Time) err
 	return nil
 }
 
-func (os OrderService) ShipOrder(ctx context.Context, orderID int64, userID int64) (err error) {
-	seller, err := os.sellerGetter.GetSellerByUserID(ctx, userID)
+func (os OrderService) ShipOrder(ctx context.Context, actor Actor, orderID int64) (err error) {
+	seller, err := os.sellerGetter.GetSellerByUserID(ctx, actor.UserID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return ErrSellerNotFound
@@ -566,8 +572,8 @@ func (os OrderService) ShipOrder(ctx context.Context, orderID int64, userID int6
 	})
 }
 
-func (os OrderService) DeliverOrder(ctx context.Context, orderID int64, userID int64) (err error) {
-	seller, err := os.sellerGetter.GetSellerByUserID(ctx, userID)
+func (os OrderService) DeliverOrder(ctx context.Context, actor Actor, orderID int64) (err error) {
+	seller, err := os.sellerGetter.GetSellerByUserID(ctx, actor.UserID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return ErrSellerNotFound

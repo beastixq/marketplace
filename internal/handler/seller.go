@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/beastixq/marketplace/internal/middleware"
 	"github.com/beastixq/marketplace/internal/model"
 	"github.com/beastixq/marketplace/internal/service"
 	"github.com/go-chi/chi/v5"
@@ -46,7 +45,7 @@ func (sh SellerHandler) GetSellerByID(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/sellers
 func (sh SellerHandler) CreateSeller(w http.ResponseWriter, r *http.Request) {
-	tokenClaims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -62,8 +61,7 @@ func (sh SellerHandler) CreateSeller(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := sh.sellerService.CreateSeller(r.Context(), model.SellerCreate{
-		UserID:      tokenClaims.UserID,
+	id, err := sh.sellerService.CreateSeller(r.Context(), actor, model.SellerCreate{
 		CompanyName: req.CompanyName,
 		Description: req.Description,
 	})
@@ -76,7 +74,7 @@ func (sh SellerHandler) CreateSeller(w http.ResponseWriter, r *http.Request) {
 
 // PATCH /api/v1/sellers/:id
 func (sh SellerHandler) UpdateSeller(w http.ResponseWriter, r *http.Request) {
-	tokenClaims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -98,7 +96,7 @@ func (sh SellerHandler) UpdateSeller(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	seller, err := sh.sellerService.UpdateSeller(r.Context(), tokenClaims.UserID, sellerID, model.SellerUpdate{
+	seller, err := sh.sellerService.UpdateSeller(r.Context(), actor, sellerID, model.SellerUpdate{
 		CompanyName: req.CompanyName,
 		Description: req.Description,
 	})
@@ -119,7 +117,7 @@ func (sh SellerHandler) UpdateSeller(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/sellers/:id
 func (sh SellerHandler) DeleteSeller(w http.ResponseWriter, r *http.Request) {
-	tokenClaims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -131,7 +129,7 @@ func (sh SellerHandler) DeleteSeller(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := sh.sellerService.DeleteSellerByID(r.Context(), tokenClaims.UserID, sellerID); err != nil {
+	if err := sh.sellerService.DeleteSellerByID(r.Context(), actor, sellerID); err != nil {
 		if errors.Is(err, service.ErrSellerNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrSellerNotFound.Error())
 			return
@@ -148,7 +146,7 @@ func (sh SellerHandler) DeleteSeller(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/sellers/:id/stats
 func (sh SellerHandler) GetSellerStats(w http.ResponseWriter, r *http.Request) {
-	tokenClaims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -182,7 +180,7 @@ func (sh SellerHandler) GetSellerStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats, err := sh.sellerService.GetSellerStats(r.Context(), tokenClaims.UserID, sellerID, dateFrom, dateTo)
+	stats, err := sh.sellerService.GetSellerStats(r.Context(), actor, sellerID, dateFrom, dateTo)
 	if err != nil {
 		if errors.Is(err, service.ErrSellerNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrSellerNotFound.Error())
@@ -200,7 +198,7 @@ func (sh SellerHandler) GetSellerStats(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/sellers/me/orders
 func (sh SellerHandler) GetSellerOrders(w http.ResponseWriter, r *http.Request) {
-	tokenClaims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -212,7 +210,7 @@ func (sh SellerHandler) GetSellerOrders(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	ordersService, err := sh.orderService.GetSellerOrdersByUserID(r.Context(), tokenClaims.UserID, pg)
+	ordersService, err := sh.orderService.GetSellerOrdersByUserID(r.Context(), actor, pg)
 	if err != nil {
 		if errors.Is(err, service.ErrSellerNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrSellerNotFound.Error())

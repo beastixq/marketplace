@@ -30,6 +30,7 @@ var (
 	ErrWrongPassword                 = errors.New("Wrong password")
 	ErrPhoneAlreadyExists            = errors.New("This phone number is already in use")
 	ErrEmailAlreadyInUse             = errors.New("This email is already in use")
+	ErrNotYourUser                   = errors.New("It's not your user")
 
 	// addresses
 	ErrGetAddressByID       = errors.New("Failed to get address by id")

@@ -36,7 +36,8 @@ func (rs ReviewService) GetReviewByID(ctx context.Context, id int64) (r m.Review
 	return r, nil
 }
 
-func (rs ReviewService) CreateReview(ctx context.Context, rc m.ReviewCreate) (id int64, err error) {
+func (rs ReviewService) CreateReview(ctx context.Context, actor Actor, rc m.ReviewCreate) (id int64, err error) {
+	rc.UserID = actor.UserID
 	id, err = rs.reviewRepo.CreateReview(ctx, rc)
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrCreateReview, err)
@@ -44,7 +45,7 @@ func (rs ReviewService) CreateReview(ctx context.Context, rc m.ReviewCreate) (id
 	return id, nil
 }
 
-func (rs ReviewService) UpdateReview(ctx context.Context, userID, id int64, ru m.ReviewUpdate) (r m.Review, err error) {
+func (rs ReviewService) UpdateReview(ctx context.Context, actor Actor, id int64, ru m.ReviewUpdate) (r m.Review, err error) {
 	r, err = rs.reviewRepo.GetReviewByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -52,7 +53,7 @@ func (rs ReviewService) UpdateReview(ctx context.Context, userID, id int64, ru m
 		}
 		return m.Review{}, fmt.Errorf("%w: %v", ErrGetReviewByID, err)
 	}
-	if r.UserID != userID {
+	if !actor.IsAdmin() && r.UserID != actor.UserID {
 		return m.Review{}, ErrNotYourReview
 	}
 
@@ -63,7 +64,7 @@ func (rs ReviewService) UpdateReview(ctx context.Context, userID, id int64, ru m
 	return r, nil
 }
 
-func (rs ReviewService) DeleteReviewByID(ctx context.Context, userID, id int64) (err error) {
+func (rs ReviewService) DeleteReviewByID(ctx context.Context, actor Actor, id int64) (err error) {
 	r, err := rs.reviewRepo.GetReviewByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -71,7 +72,7 @@ func (rs ReviewService) DeleteReviewByID(ctx context.Context, userID, id int64) 
 		}
 		return fmt.Errorf("%w: %v", ErrGetReviewByID, err)
 	}
-	if r.UserID != userID {
+	if !actor.IsAdmin() && r.UserID != actor.UserID {
 		return ErrNotYourReview
 	}
 

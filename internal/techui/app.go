@@ -12,6 +12,7 @@ import (
 	"time"
 
 	m "github.com/beastixq/marketplace/internal/model"
+	svc "github.com/beastixq/marketplace/internal/service"
 	"github.com/shopspring/decimal"
 )
 
@@ -23,29 +24,29 @@ type AuthSession interface {
 }
 
 type UserProfile interface {
-	GetUserByID(ctx context.Context, id int64) (m.User, error)
-	UpdateUser(ctx context.Context, id int64, uu m.UserUpdate) (m.User, error)
-	ChangePasswordUser(ctx context.Context, id int64, oldPass, newPass string) error
-	DeleteUserByID(ctx context.Context, id int64) error
+	GetUserByID(ctx context.Context, actor svc.Actor, id int64) (m.User, error)
+	UpdateUser(ctx context.Context, actor svc.Actor, id int64, uu m.UserUpdate) (m.User, error)
+	ChangePasswordUser(ctx context.Context, actor svc.Actor, oldPass, newPass string) error
+	DeleteUserByID(ctx context.Context, actor svc.Actor, id int64) error
 }
 
 type UserAdministration interface {
-	GetUsers(ctx context.Context, opts m.UserListOptions) ([]m.User, error)
-	GetUserByID(ctx context.Context, id int64) (m.User, error)
-	UpdateUser(ctx context.Context, id int64, uu m.UserUpdate) (m.User, error)
-	DeleteUserByID(ctx context.Context, id int64) error
+	GetUsers(ctx context.Context, actor svc.Actor, opts m.UserListOptions) ([]m.User, error)
+	GetUserByID(ctx context.Context, actor svc.Actor, id int64) (m.User, error)
+	UpdateUser(ctx context.Context, actor svc.Actor, id int64, uu m.UserUpdate) (m.User, error)
+	DeleteUserByID(ctx context.Context, actor svc.Actor, id int64) error
 }
 
 type SellerProfile interface {
 	GetSellerByID(ctx context.Context, id int64) (m.Seller, error)
-	GetSellerByUserID(ctx context.Context, userID int64) (m.Seller, error)
-	CreateSeller(ctx context.Context, sc m.SellerCreate) (int64, error)
-	UpdateSeller(ctx context.Context, userID, id int64, su m.SellerUpdate) (m.Seller, error)
-	DeleteSellerByID(ctx context.Context, userID, id int64) error
+	GetSellerByUserID(ctx context.Context, actor svc.Actor) (m.Seller, error)
+	CreateSeller(ctx context.Context, actor svc.Actor, sc m.SellerCreate) (int64, error)
+	UpdateSeller(ctx context.Context, actor svc.Actor, id int64, su m.SellerUpdate) (m.Seller, error)
+	DeleteSellerByID(ctx context.Context, actor svc.Actor, id int64) error
 }
 
 type SellerStatistics interface {
-	GetSellerStats(ctx context.Context, userID, sellerID int64, dateFrom, dateTo time.Time) (m.SellerStats, error)
+	GetSellerStats(ctx context.Context, actor svc.Actor, sellerID int64, dateFrom, dateTo time.Time) (m.SellerStats, error)
 }
 
 type ProductCatalog interface {
@@ -59,9 +60,9 @@ type ProductDetails interface {
 }
 
 type ProductManagement interface {
-	CreateProduct(ctx context.Context, userID int64, pc m.ProductCreate) (int64, error)
-	UpdateProduct(ctx context.Context, userID, id int64, pu m.ProductUpdate) (m.Product, error)
-	DeleteProductByID(ctx context.Context, userID, id int64) error
+	CreateProduct(ctx context.Context, actor svc.Actor, pc m.ProductCreate) (int64, error)
+	UpdateProduct(ctx context.Context, actor svc.Actor, id int64, pu m.ProductUpdate) (m.Product, error)
+	DeleteProductByID(ctx context.Context, actor svc.Actor, id int64) error
 }
 
 type CategoryBrowser interface {
@@ -76,45 +77,45 @@ type CategoryManagement interface {
 }
 
 type AddressBook interface {
-	GetAddressesByUserID(ctx context.Context, userID int64) ([]m.Address, error)
-	CreateAddress(ctx context.Context, ac m.AddressCreate) (int64, error)
-	UpdateAddress(ctx context.Context, userID, id int64, au m.AddressUpdate) (m.Address, error)
-	DeleteAddressByID(ctx context.Context, userID, id int64) error
+	GetAddressesByUserID(ctx context.Context, actor svc.Actor) ([]m.Address, error)
+	CreateAddress(ctx context.Context, actor svc.Actor, ac m.AddressCreate) (int64, error)
+	UpdateAddress(ctx context.Context, actor svc.Actor, id int64, au m.AddressUpdate) (m.Address, error)
+	DeleteAddressByID(ctx context.Context, actor svc.Actor, id int64) error
 }
 
 type Cart interface {
-	GetCart(ctx context.Context, userID int64) (m.Order, error)
-	GetOrderItemsByOrderID(ctx context.Context, orderID int64) ([]m.OrderItem, error)
-	AddItemToCart(ctx context.Context, userID int64, productID int64, quantity int) error
-	ChangeQuantityCartItem(ctx context.Context, userID int64, itemID int64, quantity int) error
-	DeleteCartItem(ctx context.Context, userID int64, itemID int64) error
-	Checkout(ctx context.Context, userID int64, addressID int64) ([]int64, error)
+	GetCart(ctx context.Context, actor svc.Actor) (m.Order, error)
+	GetOrderItemsByOrderID(ctx context.Context, actor svc.Actor, orderID int64) ([]m.OrderItem, error)
+	AddItemToCart(ctx context.Context, actor svc.Actor, productID int64, quantity int) error
+	ChangeQuantityCartItem(ctx context.Context, actor svc.Actor, itemID int64, quantity int) error
+	DeleteCartItem(ctx context.Context, actor svc.Actor, itemID int64) error
+	Checkout(ctx context.Context, actor svc.Actor, addressID int64) ([]int64, error)
 }
 
 type BuyerOrders interface {
-	GetOrderByID(ctx context.Context, orderID int64) (m.Order, error)
-	GetOrdersByUserID(ctx context.Context, userID int64, pg m.PaginationOpts) ([]m.Order, error)
-	GetOrderItemsByOrderID(ctx context.Context, orderID int64) ([]m.OrderItem, error)
-	PayOrder(ctx context.Context, orderID int64, userID int64) error
-	CancelOrder(ctx context.Context, orderID int64, userID int64) error
+	GetOrderByID(ctx context.Context, actor svc.Actor, orderID int64) (m.Order, error)
+	GetOrdersByUserID(ctx context.Context, actor svc.Actor, pg m.PaginationOpts) ([]m.Order, error)
+	GetOrderItemsByOrderID(ctx context.Context, actor svc.Actor, orderID int64) ([]m.OrderItem, error)
+	PayOrder(ctx context.Context, actor svc.Actor, orderID int64) error
+	CancelOrder(ctx context.Context, actor svc.Actor, orderID int64) error
 }
 
 type SellerOrders interface {
-	GetSellerOrdersByUserID(ctx context.Context, userID int64, pg m.PaginationOpts) ([]m.Order, error)
-	ShipOrder(ctx context.Context, orderID int64, userID int64) error
-	DeliverOrder(ctx context.Context, orderID int64, userID int64) error
+	GetSellerOrdersByUserID(ctx context.Context, actor svc.Actor, pg m.PaginationOpts) ([]m.Order, error)
+	ShipOrder(ctx context.Context, actor svc.Actor, orderID int64) error
+	DeliverOrder(ctx context.Context, actor svc.Actor, orderID int64) error
 }
 
 type Payments interface {
-	GetOrderPaymentURL(ctx context.Context, orderID, userID int64) (string, time.Time, error)
+	GetOrderPaymentURL(ctx context.Context, actor svc.Actor, orderID int64) (string, time.Time, error)
 	ProcessOrderPayment(ctx context.Context, token string) error
 }
 
 type ReviewManagement interface {
 	GetReviewByID(ctx context.Context, id int64) (m.Review, error)
-	CreateReview(ctx context.Context, rc m.ReviewCreate) (int64, error)
-	UpdateReview(ctx context.Context, userID, id int64, ru m.ReviewUpdate) (m.Review, error)
-	DeleteReviewByID(ctx context.Context, userID, id int64) error
+	CreateReview(ctx context.Context, actor svc.Actor, rc m.ReviewCreate) (int64, error)
+	UpdateReview(ctx context.Context, actor svc.Actor, id int64, ru m.ReviewUpdate) (m.Review, error)
+	DeleteReviewByID(ctx context.Context, actor svc.Actor, id int64) error
 }
 
 type ServicePorts struct {
@@ -348,7 +349,8 @@ func (a *App) showProfile(ctx context.Context) error {
 	if !ok {
 		return nil
 	}
-	user, err := a.servicePorts.UserProfile.GetUserByID(ctx, claims.UserID)
+	actor := actorFromClaims(claims)
+	user, err := a.servicePorts.UserProfile.GetUserByID(ctx, actor, claims.UserID)
 	if err != nil {
 		return err
 	}
@@ -373,7 +375,8 @@ func (a *App) updateProfile(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	user, err := a.servicePorts.UserProfile.UpdateUser(ctx, claims.UserID, m.UserUpdate{
+	actor := actorFromClaims(claims)
+	user, err := a.servicePorts.UserProfile.UpdateUser(ctx, actor, claims.UserID, m.UserUpdate{
 		Email:    email,
 		FullName: name,
 		Phone:    phone,
@@ -398,7 +401,7 @@ func (a *App) changePassword(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.UserProfile.ChangePasswordUser(ctx, claims.UserID, oldPass, newPass)
+	return a.servicePorts.UserProfile.ChangePasswordUser(ctx, actorFromClaims(claims), oldPass, newPass)
 }
 
 func (a *App) deleteProfile(ctx context.Context) error {
@@ -413,7 +416,7 @@ func (a *App) deleteProfile(ctx context.Context) error {
 	if !confirmed {
 		return nil
 	}
-	if err := a.servicePorts.UserProfile.DeleteUserByID(ctx, claims.UserID); err != nil {
+	if err := a.servicePorts.UserProfile.DeleteUserByID(ctx, actorFromClaims(claims), claims.UserID); err != nil {
 		return err
 	}
 	a.claims = nil
@@ -581,7 +584,7 @@ func (a *App) createProduct(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	id, err := a.servicePorts.ProductManagement.CreateProduct(ctx, claims.UserID, m.ProductCreate{
+	id, err := a.servicePorts.ProductManagement.CreateProduct(ctx, actorFromClaims(claims), m.ProductCreate{
 		SellerID:      sellerID,
 		Name:          name,
 		Description:   description,
@@ -621,7 +624,7 @@ func (a *App) updateProduct(ctx context.Context) error {
 		return err
 	}
 	changedBy := fmt.Sprintf("%s:%d:techui", claims.Role, claims.UserID)
-	product, err := a.servicePorts.ProductManagement.UpdateProduct(ctx, claims.UserID, id, m.ProductUpdate{
+	product, err := a.servicePorts.ProductManagement.UpdateProduct(ctx, actorFromClaims(claims), id, m.ProductUpdate{
 		Name:          name,
 		Description:   description,
 		Price:         price,
@@ -644,7 +647,7 @@ func (a *App) deleteProduct(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.ProductManagement.DeleteProductByID(ctx, claims.UserID, id)
+	return a.servicePorts.ProductManagement.DeleteProductByID(ctx, actorFromClaims(claims), id)
 }
 
 func (a *App) categoriesMenu(ctx context.Context) error {
@@ -806,7 +809,7 @@ func (a *App) listAddresses(ctx context.Context) error {
 	if !ok {
 		return nil
 	}
-	addresses, err := a.servicePorts.AddressBook.GetAddressesByUserID(ctx, claims.UserID)
+	addresses, err := a.servicePorts.AddressBook.GetAddressesByUserID(ctx, actorFromClaims(claims))
 	if err != nil {
 		return err
 	}
@@ -837,8 +840,7 @@ func (a *App) createAddress(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	id, err := a.servicePorts.AddressBook.CreateAddress(ctx, m.AddressCreate{
-		UserID:    claims.UserID,
+	id, err := a.servicePorts.AddressBook.CreateAddress(ctx, actorFromClaims(claims), m.AddressCreate{
 		City:      city,
 		Street:    street,
 		ZipCode:   zip,
@@ -876,7 +878,7 @@ func (a *App) updateAddress(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	address, err := a.servicePorts.AddressBook.UpdateAddress(ctx, claims.UserID, id, m.AddressUpdate{
+	address, err := a.servicePorts.AddressBook.UpdateAddress(ctx, actorFromClaims(claims), id, m.AddressUpdate{
 		City:      city,
 		Street:    street,
 		ZipCode:   zip,
@@ -898,7 +900,7 @@ func (a *App) deleteAddress(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.AddressBook.DeleteAddressByID(ctx, claims.UserID, id)
+	return a.servicePorts.AddressBook.DeleteAddressByID(ctx, actorFromClaims(claims), id)
 }
 
 func (a *App) ordersMenu(ctx context.Context) error {
@@ -958,12 +960,13 @@ func (a *App) showCart(ctx context.Context) error {
 	if !ok {
 		return nil
 	}
-	cart, err := a.servicePorts.Cart.GetCart(ctx, claims.UserID)
+	actor := actorFromClaims(claims)
+	cart, err := a.servicePorts.Cart.GetCart(ctx, actor)
 	if err != nil {
 		return err
 	}
 	a.printOrder(cart)
-	items, err := a.servicePorts.Cart.GetOrderItemsByOrderID(ctx, cart.ID)
+	items, err := a.servicePorts.Cart.GetOrderItemsByOrderID(ctx, actor, cart.ID)
 	if err != nil {
 		return err
 	}
@@ -986,7 +989,7 @@ func (a *App) addCartItem(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.Cart.AddItemToCart(ctx, claims.UserID, productID, quantity)
+	return a.servicePorts.Cart.AddItemToCart(ctx, actorFromClaims(claims), productID, quantity)
 }
 
 func (a *App) changeCartItem(ctx context.Context) error {
@@ -1002,7 +1005,7 @@ func (a *App) changeCartItem(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.Cart.ChangeQuantityCartItem(ctx, claims.UserID, itemID, quantity)
+	return a.servicePorts.Cart.ChangeQuantityCartItem(ctx, actorFromClaims(claims), itemID, quantity)
 }
 
 func (a *App) deleteCartItem(ctx context.Context) error {
@@ -1014,7 +1017,7 @@ func (a *App) deleteCartItem(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.Cart.DeleteCartItem(ctx, claims.UserID, itemID)
+	return a.servicePorts.Cart.DeleteCartItem(ctx, actorFromClaims(claims), itemID)
 }
 
 func (a *App) checkout(ctx context.Context) error {
@@ -1026,7 +1029,7 @@ func (a *App) checkout(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	orderIDs, err := a.servicePorts.Cart.Checkout(ctx, claims.UserID, addressID)
+	orderIDs, err := a.servicePorts.Cart.Checkout(ctx, actorFromClaims(claims), addressID)
 	if err != nil {
 		return err
 	}
@@ -1039,7 +1042,7 @@ func (a *App) listOrders(ctx context.Context) error {
 	if !ok {
 		return nil
 	}
-	orders, err := a.servicePorts.BuyerOrders.GetOrdersByUserID(ctx, claims.UserID, m.PaginationOpts{Page: 1, Limit: 20})
+	orders, err := a.servicePorts.BuyerOrders.GetOrdersByUserID(ctx, actorFromClaims(claims), m.PaginationOpts{Page: 1, Limit: 20})
 	if err != nil {
 		return err
 	}
@@ -1050,11 +1053,15 @@ func (a *App) listOrders(ctx context.Context) error {
 }
 
 func (a *App) showOrder(ctx context.Context) error {
+	claims, ok := a.requireAuth()
+	if !ok {
+		return nil
+	}
 	id, err := a.readInt64("Order ID")
 	if err != nil {
 		return err
 	}
-	order, err := a.servicePorts.BuyerOrders.GetOrderByID(ctx, id)
+	order, err := a.servicePorts.BuyerOrders.GetOrderByID(ctx, actorFromClaims(claims), id)
 	if err != nil {
 		return err
 	}
@@ -1063,11 +1070,15 @@ func (a *App) showOrder(ctx context.Context) error {
 }
 
 func (a *App) showOrderItems(ctx context.Context) error {
+	claims, ok := a.requireAuth()
+	if !ok {
+		return nil
+	}
 	id, err := a.readInt64("Order ID")
 	if err != nil {
 		return err
 	}
-	items, err := a.servicePorts.BuyerOrders.GetOrderItemsByOrderID(ctx, id)
+	items, err := a.servicePorts.BuyerOrders.GetOrderItemsByOrderID(ctx, actorFromClaims(claims), id)
 	if err != nil {
 		return err
 	}
@@ -1086,7 +1097,7 @@ func (a *App) paymentURL(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	paymentURL, expiresAt, err := a.servicePorts.Payments.GetOrderPaymentURL(ctx, orderID, claims.UserID)
+	paymentURL, expiresAt, err := a.servicePorts.Payments.GetOrderPaymentURL(ctx, actorFromClaims(claims), orderID)
 	if err != nil {
 		return err
 	}
@@ -1128,7 +1139,7 @@ func (a *App) payOrderDirectly(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.BuyerOrders.PayOrder(ctx, orderID, claims.UserID)
+	return a.servicePorts.BuyerOrders.PayOrder(ctx, actorFromClaims(claims), orderID)
 }
 
 func (a *App) cancelOrder(ctx context.Context) error {
@@ -1140,7 +1151,7 @@ func (a *App) cancelOrder(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.BuyerOrders.CancelOrder(ctx, orderID, claims.UserID)
+	return a.servicePorts.BuyerOrders.CancelOrder(ctx, actorFromClaims(claims), orderID)
 }
 
 func (a *App) sellerMenu(ctx context.Context) error {
@@ -1191,7 +1202,7 @@ func (a *App) mySeller(ctx context.Context) error {
 	if !ok {
 		return nil
 	}
-	seller, err := a.servicePorts.SellerProfile.GetSellerByUserID(ctx, claims.UserID)
+	seller, err := a.servicePorts.SellerProfile.GetSellerByUserID(ctx, actorFromClaims(claims))
 	if err != nil {
 		return err
 	}
@@ -1212,8 +1223,7 @@ func (a *App) createSeller(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	id, err := a.servicePorts.SellerProfile.CreateSeller(ctx, m.SellerCreate{
-		UserID:      claims.UserID,
+	id, err := a.servicePorts.SellerProfile.CreateSeller(ctx, actorFromClaims(claims), m.SellerCreate{
 		CompanyName: company,
 		Description: description,
 	})
@@ -1254,7 +1264,7 @@ func (a *App) updateSeller(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	seller, err := a.servicePorts.SellerProfile.UpdateSeller(ctx, claims.UserID, id, m.SellerUpdate{
+	seller, err := a.servicePorts.SellerProfile.UpdateSeller(ctx, actorFromClaims(claims), id, m.SellerUpdate{
 		CompanyName: company,
 		Description: description,
 	})
@@ -1274,7 +1284,7 @@ func (a *App) deleteSeller(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.SellerProfile.DeleteSellerByID(ctx, claims.UserID, id)
+	return a.servicePorts.SellerProfile.DeleteSellerByID(ctx, actorFromClaims(claims), id)
 }
 
 func (a *App) sellerStats(ctx context.Context) error {
@@ -1294,7 +1304,7 @@ func (a *App) sellerStats(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	stats, err := a.servicePorts.SellerStatistics.GetSellerStats(ctx, claims.UserID, id, dateFrom, dateTo)
+	stats, err := a.servicePorts.SellerStatistics.GetSellerStats(ctx, actorFromClaims(claims), id, dateFrom, dateTo)
 	if err != nil {
 		return err
 	}
@@ -1308,7 +1318,7 @@ func (a *App) sellerOrders(ctx context.Context) error {
 	if !ok {
 		return nil
 	}
-	orders, err := a.servicePorts.SellerOrders.GetSellerOrdersByUserID(ctx, claims.UserID, m.PaginationOpts{Page: 1, Limit: 20})
+	orders, err := a.servicePorts.SellerOrders.GetSellerOrdersByUserID(ctx, actorFromClaims(claims), m.PaginationOpts{Page: 1, Limit: 20})
 	if err != nil {
 		return err
 	}
@@ -1327,7 +1337,7 @@ func (a *App) shipOrder(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.SellerOrders.ShipOrder(ctx, id, claims.UserID)
+	return a.servicePorts.SellerOrders.ShipOrder(ctx, actorFromClaims(claims), id)
 }
 
 func (a *App) deliverOrder(ctx context.Context) error {
@@ -1339,7 +1349,7 @@ func (a *App) deliverOrder(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.SellerOrders.DeliverOrder(ctx, id, claims.UserID)
+	return a.servicePorts.SellerOrders.DeliverOrder(ctx, actorFromClaims(claims), id)
 }
 
 func (a *App) reviewsMenu(ctx context.Context) error {
@@ -1387,8 +1397,7 @@ func (a *App) createReview(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	id, err := a.servicePorts.ReviewManagement.CreateReview(ctx, m.ReviewCreate{
-		UserID:    claims.UserID,
+	id, err := a.servicePorts.ReviewManagement.CreateReview(ctx, actorFromClaims(claims), m.ReviewCreate{
 		ProductID: productID,
 		Rating:    int8(rating),
 		Comment:   comment,
@@ -1435,7 +1444,7 @@ func (a *App) updateReview(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	review, err := a.servicePorts.ReviewManagement.UpdateReview(ctx, claims.UserID, id, m.ReviewUpdate{
+	review, err := a.servicePorts.ReviewManagement.UpdateReview(ctx, actorFromClaims(claims), id, m.ReviewUpdate{
 		Rating:  rating8,
 		Comment: comment,
 	})
@@ -1455,7 +1464,7 @@ func (a *App) deleteReview(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.ReviewManagement.DeleteReviewByID(ctx, claims.UserID, id)
+	return a.servicePorts.ReviewManagement.DeleteReviewByID(ctx, actorFromClaims(claims), id)
 }
 
 func (a *App) adminMenu(ctx context.Context) error {
@@ -1490,6 +1499,10 @@ func (a *App) adminMenu(ctx context.Context) error {
 }
 
 func (a *App) adminListUsers(ctx context.Context) error {
+	claims, ok := a.requireAuth()
+	if !ok {
+		return nil
+	}
 	roleLine, err := a.readLine("Role filter [buyer/seller/admin/analyst]")
 	if err != nil {
 		return err
@@ -1502,7 +1515,7 @@ func (a *App) adminListUsers(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	users, err := a.servicePorts.UserAdministration.GetUsers(ctx, m.UserListOptions{
+	users, err := a.servicePorts.UserAdministration.GetUsers(ctx, actorFromClaims(claims), m.UserListOptions{
 		Search:     search,
 		Role:       role,
 		Pagination: m.PaginationOpts{Page: 1, Limit: 50},
@@ -1517,11 +1530,15 @@ func (a *App) adminListUsers(ctx context.Context) error {
 }
 
 func (a *App) adminShowUser(ctx context.Context) error {
+	claims, ok := a.requireAuth()
+	if !ok {
+		return nil
+	}
 	id, err := a.readInt64("User ID")
 	if err != nil {
 		return err
 	}
-	user, err := a.servicePorts.UserAdministration.GetUserByID(ctx, id)
+	user, err := a.servicePorts.UserAdministration.GetUserByID(ctx, actorFromClaims(claims), id)
 	if err != nil {
 		return err
 	}
@@ -1530,6 +1547,10 @@ func (a *App) adminShowUser(ctx context.Context) error {
 }
 
 func (a *App) adminUpdateUserRole(ctx context.Context) error {
+	claims, ok := a.requireAuth()
+	if !ok {
+		return nil
+	}
 	id, err := a.readInt64("User ID")
 	if err != nil {
 		return err
@@ -1538,7 +1559,7 @@ func (a *App) adminUpdateUserRole(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	user, err := a.servicePorts.UserAdministration.UpdateUser(ctx, id, m.UserUpdate{Role: &role})
+	user, err := a.servicePorts.UserAdministration.UpdateUser(ctx, actorFromClaims(claims), id, m.UserUpdate{Role: &role})
 	if err != nil {
 		return err
 	}
@@ -1547,11 +1568,15 @@ func (a *App) adminUpdateUserRole(ctx context.Context) error {
 }
 
 func (a *App) adminDeleteUser(ctx context.Context) error {
+	claims, ok := a.requireAuth()
+	if !ok {
+		return nil
+	}
 	id, err := a.readInt64("User ID")
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.UserAdministration.DeleteUserByID(ctx, id)
+	return a.servicePorts.UserAdministration.DeleteUserByID(ctx, actorFromClaims(claims), id)
 }
 
 func (a *App) run(ctx context.Context, fn func(context.Context) error) {
@@ -1572,6 +1597,10 @@ func (a *App) requireAuth() (m.TokenClaims, bool) {
 		return m.TokenClaims{}, false
 	}
 	return *a.claims, true
+}
+
+func actorFromClaims(claims m.TokenClaims) svc.Actor {
+	return svc.Actor{UserID: claims.UserID, Role: claims.Role}
 }
 
 func (a *App) requireRole(role m.UserRole) bool {

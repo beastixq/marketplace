@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/beastixq/marketplace/internal/middleware"
 	"github.com/beastixq/marketplace/internal/service"
 	"github.com/go-chi/chi/v5"
 )
@@ -21,7 +20,7 @@ func NewOrderHandler(orderSvc service.OrderService) OrderHandler {
 
 // GET /api/v1/orders
 func (oh OrderHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -33,7 +32,7 @@ func (oh OrderHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orders, err := oh.orderService.GetOrdersByUserID(r.Context(), claims.UserID, pg)
+	orders, err := oh.orderService.GetOrdersByUserID(r.Context(), actor, pg)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
@@ -47,16 +46,26 @@ func (oh OrderHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/orders/:id
 func (oh OrderHandler) GetOrder(w http.ResponseWriter, r *http.Request) {
+	actor, ok := actorFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, ErrInvalidIDParam.Error())
 		return
 	}
 
-	order, err := oh.orderService.GetOrderByID(r.Context(), id)
+	order, err := oh.orderService.GetOrderByID(r.Context(), actor, id)
 	if err != nil {
 		if errors.Is(err, service.ErrOrderNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrOrderNotFound.Error())
+			return
+		}
+		if errors.Is(err, service.ErrNotYourOrder) {
+			writeError(w, http.StatusForbidden, service.ErrNotYourOrder.Error())
 			return
 		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
@@ -67,14 +76,28 @@ func (oh OrderHandler) GetOrder(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/orders/:id/items
 func (oh OrderHandler) GetOrderItems(w http.ResponseWriter, r *http.Request) {
+	actor, ok := actorFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, ErrInvalidIDParam.Error())
 		return
 	}
 
-	items, err := oh.orderService.GetOrderItemsByOrderID(r.Context(), id)
+	items, err := oh.orderService.GetOrderItemsByOrderID(r.Context(), actor, id)
 	if err != nil {
+		if errors.Is(err, service.ErrOrderNotFound) {
+			writeError(w, http.StatusNotFound, service.ErrOrderNotFound.Error())
+			return
+		}
+		if errors.Is(err, service.ErrNotYourOrder) {
+			writeError(w, http.StatusForbidden, service.ErrNotYourOrder.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -87,13 +110,13 @@ func (oh OrderHandler) GetOrderItems(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/cart
 func (oh OrderHandler) GetCart(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
 	}
 
-	cart, err := oh.orderService.GetCart(r.Context(), claims.UserID)
+	cart, err := oh.orderService.GetCart(r.Context(), actor)
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "Cart not found")
@@ -119,7 +142,7 @@ func (cr AddCartItemRequest) Validate() error {
 
 // POST /api/v1/cart/items
 func (oh OrderHandler) AddCartItem(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -135,7 +158,7 @@ func (oh OrderHandler) AddCartItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := oh.orderService.AddItemToCart(r.Context(), claims.UserID, req.ProductID, req.Quantity); err != nil {
+	if err := oh.orderService.AddItemToCart(r.Context(), actor, req.ProductID, req.Quantity); err != nil {
 		if errors.Is(err, service.ErrQuantityTooBig) {
 			writeError(w, http.StatusBadRequest, service.ErrQuantityTooBig.Error())
 			return
@@ -159,7 +182,7 @@ func (ur UpdateCartItemRequest) Validate() error {
 
 // PATCH /api/v1/cart/items/:id
 func (oh OrderHandler) UpdateCartItem(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -181,7 +204,7 @@ func (oh OrderHandler) UpdateCartItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := oh.orderService.ChangeQuantityCartItem(r.Context(), claims.UserID, id, req.Quantity); err != nil {
+	if err := oh.orderService.ChangeQuantityCartItem(r.Context(), actor, id, req.Quantity); err != nil {
 		if errors.Is(err, service.ErrQuantityTooBig) {
 			writeError(w, http.StatusBadRequest, service.ErrQuantityTooBig.Error())
 			return
@@ -194,7 +217,7 @@ func (oh OrderHandler) UpdateCartItem(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/cart/items/:id
 func (oh OrderHandler) DeleteCartItem(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -206,7 +229,7 @@ func (oh OrderHandler) DeleteCartItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := oh.orderService.DeleteCartItem(r.Context(), claims.UserID, id); err != nil {
+	if err := oh.orderService.DeleteCartItem(r.Context(), actor, id); err != nil {
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -219,7 +242,7 @@ type CheckoutRequest struct {
 
 // POST /api/v1/orders — checkout (draft → pending, split by seller)
 func (oh OrderHandler) Checkout(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -235,7 +258,7 @@ func (oh OrderHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orderIDs, err := oh.orderService.Checkout(r.Context(), claims.UserID, req.AddressID)
+	orderIDs, err := oh.orderService.Checkout(r.Context(), actor, req.AddressID)
 	if err != nil {
 		if errors.Is(err, service.ErrCartNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrCartNotFound.Error())
@@ -253,7 +276,7 @@ func (oh OrderHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/orders/:id/pay
 func (oh OrderHandler) PayOrder(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -264,7 +287,7 @@ func (oh OrderHandler) PayOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := oh.orderService.PayOrder(r.Context(), id, claims.UserID); err != nil {
+	if err := oh.orderService.PayOrder(r.Context(), actor, id); err != nil {
 		if errors.Is(err, service.ErrOrderNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrOrderNotFound.Error())
 			return
@@ -285,7 +308,7 @@ func (oh OrderHandler) PayOrder(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/orders/:id/cancel
 func (oh OrderHandler) CancelOrder(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -296,7 +319,7 @@ func (oh OrderHandler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := oh.orderService.CancelOrder(r.Context(), id, claims.UserID); err != nil {
+	if err := oh.orderService.CancelOrder(r.Context(), actor, id); err != nil {
 		if errors.Is(err, service.ErrOrderNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrOrderNotFound.Error())
 			return
@@ -317,7 +340,7 @@ func (oh OrderHandler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/orders/:id/ship — seller only
 func (oh OrderHandler) ShipOrder(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -328,7 +351,7 @@ func (oh OrderHandler) ShipOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := oh.orderService.ShipOrder(r.Context(), id, claims.UserID); err != nil {
+	if err := oh.orderService.ShipOrder(r.Context(), actor, id); err != nil {
 		if errors.Is(err, service.ErrSellerNotFound) {
 			writeError(w, http.StatusForbidden, service.ErrSellerNotFound.Error())
 			return
@@ -353,7 +376,7 @@ func (oh OrderHandler) ShipOrder(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/orders/:id/deliver — seller only
 func (oh OrderHandler) DeliverOrder(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -364,7 +387,7 @@ func (oh OrderHandler) DeliverOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := oh.orderService.DeliverOrder(r.Context(), id, claims.UserID); err != nil {
+	if err := oh.orderService.DeliverOrder(r.Context(), actor, id); err != nil {
 		if errors.Is(err, service.ErrSellerNotFound) {
 			writeError(w, http.StatusForbidden, service.ErrSellerNotFound.Error())
 			return

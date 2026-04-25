@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/beastixq/marketplace/internal/middleware"
 	"github.com/beastixq/marketplace/internal/model"
 	"github.com/beastixq/marketplace/internal/service"
 	"github.com/go-chi/chi/v5"
@@ -218,7 +217,7 @@ func (cr CreateProductRequest) Validate() error {
 
 // POST /api/v1/products
 func (ph ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -234,7 +233,7 @@ func (ph ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := ph.productService.CreateProduct(r.Context(), claims.UserID, model.ProductCreate{
+	id, err := ph.productService.CreateProduct(r.Context(), actor, model.ProductCreate{
 		SellerID:      req.SellerID,
 		Name:          req.Name,
 		Description:   req.Description,
@@ -281,7 +280,7 @@ func (ur UpdateProductRequest) Validate() error {
 
 // PATCH /api/v1/products/:id
 func (ph ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -302,8 +301,8 @@ func (ph ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	changedBy := fmt.Sprintf("%s:%d", claims.Role, claims.UserID)
-	product, err := ph.productService.UpdateProduct(r.Context(), claims.UserID, id, model.ProductUpdate{
+	changedBy := fmt.Sprintf("%s:%d", actor.Role, actor.UserID)
+	product, err := ph.productService.UpdateProduct(r.Context(), actor, id, model.ProductUpdate{
 		Name:          req.Name,
 		Description:   req.Description,
 		Price:         req.Price,
@@ -327,7 +326,7 @@ func (ph ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/products/:id
 func (ph ProductHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.ClaimsFromCtx(r.Context())
+	actor, ok := actorFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
 		return
@@ -338,7 +337,7 @@ func (ph ProductHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ph.productService.DeleteProductByID(r.Context(), claims.UserID, id); err != nil {
+	if err := ph.productService.DeleteProductByID(r.Context(), actor, id); err != nil {
 		if errors.Is(err, service.ErrProductNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrProductNotFound.Error())
 			return
