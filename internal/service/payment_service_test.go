@@ -197,22 +197,23 @@ func TestProcessOrderPayment(t *testing.T) {
 	}
 
 	type testCase struct {
-		Description   string
-		Clock         fakeClock
-		MockGWResult  *port.PaymentResult
-		MockGWErr     error
-		MockGetOrder  *MockOrderReturn
-		MockUpdate    *MockOrderReturn
-		ExpectedErr   error
+		Description      string
+		Clock            fakeClock
+		MockGWResult     *port.PaymentResult
+		MockGWErr        error
+		MockGetOrder     *MockOrderReturn
+		MockUpdateStatus *error
+		MockGetAfterRace *MockOrderReturn
+		ExpectedErr      error
 	}
 
 	tCases := []testCase{
 		{
-			Description:  "Success",
-			Clock:        clock,
-			MockGWResult: &successResult,
-			MockGetOrder: &MockOrderReturn{Order: pendingOrder},
-			MockUpdate:   &MockOrderReturn{Order: m.Order{ID: someOrderID, Status: m.StatusPaid}},
+			Description:      "Success",
+			Clock:            clock,
+			MockGWResult:     &successResult,
+			MockGetOrder:     &MockOrderReturn{Order: pendingOrder},
+			MockUpdateStatus: ptrErr(nil),
 		},
 		{
 			Description: "Gateway decode error",
@@ -268,12 +269,37 @@ func TestProcessOrderPayment(t *testing.T) {
 			ExpectedErr:  service.ErrInvalidPaymentAmount,
 		},
 		{
-			Description:  "UpdateOrder fails",
-			Clock:        clock,
-			MockGWResult: &successResult,
-			MockGetOrder: &MockOrderReturn{Order: pendingOrder},
-			MockUpdate:   &MockOrderReturn{Error: errors.New("db error")},
-			ExpectedErr:  errors.New("db error"),
+			Description:      "UpdateOrderStatus fails",
+			Clock:            clock,
+			MockGWResult:     &successResult,
+			MockGetOrder:     &MockOrderReturn{Order: pendingOrder},
+			MockUpdateStatus: ptrErr(errors.New("db error")),
+			ExpectedErr:      errors.New("db error"),
+		},
+		{
+			Description:      "Concurrent callback already paid - idempotent",
+			Clock:            clock,
+			MockGWResult:     &successResult,
+			MockGetOrder:     &MockOrderReturn{Order: pendingOrder},
+			MockUpdateStatus: ptrErr(service.ErrNotFound),
+			MockGetAfterRace: &MockOrderReturn{Order: m.Order{ID: someOrderID, Status: m.StatusPaid, CreatedAt: createdAt, TotalAmount: amount}},
+		},
+		{
+			Description:      "Concurrent expiration won - idempotent",
+			Clock:            clock,
+			MockGWResult:     &successResult,
+			MockGetOrder:     &MockOrderReturn{Order: pendingOrder},
+			MockUpdateStatus: ptrErr(service.ErrNotFound),
+			MockGetAfterRace: &MockOrderReturn{Order: m.Order{ID: someOrderID, Status: m.StatusCancelled, CreatedAt: createdAt, TotalAmount: amount}},
+		},
+		{
+			Description:      "Concurrent unsupported transition",
+			Clock:            clock,
+			MockGWResult:     &successResult,
+			MockGetOrder:     &MockOrderReturn{Order: pendingOrder},
+			MockUpdateStatus: ptrErr(service.ErrNotFound),
+			MockGetAfterRace: &MockOrderReturn{Order: m.Order{ID: someOrderID, Status: m.StatusShipped, CreatedAt: createdAt, TotalAmount: amount}},
+			ExpectedErr:      service.ErrOrderStatusInvalid,
 		},
 	}
 
@@ -292,8 +318,14 @@ func TestProcessOrderPayment(t *testing.T) {
 				orderMock.EXPECT().GetOrderByID(ctx, someOrderID).Return(tCase.MockGetOrder.Order, tCase.MockGetOrder.Error)
 			}
 
-			if tCase.MockUpdate != nil {
-				orderMock.EXPECT().UpdateOrder(ctx, someOrderID, gomock.Any()).Return(tCase.MockUpdate.Order, tCase.MockUpdate.Error)
+			if tCase.MockUpdateStatus != nil {
+				orderMock.EXPECT().UpdateOrderStatus(ctx, someOrderID, []m.OrderStatus{m.StatusPending}, m.StatusPaid).
+					Return(*tCase.MockUpdateStatus)
+			}
+
+			if tCase.MockGetAfterRace != nil {
+				orderMock.EXPECT().GetOrderByID(ctx, someOrderID).
+					Return(tCase.MockGetAfterRace.Order, tCase.MockGetAfterRace.Error)
 			}
 
 			err := ps.ProcessOrderPayment(ctx, "test-token")

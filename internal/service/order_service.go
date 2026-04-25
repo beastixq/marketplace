@@ -417,8 +417,11 @@ func (os OrderService) PayOrder(ctx context.Context, orderID int64, userID int64
 	if order.Status != m.StatusPending {
 		return fmt.Errorf("%w: status must be 'pending' to make pay", ErrOrderStatusInvalid)
 	}
-	statusPaid := m.StatusPaid
-	_, err = os.orderRepo.UpdateOrder(ctx, orderID, m.OrderUpdate{Status: &statusPaid})
+
+	err = os.orderRepo.UpdateOrderStatus(ctx, orderID, []m.OrderStatus{m.StatusPending}, m.StatusPaid)
+	if errors.Is(err, ErrNotFound) {
+		return fmt.Errorf("%w: concurrent status change", ErrOrderStatusInvalid)
+	}
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
 	}
@@ -584,8 +587,11 @@ func (os OrderService) DeliverOrder(ctx context.Context, orderID int64, userID i
 	if order.Status != m.StatusShipped {
 		return fmt.Errorf("%w: order must be shipped before delivering", ErrOrderStatusInvalid)
 	}
-	statusDelivered := m.StatusDelivered
-	_, err = os.orderRepo.UpdateOrder(ctx, orderID, m.OrderUpdate{Status: &statusDelivered})
+
+	err = os.orderRepo.UpdateOrderStatus(ctx, orderID, []m.OrderStatus{m.StatusShipped}, m.StatusDelivered)
+	if errors.Is(err, ErrNotFound) {
+		return fmt.Errorf("%w: concurrent status change", ErrOrderStatusInvalid)
+	}
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
 	}

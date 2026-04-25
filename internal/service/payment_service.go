@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	m "github.com/beastixq/marketplace/internal/model"
@@ -101,11 +102,17 @@ func (ps PaymentService) ProcessOrderPayment(ctx context.Context, token string) 
 		return ErrInvalidPaymentAmount
 	}
 
-	statusPaid := m.StatusPaid
-	_, err = ps.orderRepo.UpdateOrder(ctx, order.ID, m.OrderUpdate{
-		Status: &statusPaid,
-	})
-	if err != nil {
+	if err = ps.orderRepo.UpdateOrderStatus(ctx, order.ID, []m.OrderStatus{m.StatusPending}, m.StatusPaid); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			current, getErr := ps.orderRepo.GetOrderByID(ctx, order.ID)
+			if getErr != nil {
+				return getErr
+			}
+			if current.Status == m.StatusPaid || current.Status == m.StatusCancelled {
+				return nil
+			}
+			return ErrOrderStatusInvalid
+		}
 		return err
 	}
 

@@ -940,17 +940,17 @@ func TestPayOrder(t *testing.T) {
 	otherUsersOrder := m.Order{ID: someOrderID, UserID: otherUserID, Status: m.StatusPending}
 
 	type testCase struct {
-		Description string
-		MockGet     MockOrderReturn
-		MockUpdate  *MockOrderReturn
-		ExpectedErr error
+		Description      string
+		MockGet          MockOrderReturn
+		MockUpdateStatus *error
+		ExpectedErr      error
 	}
 
 	tCases := []testCase{
 		{
-			Description: "Success",
-			MockGet:     MockOrderReturn{Order: pendingOrder},
-			MockUpdate:  &MockOrderReturn{Order: paidOrder},
+			Description:      "Success",
+			MockGet:          MockOrderReturn{Order: pendingOrder},
+			MockUpdateStatus: ptrErr(nil),
 		},
 		{
 			Description: "Order not found",
@@ -978,10 +978,16 @@ func TestPayOrder(t *testing.T) {
 			ExpectedErr: service.ErrOrderStatusInvalid,
 		},
 		{
-			Description: "UpdateOrder fails",
-			MockGet:     MockOrderReturn{Order: pendingOrder},
-			MockUpdate:  &MockOrderReturn{Error: errors.New("db error")},
-			ExpectedErr: service.ErrUpdateOrder,
+			Description:      "UpdateOrderStatus fails",
+			MockGet:          MockOrderReturn{Order: pendingOrder},
+			MockUpdateStatus: ptrErr(errors.New("db error")),
+			ExpectedErr:      service.ErrUpdateOrder,
+		},
+		{
+			Description:      "Concurrent pay — status already changed",
+			MockGet:          MockOrderReturn{Order: pendingOrder},
+			MockUpdateStatus: ptrErr(service.ErrNotFound),
+			ExpectedErr:      service.ErrOrderStatusInvalid,
 		},
 	}
 
@@ -989,8 +995,9 @@ func TestPayOrder(t *testing.T) {
 		t.Run(tCase.Description, func(t *testing.T) {
 			orderMock.EXPECT().GetOrderByID(ctx, someOrderID).Return(tCase.MockGet.Order, tCase.MockGet.Error)
 
-			if tCase.MockUpdate != nil {
-				orderMock.EXPECT().UpdateOrder(ctx, someOrderID, gomock.Any()).Return(tCase.MockUpdate.Order, tCase.MockUpdate.Error)
+			if tCase.MockUpdateStatus != nil {
+				orderMock.EXPECT().UpdateOrderStatus(ctx, someOrderID, []m.OrderStatus{m.StatusPending}, m.StatusPaid).
+					Return(*tCase.MockUpdateStatus)
 			}
 
 			err := svc.PayOrder(ctx, someOrderID, someID)
@@ -1251,22 +1258,21 @@ func TestDeliverOrder(t *testing.T) {
 	otherSellerID := int64(999)
 	otherSellersOrder := m.Order{ID: someOrderID, UserID: otherUserID, SellerID: &otherSellerID, Status: m.StatusShipped}
 	orderNoSeller := m.Order{ID: someOrderID, UserID: otherUserID, SellerID: nil, Status: m.StatusShipped}
-	deliveredResult := m.Order{ID: someOrderID, Status: m.StatusDelivered}
 
 	type testCase struct {
-		Description string
-		MockSeller  *MockSellerReturn
-		MockGet     *MockOrderReturn
-		MockUpdate  *MockOrderReturn
-		ExpectedErr error
+		Description      string
+		MockSeller       *MockSellerReturn
+		MockGet          *MockOrderReturn
+		MockUpdateStatus *error
+		ExpectedErr      error
 	}
 
 	tCases := []testCase{
 		{
-			Description: "Success",
-			MockSeller:  &MockSellerReturn{Seller: seller},
-			MockGet:     &MockOrderReturn{Order: shippedOrder},
-			MockUpdate:  &MockOrderReturn{Order: deliveredResult},
+			Description:      "Success",
+			MockSeller:       &MockSellerReturn{Seller: seller},
+			MockGet:          &MockOrderReturn{Order: shippedOrder},
+			MockUpdateStatus: ptrErr(nil),
 		},
 		{
 			Description: "Seller not found",
@@ -1321,11 +1327,18 @@ func TestDeliverOrder(t *testing.T) {
 			ExpectedErr: service.ErrOrderStatusInvalid,
 		},
 		{
-			Description: "UpdateOrder fails",
-			MockSeller:  &MockSellerReturn{Seller: seller},
-			MockGet:     &MockOrderReturn{Order: shippedOrder},
-			MockUpdate:  &MockOrderReturn{Error: errors.New("db error")},
-			ExpectedErr: service.ErrUpdateOrder,
+			Description:      "UpdateOrderStatus fails",
+			MockSeller:       &MockSellerReturn{Seller: seller},
+			MockGet:          &MockOrderReturn{Order: shippedOrder},
+			MockUpdateStatus: ptrErr(errors.New("db error")),
+			ExpectedErr:      service.ErrUpdateOrder,
+		},
+		{
+			Description:      "Concurrent deliver — status already changed",
+			MockSeller:       &MockSellerReturn{Seller: seller},
+			MockGet:          &MockOrderReturn{Order: shippedOrder},
+			MockUpdateStatus: ptrErr(service.ErrNotFound),
+			ExpectedErr:      service.ErrOrderStatusInvalid,
 		},
 	}
 
@@ -1337,8 +1350,9 @@ func TestDeliverOrder(t *testing.T) {
 			if tCase.MockGet != nil {
 				orderMock.EXPECT().GetOrderByID(ctx, someOrderID).Return(tCase.MockGet.Order, tCase.MockGet.Error)
 			}
-			if tCase.MockUpdate != nil {
-				orderMock.EXPECT().UpdateOrder(ctx, someOrderID, gomock.Any()).Return(tCase.MockUpdate.Order, tCase.MockUpdate.Error)
+			if tCase.MockUpdateStatus != nil {
+				orderMock.EXPECT().UpdateOrderStatus(ctx, someOrderID, []m.OrderStatus{m.StatusShipped}, m.StatusDelivered).
+					Return(*tCase.MockUpdateStatus)
 			}
 
 			err := svc.DeliverOrder(ctx, someOrderID, someID)
