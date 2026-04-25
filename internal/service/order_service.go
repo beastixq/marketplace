@@ -29,6 +29,9 @@ type OrderRepo interface {
 	GetExpiredPendingOrders(ctx context.Context, deadline time.Time) (orders []m.Order, err error)
 	CreateOrder(ctx context.Context, oc m.OrderCreate) (id int64, err error)
 	UpdateOrder(ctx context.Context, id int64, ou m.OrderUpdate) (o m.Order, err error)
+	// UpdateOrderStatus atomically transitions status only if current status is in `from`.
+	// Returns ErrNotFound if no row matched (concurrent transition already happened).
+	UpdateOrderStatus(ctx context.Context, id int64, from []m.OrderStatus, to m.OrderStatus) error
 	DeleteOrderByID(ctx context.Context, id int64) (err error)
 }
 
@@ -401,9 +404,13 @@ func (os OrderService) CancelOrder(ctx context.Context, orderID int64, userID in
 	}
 
 	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
-		statusCancelled := m.StatusCancelled
-		_, err = os.orderRepo.UpdateOrder(ctx, orderID, m.OrderUpdate{Status: &statusCancelled})
+		err = os.orderRepo.UpdateOrderStatus(ctx, orderID,
+			[]m.OrderStatus{m.StatusPending, m.StatusPaid}, m.StatusCancelled)
 		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				// concurrent cancel/expire beat us — order already transitioned
+				return fmt.Errorf("%w: concurrent status change", ErrOrderStatusInvalid)
+			}
 			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
 		}
 		for _, item := range items {
@@ -433,8 +440,13 @@ func (os OrderService) ExpireOrders(ctx context.Context, deadline time.Time) err
 			return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
 		}
 		if err = os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
-			statusCancelled := m.StatusCancelled
-			if _, err = os.orderRepo.UpdateOrder(ctx, order.ID, m.OrderUpdate{Status: &statusCancelled}); err != nil {
+			err = os.orderRepo.UpdateOrderStatus(ctx, order.ID,
+				[]m.OrderStatus{m.StatusPending}, m.StatusCancelled)
+			if err != nil {
+				if errors.Is(err, ErrNotFound) {
+					// order was paid or already cancelled between snapshot and tx — skip
+					return nil
+				}
 				return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
 			}
 			for _, item := range items {
@@ -480,9 +492,12 @@ func (os OrderService) ShipOrder(ctx context.Context, orderID int64, userID int6
 	}
 
 	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
-		statusShipped := m.StatusShipped
-		_, err = os.orderRepo.UpdateOrder(ctx, orderID, m.OrderUpdate{Status: &statusShipped})
+		err = os.orderRepo.UpdateOrderStatus(ctx, orderID,
+			[]m.OrderStatus{m.StatusPaid}, m.StatusShipped)
 		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return fmt.Errorf("%w: concurrent status change", ErrOrderStatusInvalid)
+			}
 			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
 		}
 

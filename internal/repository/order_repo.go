@@ -117,7 +117,7 @@ func (or OrderRepoImpl) CreateOrder(ctx context.Context, oc m.OrderCreate) (id i
 }
 
 func (or OrderRepoImpl) UpdateOrder(ctx context.Context, id int64, ou m.OrderUpdate) (o m.Order, err error) {
-	if ou.UserID == nil && ou.AddressID == nil && ou.Status == nil && ou.TotalAmount == nil {
+	if ou.UserID == nil && ou.AddressID == nil && ou.Status == nil && ou.TotalAmount == nil && ou.SellerID == nil {
 		return m.Order{}, service.ErrNoChangesInUpdate
 	}
 
@@ -154,6 +154,28 @@ func (or OrderRepoImpl) UpdateOrder(ctx context.Context, id int64, ou m.OrderUpd
 	return order.toModel(), nil
 }
 
+func (or OrderRepoImpl) UpdateOrderStatus(ctx context.Context, id int64, from []m.OrderStatus, to m.OrderStatus) error {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.
+		Update("orders").
+		Set("status", to).
+		Set("updated_at", sq.Expr("NOW()")).
+		Where(sq.Eq{"id": id}).
+		Where(sq.Eq{"status": from}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	res, err := getConn(ctx, or.pool).Exec(ctx, sql, args...)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrExec, err)
+	}
+	if res.RowsAffected() == 0 {
+		return service.ErrNotFound
+	}
+	return nil
+}
+
 func (or OrderRepoImpl) DeleteOrderByID(ctx context.Context, id int64) (err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.
@@ -168,7 +190,6 @@ func (or OrderRepoImpl) DeleteOrderByID(ctx context.Context, id int64) (err erro
 	}
 	return nil
 }
-
 
 func (or OrderRepoImpl) GetSellerOrdersBySellerID(ctx context.Context, sellerID int64, pg m.PaginationOpts) (orders []m.Order, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
