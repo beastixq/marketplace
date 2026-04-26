@@ -122,6 +122,7 @@ type AddressDTO struct {
 	UserID    int64     `json:"user_id"`
 	City      string    `json:"city"`
 	Street    string    `json:"street"`
+	House     string    `json:"house"`
 	ZipCode   string    `json:"zip_code"`
 	IsDefault bool      `json:"is_default"`
 	CreatedAt time.Time `json:"created_at"`
@@ -133,6 +134,7 @@ func addressDTO(a model.Address) AddressDTO {
 		UserID:    a.UserID,
 		City:      a.City,
 		Street:    a.Street,
+		House:     a.House,
 		ZipCode:   a.ZipCode,
 		IsDefault: a.IsDefault,
 		CreatedAt: a.CreatedAt,

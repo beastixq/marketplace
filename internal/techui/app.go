@@ -832,6 +832,10 @@ func (a *App) createAddress(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	house, err := a.readRequired("House")
+	if err != nil {
+		return err
+	}
 	zip, err := a.readRequired("Zip code")
 	if err != nil {
 		return err
@@ -843,6 +847,7 @@ func (a *App) createAddress(ctx context.Context) error {
 	id, err := a.servicePorts.AddressBook.CreateAddress(ctx, actorFromClaims(claims), m.AddressCreate{
 		City:      city,
 		Street:    street,
+		House:     house,
 		ZipCode:   zip,
 		IsDefault: isDefault,
 	})
@@ -870,6 +875,10 @@ func (a *App) updateAddress(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	house, err := a.readOptionalString("New house")
+	if err != nil {
+		return err
+	}
 	zip, err := a.readOptionalString("New zip code")
 	if err != nil {
 		return err
@@ -881,6 +890,7 @@ func (a *App) updateAddress(ctx context.Context) error {
 	address, err := a.servicePorts.AddressBook.UpdateAddress(ctx, actorFromClaims(claims), id, m.AddressUpdate{
 		City:      city,
 		Street:    street,
+		House:     house,
 		ZipCode:   zip,
 		IsDefault: isDefault,
 	})
@@ -1825,8 +1835,8 @@ func (a *App) printCategory(category m.Category) {
 }
 
 func (a *App) printAddress(address m.Address) {
-	a.printf("#%d user=%d %s, %s, %s default=%t\n",
-		address.ID, address.UserID, address.City, address.Street, address.ZipCode, address.IsDefault)
+	a.printf("#%d user=%d %s, %s, %s, %s default=%t\n",
+		address.ID, address.UserID, address.City, address.Street, address.House, address.ZipCode, address.IsDefault)
 }
 
 func (a *App) printOrder(order m.Order) {

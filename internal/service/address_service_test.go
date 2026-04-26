@@ -19,6 +19,7 @@ var someAddress = m.Address{
 	UserID:    someAddressUserID,
 	City:      "Moscow",
 	Street:    "Baumanskaya 5",
+	House:     "10",
 	ZipCode:   "105005",
 	IsDefault: true,
 	CreatedAt: someTime,
@@ -97,6 +98,7 @@ func TestCreateAddress(t *testing.T) {
 		UserID:    someAddressUserID,
 		City:      "Moscow",
 		Street:    "Baumanskaya 5",
+		House:     "10",
 		ZipCode:   "105005",
 		IsDefault: true,
 	}
@@ -151,6 +153,7 @@ func TestUpdateAddress(t *testing.T) {
 		UserID:    someAddress.UserID,
 		City:      newCity,
 		Street:    someAddress.Street,
+		House:     someAddress.House,
 		ZipCode:   someAddress.ZipCode,
 		IsDefault: someAddress.IsDefault,
 		CreatedAt: someAddress.CreatedAt,

@@ -36,6 +36,7 @@ type addressRow struct {
 	UserID    int64
 	City      string
 	Street    string
+	House     string
 	ZipCode   string
 	IsDefault bool
 	CreatedAt time.Time
@@ -47,6 +48,7 @@ func (ar addressRow) toModel() m.Address {
 		UserID:    ar.UserID,
 		City:      ar.City,
 		Street:    ar.Street,
+		House:     ar.House,
 		ZipCode:   ar.ZipCode,
 		IsDefault: ar.IsDefault,
 		CreatedAt: ar.CreatedAt,

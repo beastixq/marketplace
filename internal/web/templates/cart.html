@@ -39,7 +39,7 @@
             <label for="address_id">Delivery Address</label>
             <select id="address_id" name="address_id">
                 {{range .Addresses}}
-                <option value="{{.ID}}">{{.City}}, {{.Street}}, {{.ZipCode}}</option>
+                <option value="{{.ID}}">{{.City}}, {{.Street}}{{if .House}}, {{.House}}{{end}}, {{.ZipCode}}</option>
                 {{end}}
             </select>
         </div>

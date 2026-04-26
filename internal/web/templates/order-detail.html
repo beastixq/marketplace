@@ -38,7 +38,7 @@
 
 {{if .Address}}
 <div style="margin-bottom: 1.5rem;">
-    <strong>Delivery:</strong> {{.Address.City}}, {{.Address.Street}}, {{.Address.ZipCode}}
+    <strong>Delivery:</strong> {{.Address.City}}, {{.Address.Street}}{{if .Address.House}}, {{.Address.House}}{{end}}, {{.Address.ZipCode}}
 </div>
 {{end}}
 

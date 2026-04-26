@@ -15,7 +15,7 @@
     {{range .Addresses}}
     <div class="card" style="margin-bottom: 1rem; padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
         <div>
-            <strong>{{.City}}</strong>, {{.Street}}, {{.ZipCode}}
+            <strong>{{.City}}</strong>, {{.Street}}{{if .House}}, {{.House}}{{end}}, {{.ZipCode}}
             {{if .IsDefault}} <span style="background: #d1fae5; color: #059669; padding: 0.15rem 0.5rem; border-radius: 8px; font-size: 0.75rem; font-weight: 600;">Default</span>{{end}}
         </div>
         <div style="display: flex; gap: 0.5rem;">
@@ -45,6 +45,10 @@
         <div class="form-group">
             <label for="street">Street</label>
             <input type="text" id="street" name="street" required placeholder="Baumanskaya st., 5">
+        </div>
+        <div class="form-group">
+            <label for="house">House</label>
+            <input type="text" id="house" name="house" required placeholder="12">
         </div>
         <div class="form-group">
             <label for="zip_code">Zip Code</label>

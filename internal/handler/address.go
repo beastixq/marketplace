@@ -41,6 +41,7 @@ func (ah AddressHandler) GetAddresses(w http.ResponseWriter, r *http.Request) {
 type CreateAddressRequest struct {
 	City      string `json:"city"`
 	Street    string `json:"street"`
+	House     string `json:"house"`
 	ZipCode   string `json:"zip_code"`
 	IsDefault bool   `json:"is_default"`
 }
@@ -79,6 +80,7 @@ func (ah AddressHandler) CreateAddress(w http.ResponseWriter, r *http.Request) {
 	id, err := ah.addressService.CreateAddress(r.Context(), actor, model.AddressCreate{
 		City:      req.City,
 		Street:    req.Street,
+		House:     req.House,
 		ZipCode:   req.ZipCode,
 		IsDefault: req.IsDefault,
 	})
@@ -92,12 +94,13 @@ func (ah AddressHandler) CreateAddress(w http.ResponseWriter, r *http.Request) {
 type UpdateAddressRequest struct {
 	City      *string `json:"city"`
 	Street    *string `json:"street"`
+	House     *string `json:"house"`
 	ZipCode   *string `json:"zip_code"`
 	IsDefault *bool   `json:"is_default"`
 }
 
 func (ur UpdateAddressRequest) Validate() error {
-	if ur.City == nil && ur.Street == nil && ur.ZipCode == nil && ur.IsDefault == nil {
+	if ur.City == nil && ur.Street == nil && ur.House == nil && ur.ZipCode == nil && ur.IsDefault == nil {
 		return ErrUpdateAddressAllNil
 	}
 	if ur.City != nil && *ur.City == "" {
@@ -138,6 +141,7 @@ func (ah AddressHandler) UpdateAddress(w http.ResponseWriter, r *http.Request) {
 	addr, err := ah.addressService.UpdateAddress(r.Context(), actor, id, model.AddressUpdate{
 		City:      req.City,
 		Street:    req.Street,
+		House:     req.House,
 		ZipCode:   req.ZipCode,
 		IsDefault: req.IsDefault,
 	})

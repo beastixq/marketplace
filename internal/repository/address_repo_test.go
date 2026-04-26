@@ -21,6 +21,7 @@ func TestAddressRepo_CreateAndGet(t *testing.T) {
 		UserID:    userID,
 		City:      "Moscow",
 		Street:    "Lenina 1",
+		House:     "10",
 		ZipCode:   "101000",
 		IsDefault: true,
 	})
@@ -40,6 +41,9 @@ func TestAddressRepo_CreateAndGet(t *testing.T) {
 	}
 	if got.City != "Moscow" {
 		t.Errorf("City: got %q, want Moscow", got.City)
+	}
+	if got.House != "10" {
+		t.Errorf("House: got %q, want 10", got.House)
 	}
 	if !got.IsDefault {
 		t.Error("IsDefault: got false, want true")
@@ -61,13 +65,13 @@ func TestAddressRepo_GetByUserID(t *testing.T) {
 	}
 
 	id1, err := r.CreateAddress(ctx, m.AddressCreate{
-		UserID: userID, City: "SPb", Street: "Nevsky 10", ZipCode: "190000",
+		UserID: userID, City: "SPb", Street: "Nevsky", House: "10", ZipCode: "190000",
 	})
 	if err != nil {
 		t.Fatalf("CreateAddress 1: %v", err)
 	}
 	id2, err := r.CreateAddress(ctx, m.AddressCreate{
-		UserID: userID, City: "Kazan", Street: "Bauman 5", ZipCode: "420000",
+		UserID: userID, City: "Kazan", Street: "Bauman", House: "5", ZipCode: "420000",
 	})
 	if err != nil {
 		t.Fatalf("CreateAddress 2: %v", err)
@@ -92,7 +96,7 @@ func TestAddressRepo_Update(t *testing.T) {
 	ctx := context.Background()
 
 	id, err := r.CreateAddress(ctx, m.AddressCreate{
-		UserID: userID, City: "Old", Street: "Old St", ZipCode: "000000",
+		UserID: userID, City: "Old", Street: "Old St", House: "1", ZipCode: "000000",
 	})
 	if err != nil {
 		t.Fatalf("CreateAddress: %v", err)
@@ -136,7 +140,7 @@ func TestAddressRepo_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	id, err := r.CreateAddress(ctx, m.AddressCreate{
-		UserID: userID, City: "X", Street: "Y", ZipCode: "000000",
+		UserID: userID, City: "X", Street: "Y", House: "1", ZipCode: "000000",
 	})
 	if err != nil {
 		t.Fatalf("CreateAddress: %v", err)

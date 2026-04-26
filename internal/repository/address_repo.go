@@ -22,13 +22,13 @@ func NewAddressRepo(pool *pgxpool.Pool) AddressRepoImpl {
 
 func (ar AddressRepoImpl) GetAddressByID(ctx context.Context, id int64) (a m.Address, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sql, args, err := psql.Select("id", "user_id", "city", "street", "zip_code", "is_default", "created_at").From("addresses").Where(sq.Eq{"id": id}).ToSql()
+	sql, args, err := psql.Select("id", "user_id", "city", "street", "house", "zip_code", "is_default", "created_at").From("addresses").Where(sq.Eq{"id": id}).ToSql()
 	if err != nil {
 		return m.Address{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := getConn(ctx, ar.pool).QueryRow(ctx, sql, args...)
 	var address addressRow
-	if err = row.Scan(&address.ID, &address.UserID, &address.City, &address.Street, &address.ZipCode, &address.IsDefault, &address.CreatedAt); err != nil {
+	if err = row.Scan(&address.ID, &address.UserID, &address.City, &address.Street, &address.House, &address.ZipCode, &address.IsDefault, &address.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return m.Address{}, service.ErrNotFound
 		}
@@ -39,7 +39,7 @@ func (ar AddressRepoImpl) GetAddressByID(ctx context.Context, id int64) (a m.Add
 
 func (ar AddressRepoImpl) GetAddressesByUserID(ctx context.Context, userID int64) (ads []m.Address, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sql, args, err := psql.Select("id", "user_id", "city", "street", "zip_code", "is_default", "created_at").From("addresses").Where(sq.Eq{"user_id": userID}).ToSql()
+	sql, args, err := psql.Select("id", "user_id", "city", "street", "house", "zip_code", "is_default", "created_at").From("addresses").Where(sq.Eq{"user_id": userID}).ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
@@ -51,7 +51,7 @@ func (ar AddressRepoImpl) GetAddressesByUserID(ctx context.Context, userID int64
 	addresses := make([]addressRow, 0)
 	var addr addressRow
 	for rows.Next() {
-		err = rows.Scan(&addr.ID, &addr.UserID, &addr.City, &addr.Street, &addr.ZipCode, &addr.IsDefault, &addr.CreatedAt)
+		err = rows.Scan(&addr.ID, &addr.UserID, &addr.City, &addr.Street, &addr.House, &addr.ZipCode, &addr.IsDefault, &addr.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrToScan, err)
 		}
@@ -69,7 +69,7 @@ func (ar AddressRepoImpl) GetAddressesByUserID(ctx context.Context, userID int64
 
 func (ar AddressRepoImpl) CreateAddress(ctx context.Context, ac m.AddressCreate) (id int64, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sql, args, err := psql.Insert("addresses").Columns("user_id", "city", "street", "zip_code", "is_default").Values(ac.UserID, ac.City, ac.Street, ac.ZipCode, ac.IsDefault).Suffix("RETURNING id").ToSql()
+	sql, args, err := psql.Insert("addresses").Columns("user_id", "city", "street", "house", "zip_code", "is_default").Values(ac.UserID, ac.City, ac.Street, ac.House, ac.ZipCode, ac.IsDefault).Suffix("RETURNING id").ToSql()
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
@@ -81,7 +81,7 @@ func (ar AddressRepoImpl) CreateAddress(ctx context.Context, ac m.AddressCreate)
 }
 
 func (ar AddressRepoImpl) UpdateAddress(ctx context.Context, id int64, au m.AddressUpdate) (a m.Address, err error) {
-	if au.UserID == nil && au.City == nil && au.Street == nil && au.ZipCode == nil && au.IsDefault == nil {
+	if au.UserID == nil && au.City == nil && au.Street == nil && au.House == nil && au.ZipCode == nil && au.IsDefault == nil {
 		return m.Address{}, service.ErrNoChangesInUpdate
 	}
 
@@ -96,20 +96,23 @@ func (ar AddressRepoImpl) UpdateAddress(ctx context.Context, id int64, au m.Addr
 	if au.Street != nil {
 		ub = ub.Set("street", *au.Street)
 	}
+	if au.House != nil {
+		ub = ub.Set("house", *au.House)
+	}
 	if au.ZipCode != nil {
 		ub = ub.Set("zip_code", *au.ZipCode)
 	}
 	if au.IsDefault != nil {
 		ub = ub.Set("is_default", *au.IsDefault)
 	}
-	ub = ub.Suffix("RETURNING id, user_id, city, street, zip_code, is_default, created_at")
+	ub = ub.Suffix("RETURNING id, user_id, city, street, house, zip_code, is_default, created_at")
 	sql, args, err := ub.ToSql()
 	if err != nil {
 		return m.Address{}, fmt.Errorf("%w: %v", ErrToSql, err)
 	}
 	row := getConn(ctx, ar.pool).QueryRow(ctx, sql, args...)
 	var address addressRow
-	if err = row.Scan(&address.ID, &address.UserID, &address.City, &address.Street, &address.ZipCode, &address.IsDefault, &address.CreatedAt); err != nil {
+	if err = row.Scan(&address.ID, &address.UserID, &address.City, &address.Street, &address.House, &address.ZipCode, &address.IsDefault, &address.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return m.Address{}, service.ErrNotFound
 		}

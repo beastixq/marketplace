@@ -902,6 +902,7 @@ func (wh *WebHandler) AddressCreate(w http.ResponseWriter, r *http.Request) {
 
 	city := r.FormValue("city")
 	street := r.FormValue("street")
+	house := r.FormValue("house")
 	zipCode := r.FormValue("zip_code")
 	isDefault := r.FormValue("is_default") == "on"
 
@@ -909,6 +910,7 @@ func (wh *WebHandler) AddressCreate(w http.ResponseWriter, r *http.Request) {
 	_, err := wh.addressService.CreateAddress(r.Context(), actor, model.AddressCreate{
 		City:      city,
 		Street:    street,
+		House:     house,
 		ZipCode:   zipCode,
 		IsDefault: isDefault,
 	})

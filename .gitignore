@@ -16,3 +16,5 @@ problems.md
 prompts/
 internal/mocks
 reviews/
+caveman/
+dist/
