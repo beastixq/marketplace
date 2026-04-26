@@ -1,11 +1,14 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
 )
 
@@ -69,7 +72,9 @@ func Load(path string) (*Config, error) {
 	}
 
 	var cfg Config
-	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(raw))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("parse config %q: %w", path, err)
 	}
 
@@ -96,8 +101,9 @@ func (c *Config) Validate() error {
 	if c.Auth.JWTTTL <= 0 {
 		return errors.New("auth.jwt_ttl must be positive")
 	}
-	if c.Auth.BcryptCost <= 0 {
-		return errors.New("auth.bcrypt_cost must be positive")
+	if c.Auth.BcryptCost < bcrypt.MinCost || c.Auth.BcryptCost > bcrypt.MaxCost {
+		return fmt.Errorf("auth.bcrypt_cost must be in [%d, %d], got %d",
+			bcrypt.MinCost, bcrypt.MaxCost, c.Auth.BcryptCost)
 	}
 	if c.Server.Addr == "" {
 		return errors.New("server.addr must be set")
@@ -107,6 +113,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Payment.GatewayURL == "" {
 		return errors.New("payment.gateway_url must be set")
+	}
+	if u, err := url.Parse(c.Payment.GatewayURL); err != nil || u.Scheme == "" || u.Host == "" {
+		return fmt.Errorf("payment.gateway_url must be absolute URL, got %q", c.Payment.GatewayURL)
 	}
 	if c.Orders.ExpirationCheckInterval <= 0 {
 		return errors.New("orders.expiration_check_interval must be positive")

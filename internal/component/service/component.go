@@ -60,9 +60,6 @@ func (cfg Config) withDefaults() Config {
 	if cfg.BcryptCost == 0 {
 		cfg.BcryptCost = 10
 	}
-	if cfg.JWTSecret == "" {
-		cfg.JWTSecret = "TODO_SECRET"
-	}
 	if cfg.TokenTTL == 0 {
 		cfg.TokenTTL = 24 * time.Hour
 	}
