@@ -2,15 +2,16 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
+	"log"
 	"log/slog"
 	"net/http"
-	"os"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	payment "github.com/beastixq/marketplace/internal/adapter/payment"
+	"github.com/beastixq/marketplace/internal/config"
 	"github.com/beastixq/marketplace/internal/handler"
 	repo "github.com/beastixq/marketplace/internal/repository"
 	svc "github.com/beastixq/marketplace/internal/service"
@@ -18,16 +19,21 @@ import (
 )
 
 func main() {
+	configPath := flag.String("config", "config/config.yaml", "path to YAML config file")
+	flag.Parse()
+
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		log.Fatalf("load config: %v", err)
+	}
+
 	fmt.Println("Marketplace server starting")
 
-	dbURL, ok := os.LookupEnv("DATABASE_URL")
-	if !ok {
-		os.Exit(1)
-	}
-	pool, err := pgxpool.New(context.Background(), dbURL)
+	pool, err := pgxpool.New(context.Background(), cfg.Database.DSN)
 	if err != nil {
-		os.Exit(2)
+		log.Fatalf("connect database: %v", err)
 	}
+	defer pool.Close()
 
 	userRepo := repo.NewUserRepo(pool)
 	sellerRepo := repo.NewSellerRepo(pool)
@@ -39,7 +45,7 @@ func main() {
 	categoryRepo := repo.NewCategoryRepo(pool)
 	txManager := repo.NewPgxTxManager(pool)
 
-	userService := svc.NewUserService(userRepo, 10)
+	userService := svc.NewUserService(userRepo, cfg.Auth.BcryptCost)
 	sellerService := svc.NewSellerService(sellerRepo)
 	addressService := svc.NewAddressService(addressRepo)
 	reviewService := svc.NewReviewService(reviewRepo)
@@ -47,14 +53,14 @@ func main() {
 	orderService := svc.NewOrderService(orderRepo, orderItemRepo, productRepo, sellerRepo, txManager)
 	categoryService := svc.NewCategoryService(categoryRepo)
 	// TODO: replace with Redis TokenBlocklist implementation
-	authService := svc.NewAuthService(userService, nil, "TODO_SECRET", 24*time.Hour)
+	authService := svc.NewAuthService(userService, nil, cfg.Auth.JWTSecret, cfg.Auth.JWTTTL.Std())
 
-	paymentTTL := 15 * time.Minute
-	gateway := payment.NewMockBankGateway("http://localhost:8080")
+	paymentTTL := cfg.Payment.TTL.Std()
+	gateway := payment.NewMockBankGateway(cfg.Payment.GatewayURL)
 	paymentService := svc.NewPaymentService(orderRepo, gateway, paymentTTL)
 
 	logger := slog.Default()
-	worker := svc.NewOrderExpirationWorker(orderService, 1*time.Minute, paymentTTL, logger)
+	worker := svc.NewOrderExpirationWorker(orderService, cfg.Orders.ExpirationCheckInterval.Std(), paymentTTL, logger)
 	go worker.Run(context.Background())
 
 	authHandler := handler.NewAuthHandler(authService)
@@ -92,6 +98,8 @@ func main() {
 	mux.Handle("/api/", apiRouter)
 	mux.Handle("/", webRouter)
 
-	fmt.Println("Listening on :8080")
-	http.ListenAndServe(":8080", mux)
+	fmt.Printf("Listening on %s\n", cfg.Server.Addr)
+	if err := http.ListenAndServe(cfg.Server.Addr, mux); err != nil {
+		log.Fatalf("http server: %v", err)
+	}
 }

@@ -1,0 +1,22 @@
+# Marketplace configuration.
+# Secrets (database.dsn, auth.jwt_secret) can be overridden by env vars
+# DATABASE_URL and JWT_SECRET respectively. The env var wins when set.
+
+server:
+  addr: ":8080"
+
+database:
+  # Local dev default. Override via DATABASE_URL in prod.
+  dsn: "postgres://marketplace:marketplace@localhost:5432/marketplace?sslmode=disable"
+
+auth:
+  jwt_secret: "dev-secret-change-me"
+  jwt_ttl: "24h"
+  bcrypt_cost: 10
+
+payment:
+  ttl: "15m"
+  gateway_url: "http://localhost:8080"
+
+orders:
+  expiration_check_interval: "1m"

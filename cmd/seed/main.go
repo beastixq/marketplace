@@ -2,14 +2,15 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
-	"os"
 	"time"
 
 	"github.com/go-faker/faker/v4"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/beastixq/marketplace/cmd/seed/generators"
+	"github.com/beastixq/marketplace/internal/config"
 )
 
 // type UsersGenerator interface {
@@ -31,9 +32,17 @@ func main() {
 		priceHistoryCount = 25000
 	)
 
+	configPath := flag.String("config", "config/config.yaml", "path to YAML config file")
+	flag.Parse()
+
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		log.Fatalf("Failed to load config: %v\n", err)
+	}
+
 	log.Println("Start seeding...")
 
-	pool, err := pgxpool.New(context.Background(), os.Getenv("DATABASE_URL"))
+	pool, err := pgxpool.New(context.Background(), cfg.Database.DSN)
 	if err != nil {
 		log.Fatalf("Failed to create New pool: %v\n", err)
 	}
