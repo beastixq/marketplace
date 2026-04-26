@@ -63,6 +63,10 @@ func NewOrderService(or OrderRepo, oir OrderItemRepo, pr ProductRepo, sr SellerG
 }
 
 func (os OrderService) GetOrderByID(ctx context.Context, actor Actor, orderID int64) (order m.Order, err error) {
+	if !actor.HasRole(m.RoleBuyer, m.RoleSeller, m.RoleAdmin) {
+		return m.Order{}, ErrPermissionDenied
+	}
+
 	order, err = os.orderRepo.GetOrderByID(ctx, orderID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -70,13 +74,37 @@ func (os OrderService) GetOrderByID(ctx context.Context, actor Actor, orderID in
 		}
 		return m.Order{}, fmt.Errorf("%w: %v", ErrGetOrderByID, err)
 	}
-	if !actor.IsAdmin() && order.UserID != actor.UserID {
-		return m.Order{}, ErrNotYourOrder
+	if actor.IsAdmin() {
+		return order, nil
+	}
+
+	switch actor.Role {
+	case m.RoleBuyer:
+		if order.UserID != actor.UserID {
+			return m.Order{}, ErrNotYourOrder
+		}
+	case m.RoleSeller:
+		seller, err := os.sellerGetter.GetSellerByUserID(ctx, actor.UserID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return m.Order{}, ErrSellerNotFound
+			}
+			return m.Order{}, fmt.Errorf("%w: %v", ErrGetSellerByUserID, err)
+		}
+		if order.SellerID == nil || *order.SellerID != seller.ID {
+			return m.Order{}, ErrNotYourOrder
+		}
+	default:
+		return m.Order{}, ErrPermissionDenied
 	}
 	return order, nil
 }
 
 func (os OrderService) GetOrdersByUserID(ctx context.Context, actor Actor, pg m.PaginationOpts) (orders []m.Order, err error) {
+	if !actor.HasRole(m.RoleBuyer) {
+		return nil, ErrPermissionDenied
+	}
+
 	orders, err = os.orderRepo.GetOrdersByUserID(ctx, actor.UserID, pg)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrGetOrdersByUserID, err)
@@ -85,6 +113,10 @@ func (os OrderService) GetOrdersByUserID(ctx context.Context, actor Actor, pg m.
 }
 
 func (os OrderService) GetSellerOrdersByUserID(ctx context.Context, actor Actor, pg m.PaginationOpts) (orders []m.Order, err error) {
+	if !actor.HasRole(m.RoleSeller) {
+		return nil, ErrPermissionDenied
+	}
+
 	seller, err := os.sellerGetter.GetSellerByUserID(ctx, actor.UserID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -112,6 +144,10 @@ func (os OrderService) GetOrderItemsByOrderID(ctx context.Context, actor Actor, 
 }
 
 func (os OrderService) GetCart(ctx context.Context, actor Actor) (order m.Order, err error) {
+	if !actor.HasRole(m.RoleBuyer) {
+		return m.Order{}, ErrPermissionDenied
+	}
+
 	orders, err := os.orderRepo.GetOrdersByUserID(ctx, actor.UserID, m.PaginationOpts{})
 	if err != nil {
 		return m.Order{}, fmt.Errorf("%w: %v", ErrGetCart, err)
@@ -151,6 +187,10 @@ func (os OrderService) GetCart(ctx context.Context, actor Actor) (order m.Order,
 }
 
 func (os OrderService) AddItemToCart(ctx context.Context, actor Actor, productID int64, quantity int) error {
+	if !actor.HasRole(m.RoleBuyer) {
+		return ErrPermissionDenied
+	}
+
 	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
 		// Advisory lock serializes cart mutations and Checkout for this user.
 		if err := os.orderRepo.LockUserCart(ctx, actor.UserID); err != nil {
@@ -210,6 +250,10 @@ func (os OrderService) AddItemToCart(ctx context.Context, actor Actor, productID
 }
 
 func (os OrderService) ChangeQuantityCartItem(ctx context.Context, actor Actor, itemID int64, quantity int) (err error) {
+	if !actor.HasRole(m.RoleBuyer) {
+		return ErrPermissionDenied
+	}
+
 	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
 		if err := os.orderRepo.LockUserCart(ctx, actor.UserID); err != nil {
 			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
@@ -246,6 +290,10 @@ func (os OrderService) ChangeQuantityCartItem(ctx context.Context, actor Actor, 
 }
 
 func (os OrderService) DeleteCartItem(ctx context.Context, actor Actor, itemID int64) (err error) {
+	if !actor.HasRole(m.RoleBuyer) {
+		return ErrPermissionDenied
+	}
+
 	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
 		if err := os.orderRepo.LockUserCart(ctx, actor.UserID); err != nil {
 			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
@@ -261,6 +309,10 @@ func (os OrderService) DeleteCartItem(ctx context.Context, actor Actor, itemID i
 }
 
 func (os OrderService) Checkout(ctx context.Context, actor Actor, addressID int64) (orderIDs []int64, err error) {
+	if !actor.HasRole(m.RoleBuyer) {
+		return nil, ErrPermissionDenied
+	}
+
 	var createdOrdersIDs []int64
 	err = os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
 		// Advisory lock serializes Checkout with parallel cart mutations of the same user.
@@ -410,6 +462,10 @@ func (os OrderService) Checkout(ctx context.Context, actor Actor, addressID int6
 }
 
 func (os OrderService) PayOrder(ctx context.Context, actor Actor, orderID int64) (err error) {
+	if !actor.HasRole(m.RoleBuyer) {
+		return ErrPermissionDenied
+	}
+
 	order, err := os.orderRepo.GetOrderByID(ctx, orderID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -417,7 +473,7 @@ func (os OrderService) PayOrder(ctx context.Context, actor Actor, orderID int64)
 		}
 		return fmt.Errorf("%w: %v", ErrGetOrderByID, err)
 	}
-	if !actor.IsAdmin() && actor.UserID != order.UserID {
+	if actor.UserID != order.UserID {
 		return ErrNotYourOrder
 	}
 	if order.Status != m.StatusPending {
@@ -435,6 +491,10 @@ func (os OrderService) PayOrder(ctx context.Context, actor Actor, orderID int64)
 }
 
 func (os OrderService) CancelOrder(ctx context.Context, actor Actor, orderID int64) (err error) {
+	if !actor.IsAdmin() && !actor.HasRole(m.RoleBuyer) {
+		return ErrPermissionDenied
+	}
+
 	order, err := os.orderRepo.GetOrderByID(ctx, orderID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -521,6 +581,10 @@ func (os OrderService) ExpireOrders(ctx context.Context, deadline time.Time) err
 }
 
 func (os OrderService) ShipOrder(ctx context.Context, actor Actor, orderID int64) (err error) {
+	if !actor.HasRole(m.RoleSeller) {
+		return ErrPermissionDenied
+	}
+
 	seller, err := os.sellerGetter.GetSellerByUserID(ctx, actor.UserID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -573,6 +637,10 @@ func (os OrderService) ShipOrder(ctx context.Context, actor Actor, orderID int64
 }
 
 func (os OrderService) DeliverOrder(ctx context.Context, actor Actor, orderID int64) (err error) {
+	if !actor.HasRole(m.RoleSeller) {
+		return ErrPermissionDenied
+	}
+
 	seller, err := os.sellerGetter.GetSellerByUserID(ctx, actor.UserID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {

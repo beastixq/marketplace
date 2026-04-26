@@ -37,6 +37,10 @@ func (rs ReviewService) GetReviewByID(ctx context.Context, id int64) (r m.Review
 }
 
 func (rs ReviewService) CreateReview(ctx context.Context, actor Actor, rc m.ReviewCreate) (id int64, err error) {
+	if !actor.HasRole(m.RoleBuyer) {
+		return 0, ErrPermissionDenied
+	}
+
 	rc.UserID = actor.UserID
 	id, err = rs.reviewRepo.CreateReview(ctx, rc)
 	if err != nil {
@@ -46,6 +50,10 @@ func (rs ReviewService) CreateReview(ctx context.Context, actor Actor, rc m.Revi
 }
 
 func (rs ReviewService) UpdateReview(ctx context.Context, actor Actor, id int64, ru m.ReviewUpdate) (r m.Review, err error) {
+	if !actor.HasRole(m.RoleBuyer) {
+		return m.Review{}, ErrPermissionDenied
+	}
+
 	r, err = rs.reviewRepo.GetReviewByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -53,7 +61,7 @@ func (rs ReviewService) UpdateReview(ctx context.Context, actor Actor, id int64,
 		}
 		return m.Review{}, fmt.Errorf("%w: %v", ErrGetReviewByID, err)
 	}
-	if !actor.IsAdmin() && r.UserID != actor.UserID {
+	if r.UserID != actor.UserID {
 		return m.Review{}, ErrNotYourReview
 	}
 
@@ -72,8 +80,13 @@ func (rs ReviewService) DeleteReviewByID(ctx context.Context, actor Actor, id in
 		}
 		return fmt.Errorf("%w: %v", ErrGetReviewByID, err)
 	}
-	if !actor.IsAdmin() && r.UserID != actor.UserID {
-		return ErrNotYourReview
+	if !actor.IsAdmin() {
+		if !actor.HasRole(m.RoleBuyer) {
+			return ErrPermissionDenied
+		}
+		if r.UserID != actor.UserID {
+			return ErrNotYourReview
+		}
 	}
 
 	err = rs.reviewRepo.DeleteReviewByID(ctx, id)

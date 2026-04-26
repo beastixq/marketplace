@@ -33,7 +33,7 @@ func NewUserService(ur UserRepo, bcryptCost int) UserService {
 
 func (us UserService) GetUsers(ctx context.Context, actor Actor, opts m.UserListOptions) (users []m.User, err error) {
 	if !actor.IsAdmin() {
-		return nil, ErrNotYourUser
+		return nil, ErrPermissionDenied
 	}
 	users, err = us.repo.GetUsers(ctx, opts)
 	if err != nil {
@@ -43,6 +43,10 @@ func (us UserService) GetUsers(ctx context.Context, actor Actor, opts m.UserList
 }
 
 func (us UserService) CreateUser(ctx context.Context, uc m.UserCreate) (id int64, err error) {
+	if uc.Role != m.RoleBuyer && uc.Role != m.RoleSeller {
+		return 0, ErrPermissionDenied
+	}
+
 	_, err = us.repo.GetUserByEmail(ctx, uc.Email)
 	if err == nil {
 		return 0, ErrAccountWithEmailAlreadyExists
@@ -112,7 +116,18 @@ func (us UserService) GetAuthUserByID(ctx context.Context, id int64) (u m.User, 
 	return user, nil
 }
 
-func (us UserService) GetUserByEmail(ctx context.Context, email string) (u m.User, err error) {
+func (us UserService) GetAuthUserByEmail(ctx context.Context, email string) (u m.User, err error) {
+	return us.getUserByEmail(ctx, email)
+}
+
+func (us UserService) GetUserByEmail(ctx context.Context, actor Actor, email string) (u m.User, err error) {
+	if !actor.IsAdmin() {
+		return m.User{}, ErrPermissionDenied
+	}
+	return us.getUserByEmail(ctx, email)
+}
+
+func (us UserService) getUserByEmail(ctx context.Context, email string) (u m.User, err error) {
 	user, err := us.repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {

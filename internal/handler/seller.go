@@ -66,6 +66,10 @@ func (sh SellerHandler) CreateSeller(w http.ResponseWriter, r *http.Request) {
 		Description: req.Description,
 	})
 	if err != nil {
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -109,6 +113,10 @@ func (sh SellerHandler) UpdateSeller(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourSeller.Error())
 			return
 		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -138,6 +146,10 @@ func (sh SellerHandler) DeleteSeller(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourSeller.Error())
 			return
 		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -146,12 +158,6 @@ func (sh SellerHandler) DeleteSeller(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/sellers/:id/stats
 func (sh SellerHandler) GetSellerStats(w http.ResponseWriter, r *http.Request) {
-	actor, ok := actorFromRequest(r)
-	if !ok {
-		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
-		return
-	}
-
 	sellerID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, ErrInvalidIDParam.Error())
@@ -180,14 +186,14 @@ func (sh SellerHandler) GetSellerStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats, err := sh.sellerService.GetSellerStats(r.Context(), actor, sellerID, dateFrom, dateTo)
+	stats, err := sh.sellerService.GetSellerStats(r.Context(), sellerID, dateFrom, dateTo)
 	if err != nil {
 		if errors.Is(err, service.ErrSellerNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrSellerNotFound.Error())
 			return
 		}
-		if errors.Is(err, service.ErrNotYourSeller) {
-			writeError(w, http.StatusForbidden, service.ErrNotYourSeller.Error())
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
 			return
 		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())

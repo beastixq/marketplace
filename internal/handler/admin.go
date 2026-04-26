@@ -50,6 +50,10 @@ func (ah AdminHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourUser.Error())
 			return
 		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -109,6 +113,10 @@ func (ah AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourUser.Error())
 			return
 		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -138,6 +146,10 @@ func (ah AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourUser.Error())
 			return
 		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -161,6 +173,10 @@ func (ah AdminHandler) DeleteSeller(w http.ResponseWriter, r *http.Request) {
 	if err := ah.sellerService.DeleteSellerByID(r.Context(), actor, id); err != nil {
 		if errors.Is(err, service.ErrSellerNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrSellerNotFound.Error())
+			return
+		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
 			return
 		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())

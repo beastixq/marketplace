@@ -1007,7 +1007,7 @@ func (wh *WebHandler) SellerDashboard(w http.ResponseWriter, r *http.Request) {
 
 	var stats *model.SellerStats
 	if hasSeller {
-		s, statsErr := wh.sellerService.GetSellerStats(r.Context(), actor, seller.ID, time.Now().AddDate(-1, 0, 0), time.Now())
+		s, statsErr := wh.sellerService.GetSellerStats(r.Context(), seller.ID, time.Now().AddDate(-1, 0, 0), time.Now())
 		if statsErr == nil {
 			stats = &s
 		}
@@ -1387,15 +1387,8 @@ func (wh *WebHandler) SellerProfile(w http.ResponseWriter, r *http.Request) {
 
 	user := wh.userFromCookie(r)
 	var stats *model.SellerStats
-	if user != nil && user.Role == "admin" {
-		var s model.SellerStats
-		err := wh.dbPool.QueryRow(r.Context(),
-			"SELECT total_orders, total_revenue, avg_order_value, top_product_name FROM get_seller_statistics($1, $2, $3)",
-			seller.ID, time.Now().AddDate(-1, 0, 0), time.Now(),
-		).Scan(&s.TotalOrders, &s.TotalRevenue, &s.AvgOrderValue, &s.TopProductName)
-		if err == nil {
-			stats = &s
-		}
+	if s, err := wh.sellerService.GetSellerStats(r.Context(), seller.ID, time.Now().AddDate(-1, 0, 0), time.Now()); err == nil {
+		stats = &s
 	}
 
 	wh.render(w, "seller-profile", map[string]any{
@@ -1573,7 +1566,7 @@ func (wh *WebHandler) AdminCategoryCreate(w http.ResponseWriter, r *http.Request
 		cc.Description = &description
 	}
 
-	_, err := wh.categoryService.CreateCategory(r.Context(), cc)
+	_, err := wh.categoryService.CreateCategory(r.Context(), user.actor(), cc)
 	if err != nil {
 		http.Redirect(w, r, "/admin/categories?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
@@ -1593,7 +1586,7 @@ func (wh *WebHandler) AdminCategoryDelete(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err = wh.categoryService.DeleteCategoryByID(r.Context(), id); err != nil {
+	if err = wh.categoryService.DeleteCategoryByID(r.Context(), user.actor(), id); err != nil {
 		http.Redirect(w, r, "/admin/categories?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}

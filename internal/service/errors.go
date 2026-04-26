@@ -6,6 +6,9 @@ import (
 
 // service layer errors
 var (
+	// authorization
+	ErrPermissionDenied = errors.New("Permission denied")
+
 	// auth
 	ErrSign               = errors.New("Failed to sign")
 	ErrLogin              = errors.New("Login failed")

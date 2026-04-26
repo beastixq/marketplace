@@ -402,15 +402,6 @@ func TestGetSellerStats(t *testing.T) {
 			ExpectedErr: service.ErrGetSellerByID,
 		},
 		{
-			Description: "Not your seller",
-			UserID:      otherUserID,
-			SellerID:    someID,
-			DateFrom:    dateFrom,
-			DateTo:      dateTo,
-			MockGetByID: MockSellerReturn{Seller: someSeller},
-			ExpectedErr: service.ErrNotYourSeller,
-		},
-		{
 			Description: "GetSellerStats repo error",
 			UserID:      someSellerUserID,
 			SellerID:    someID,
@@ -428,7 +419,7 @@ func TestGetSellerStats(t *testing.T) {
 			if tCase.MockStats != nil {
 				mock.EXPECT().GetSellerStats(ctx, tCase.SellerID, tCase.DateFrom, tCase.DateTo).Return(tCase.MockStats.Stats, tCase.MockStats.Error)
 			}
-			stats, err := svc.GetSellerStats(ctx, testActor(tCase.UserID, m.RoleSeller), tCase.SellerID, tCase.DateFrom, tCase.DateTo)
+			stats, err := svc.GetSellerStats(ctx, tCase.SellerID, tCase.DateFrom, tCase.DateTo)
 			assertError(t, err, tCase.ExpectedErr)
 			assertSellerStats(t, stats, tCase.ExpectedStats)
 		})

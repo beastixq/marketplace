@@ -80,7 +80,6 @@ func NewRouter(
 			// Reviews
 			r.Post("/api/v1/reviews", reviewHandler.CreateReview)
 			r.Patch("/api/v1/reviews/{id}", reviewHandler.UpdateReview)
-			r.Delete("/api/v1/reviews/{id}", reviewHandler.DeleteReview)
 		})
 
 		// Seller only
@@ -93,14 +92,27 @@ func NewRouter(
 			r.Delete("/api/v1/sellers/{id}", sellerHandler.DeleteSeller)
 			r.Get("/api/v1/sellers/me/orders", sellerHandler.GetSellerOrders)
 
-			// Products (seller creates/updates/deletes)
-			r.Post("/api/v1/products", productHandler.CreateProduct)
-			r.Patch("/api/v1/products/{id}", productHandler.UpdateProduct)
-			r.Delete("/api/v1/products/{id}", productHandler.DeleteProduct)
-
 			// Orders (seller)
 			r.Post("/api/v1/orders/{id}/ship", orderHandler.ShipOrder)
 			r.Post("/api/v1/orders/{id}/deliver", orderHandler.DeliverOrder)
+		})
+
+		// Seller or admin
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRole(model.RoleSeller, model.RoleAdmin))
+
+			// Products
+			r.Post("/api/v1/products", productHandler.CreateProduct)
+			r.Patch("/api/v1/products/{id}", productHandler.UpdateProduct)
+			r.Delete("/api/v1/products/{id}", productHandler.DeleteProduct)
+		})
+
+		// Buyer or admin
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRole(model.RoleBuyer, model.RoleAdmin))
+
+			// Reviews
+			r.Delete("/api/v1/reviews/{id}", reviewHandler.DeleteReview)
 		})
 
 		// Admin only
@@ -111,6 +123,7 @@ func NewRouter(
 			r.Get("/api/v1/admin/users/{id}", adminHandler.GetUser)
 			r.Patch("/api/v1/admin/users/{id}", adminHandler.UpdateUser)
 			r.Delete("/api/v1/admin/users/{id}", adminHandler.DeleteUser)
+			r.Patch("/api/v1/admin/sellers/{id}", sellerHandler.UpdateSeller)
 			r.Delete("/api/v1/admin/sellers/{id}", adminHandler.DeleteSeller)
 
 			r.Post("/api/v1/categories", categoryHandler.CreateCategory)

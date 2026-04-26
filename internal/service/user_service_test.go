@@ -145,7 +145,7 @@ func TestGetUserByEmail(t *testing.T) {
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
 			mock.EXPECT().GetUserByEmail(ctx, tCase.Email).Return(tCase.MockReturn.User, tCase.MockReturn.Error)
-			user, err := svc.GetUserByEmail(ctx, tCase.Email)
+			user, err := svc.GetUserByEmail(ctx, testActor(someID, m.RoleAdmin), tCase.Email)
 			assertError(t, err, tCase.ExpectedErr)
 			assertUser(t, user, tCase.ExpectedUser)
 		})

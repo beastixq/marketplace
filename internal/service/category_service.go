@@ -44,7 +44,11 @@ func (cs CategoryService) GetCategoryByID(ctx context.Context, id int64) (c m.Ca
 	return c, nil
 }
 
-func (cs CategoryService) CreateCategory(ctx context.Context, cc m.CategoryCreate) (id int64, err error) {
+func (cs CategoryService) CreateCategory(ctx context.Context, actor Actor, cc m.CategoryCreate) (id int64, err error) {
+	if !actor.IsAdmin() {
+		return 0, ErrPermissionDenied
+	}
+
 	id, err = cs.categoryRepo.CreateCategory(ctx, cc)
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrCreateCategory, err)
@@ -52,7 +56,11 @@ func (cs CategoryService) CreateCategory(ctx context.Context, cc m.CategoryCreat
 	return id, nil
 }
 
-func (cs CategoryService) UpdateCategory(ctx context.Context, id int64, cu m.CategoryUpdate) (c m.Category, err error) {
+func (cs CategoryService) UpdateCategory(ctx context.Context, actor Actor, id int64, cu m.CategoryUpdate) (c m.Category, err error) {
+	if !actor.IsAdmin() {
+		return m.Category{}, ErrPermissionDenied
+	}
+
 	c, err = cs.categoryRepo.UpdateCategory(ctx, id, cu)
 	if err != nil {
 		return m.Category{}, fmt.Errorf("%w: %v", ErrUpdateCategory, err)
@@ -60,7 +68,11 @@ func (cs CategoryService) UpdateCategory(ctx context.Context, id int64, cu m.Cat
 	return c, nil
 }
 
-func (cs CategoryService) DeleteCategoryByID(ctx context.Context, id int64) (err error) {
+func (cs CategoryService) DeleteCategoryByID(ctx context.Context, actor Actor, id int64) (err error) {
+	if !actor.IsAdmin() {
+		return ErrPermissionDenied
+	}
+
 	err = cs.categoryRepo.DeleteCategoryByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrDeleteCategory, err)

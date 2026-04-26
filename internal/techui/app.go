@@ -46,7 +46,7 @@ type SellerProfile interface {
 }
 
 type SellerStatistics interface {
-	GetSellerStats(ctx context.Context, actor svc.Actor, sellerID int64, dateFrom, dateTo time.Time) (m.SellerStats, error)
+	GetSellerStats(ctx context.Context, sellerID int64, dateFrom, dateTo time.Time) (m.SellerStats, error)
 }
 
 type ProductCatalog interface {
@@ -71,9 +71,9 @@ type CategoryBrowser interface {
 }
 
 type CategoryManagement interface {
-	CreateCategory(ctx context.Context, cc m.CategoryCreate) (int64, error)
-	UpdateCategory(ctx context.Context, id int64, cu m.CategoryUpdate) (m.Category, error)
-	DeleteCategoryByID(ctx context.Context, id int64) error
+	CreateCategory(ctx context.Context, actor svc.Actor, cc m.CategoryCreate) (int64, error)
+	UpdateCategory(ctx context.Context, actor svc.Actor, id int64, cu m.CategoryUpdate) (m.Category, error)
+	DeleteCategoryByID(ctx context.Context, actor svc.Actor, id int64) error
 }
 
 type AddressBook interface {
@@ -260,7 +260,7 @@ func (a *App) register(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	role, err := a.readRole("Role [buyer/seller/admin/analyst]", m.RoleBuyer)
+	role, err := a.readRole("Role [buyer/seller]", m.RoleBuyer)
 	if err != nil {
 		return err
 	}
@@ -721,7 +721,7 @@ func (a *App) createCategory(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	id, err := a.servicePorts.CategoryManagement.CreateCategory(ctx, m.CategoryCreate{
+	id, err := a.servicePorts.CategoryManagement.CreateCategory(ctx, actorFromClaims(*a.claims), m.CategoryCreate{
 		ParentID:    parentID,
 		Name:        name,
 		Description: description,
@@ -753,7 +753,7 @@ func (a *App) updateCategory(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	category, err := a.servicePorts.CategoryManagement.UpdateCategory(ctx, id, m.CategoryUpdate{
+	category, err := a.servicePorts.CategoryManagement.UpdateCategory(ctx, actorFromClaims(*a.claims), id, m.CategoryUpdate{
 		ParentID:    parentID,
 		Name:        name,
 		Description: description,
@@ -773,7 +773,7 @@ func (a *App) deleteCategory(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return a.servicePorts.CategoryManagement.DeleteCategoryByID(ctx, id)
+	return a.servicePorts.CategoryManagement.DeleteCategoryByID(ctx, actorFromClaims(*a.claims), id)
 }
 
 func (a *App) addressesMenu(ctx context.Context) error {
@@ -1288,7 +1288,7 @@ func (a *App) deleteSeller(ctx context.Context) error {
 }
 
 func (a *App) sellerStats(ctx context.Context) error {
-	claims, ok := a.requireAuth()
+	_, ok := a.requireAuth()
 	if !ok {
 		return nil
 	}
@@ -1304,7 +1304,7 @@ func (a *App) sellerStats(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	stats, err := a.servicePorts.SellerStatistics.GetSellerStats(ctx, actorFromClaims(claims), id, dateFrom, dateTo)
+	stats, err := a.servicePorts.SellerStatistics.GetSellerStats(ctx, id, dateFrom, dateTo)
 	if err != nil {
 		return err
 	}

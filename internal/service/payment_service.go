@@ -38,12 +38,16 @@ func NewPaymentService(
 }
 
 func (ps PaymentService) GetOrderPaymentURL(ctx context.Context, actor Actor, orderID int64) (string, time.Time, error) {
+	if !actor.HasRole(m.RoleBuyer) {
+		return "", time.Time{}, ErrPermissionDenied
+	}
+
 	order, err := ps.orderRepo.GetOrderByID(ctx, orderID)
 	if err != nil {
 		return "", time.Time{}, err
 	}
 
-	if !actor.IsAdmin() && order.UserID != actor.UserID {
+	if order.UserID != actor.UserID {
 		return "", time.Time{}, ErrNotYourOrder
 	}
 

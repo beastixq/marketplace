@@ -26,6 +26,10 @@ func NewAddressService(addressRepo AddressRepo) AddressService {
 }
 
 func (as AddressService) GetAddressesByUserID(ctx context.Context, actor Actor) (addrs []m.Address, err error) {
+	if !actor.HasRole(m.RoleBuyer) {
+		return nil, ErrPermissionDenied
+	}
+
 	addrs, err = as.addrRepo.GetAddressesByUserID(ctx, actor.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrGetAddressesByUserID, err)
@@ -34,6 +38,10 @@ func (as AddressService) GetAddressesByUserID(ctx context.Context, actor Actor) 
 }
 
 func (as AddressService) CreateAddress(ctx context.Context, actor Actor, ac m.AddressCreate) (id int64, err error) {
+	if !actor.HasRole(m.RoleBuyer) {
+		return 0, ErrPermissionDenied
+	}
+
 	ac.UserID = actor.UserID
 	id, err = as.addrRepo.CreateAddress(ctx, ac)
 	if err != nil {
@@ -43,6 +51,10 @@ func (as AddressService) CreateAddress(ctx context.Context, actor Actor, ac m.Ad
 }
 
 func (as AddressService) UpdateAddress(ctx context.Context, actor Actor, id int64, au m.AddressUpdate) (a m.Address, err error) {
+	if !actor.HasRole(m.RoleBuyer) {
+		return m.Address{}, ErrPermissionDenied
+	}
+
 	a, err = as.addrRepo.GetAddressByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -62,6 +74,10 @@ func (as AddressService) UpdateAddress(ctx context.Context, actor Actor, id int6
 }
 
 func (as AddressService) DeleteAddressByID(ctx context.Context, actor Actor, id int64) (err error) {
+	if !actor.HasRole(m.RoleBuyer) {
+		return ErrPermissionDenied
+	}
+
 	a, err := as.addrRepo.GetAddressByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {

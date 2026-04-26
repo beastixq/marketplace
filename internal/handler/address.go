@@ -29,6 +29,10 @@ func (ah AddressHandler) GetAddresses(w http.ResponseWriter, r *http.Request) {
 
 	addrs, err := ah.addressService.GetAddressesByUserID(r.Context(), actor)
 	if err != nil {
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -84,6 +88,10 @@ func (ah AddressHandler) CreateAddress(w http.ResponseWriter, r *http.Request) {
 		IsDefault: req.IsDefault,
 	})
 	if err != nil {
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -151,6 +159,10 @@ func (ah AddressHandler) UpdateAddress(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourAddress.Error())
 			return
 		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -177,6 +189,10 @@ func (ah AddressHandler) DeleteAddress(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, service.ErrNotYourAddress) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourAddress.Error())
+			return
+		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
 			return
 		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())

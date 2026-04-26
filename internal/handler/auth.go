@@ -76,6 +76,10 @@ func (ah AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, service.ErrAccountWithEmailAlreadyExists.Error())
 			return
 		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

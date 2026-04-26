@@ -34,6 +34,10 @@ func (oh OrderHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 
 	orders, err := oh.orderService.GetOrdersByUserID(r.Context(), actor, pg)
 	if err != nil {
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -68,6 +72,10 @@ func (oh OrderHandler) GetOrder(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourOrder.Error())
 			return
 		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -98,6 +106,10 @@ func (oh OrderHandler) GetOrderItems(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourOrder.Error())
 			return
 		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -118,6 +130,10 @@ func (oh OrderHandler) GetCart(w http.ResponseWriter, r *http.Request) {
 
 	cart, err := oh.orderService.GetCart(r.Context(), actor)
 	if err != nil {
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		if errors.Is(err, service.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "Cart not found")
 			return
@@ -159,6 +175,10 @@ func (oh OrderHandler) AddCartItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := oh.orderService.AddItemToCart(r.Context(), actor, req.ProductID, req.Quantity); err != nil {
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		if errors.Is(err, service.ErrQuantityTooBig) {
 			writeError(w, http.StatusBadRequest, service.ErrQuantityTooBig.Error())
 			return
@@ -205,6 +225,10 @@ func (oh OrderHandler) UpdateCartItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := oh.orderService.ChangeQuantityCartItem(r.Context(), actor, id, req.Quantity); err != nil {
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		if errors.Is(err, service.ErrQuantityTooBig) {
 			writeError(w, http.StatusBadRequest, service.ErrQuantityTooBig.Error())
 			return
@@ -230,6 +254,10 @@ func (oh OrderHandler) DeleteCartItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := oh.orderService.DeleteCartItem(r.Context(), actor, id); err != nil {
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -260,6 +288,10 @@ func (oh OrderHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 
 	orderIDs, err := oh.orderService.Checkout(r.Context(), actor, req.AddressID)
 	if err != nil {
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		if errors.Is(err, service.ErrCartNotFound) {
 			writeError(w, http.StatusNotFound, service.ErrCartNotFound.Error())
 			return
@@ -296,6 +328,10 @@ func (oh OrderHandler) PayOrder(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourOrder.Error())
 			return
 		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		if errors.Is(err, service.ErrOrderStatusInvalid) {
 			writeError(w, http.StatusConflict, service.ErrOrderStatusInvalid.Error())
 			return
@@ -326,6 +362,10 @@ func (oh OrderHandler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, service.ErrNotYourOrder) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourOrder.Error())
+			return
+		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
 			return
 		}
 		if errors.Is(err, service.ErrOrderStatusInvalid) {
@@ -364,6 +404,10 @@ func (oh OrderHandler) ShipOrder(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourOrder.Error())
 			return
 		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		if errors.Is(err, service.ErrOrderStatusInvalid) {
 			writeError(w, http.StatusConflict, service.ErrOrderStatusInvalid.Error())
 			return
@@ -398,6 +442,10 @@ func (oh OrderHandler) DeliverOrder(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, service.ErrNotYourOrder) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourOrder.Error())
+			return
+		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
 			return
 		}
 		if errors.Is(err, service.ErrOrderStatusInvalid) {

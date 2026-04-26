@@ -249,6 +249,10 @@ func (ph ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourSeller.Error())
 			return
 		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -318,6 +322,10 @@ func (ph ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourSeller.Error())
 			return
 		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -344,6 +352,10 @@ func (ph ProductHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, service.ErrNotYourSeller) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourSeller.Error())
+			return
+		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
 			return
 		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())

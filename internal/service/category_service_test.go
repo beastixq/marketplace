@@ -163,7 +163,7 @@ func TestCreateCategory(t *testing.T) {
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
 			mock.EXPECT().CreateCategory(ctx, tCase.Create).Return(tCase.MockReturn.ID, tCase.MockReturn.Error)
-			id, err := svc.CreateCategory(ctx, tCase.Create)
+			id, err := svc.CreateCategory(ctx, testActor(someID, m.RoleAdmin), tCase.Create)
 			assertError(t, err, tCase.ExpectedErr)
 			if id != tCase.ExpectedID {
 				t.Fatalf("invalid id. expected: %v, got: %v", tCase.ExpectedID, id)
@@ -218,7 +218,7 @@ func TestUpdateCategory(t *testing.T) {
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
 			mock.EXPECT().UpdateCategory(ctx, tCase.CategoryID, tCase.Update).Return(tCase.MockReturn.Category, tCase.MockReturn.Error)
-			cat, err := svc.UpdateCategory(ctx, tCase.CategoryID, tCase.Update)
+			cat, err := svc.UpdateCategory(ctx, testActor(someID, m.RoleAdmin), tCase.CategoryID, tCase.Update)
 			assertError(t, err, tCase.ExpectedErr)
 			assertCategory(t, cat, tCase.ExpectedCategory)
 		})
@@ -253,7 +253,7 @@ func TestDeleteCategoryByID(t *testing.T) {
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
 			mock.EXPECT().DeleteCategoryByID(ctx, tCase.CategoryID).Return(tCase.MockError)
-			err := svc.DeleteCategoryByID(ctx, tCase.CategoryID)
+			err := svc.DeleteCategoryByID(ctx, testActor(someID, m.RoleAdmin), tCase.CategoryID)
 			assertError(t, err, tCase.ExpectedErr)
 		})
 	}

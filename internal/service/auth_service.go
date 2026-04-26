@@ -20,7 +20,7 @@ import (
 type AuthUserProvider interface {
 	CreateUser(ctx context.Context, uc m.UserCreate) (id int64, err error)
 	GetAuthUserByID(ctx context.Context, id int64) (u m.User, err error)
-	GetUserByEmail(ctx context.Context, email string) (u m.User, err error)
+	GetAuthUserByEmail(ctx context.Context, email string) (u m.User, err error)
 }
 
 // TokenBlocklist stores revoked token JTIs (e.g. Redis SET with TTL).
@@ -74,6 +74,9 @@ func (as AuthService) Register(ctx context.Context, uc m.UserCreate) (token stri
 		if errors.Is(err, ErrAccountWithEmailAlreadyExists) {
 			return "", ErrAccountWithEmailAlreadyExists
 		}
+		if errors.Is(err, ErrPermissionDenied) {
+			return "", ErrPermissionDenied
+		}
 		return "", fmt.Errorf("%w: %v", ErrCreateUser, err)
 	}
 
@@ -93,7 +96,7 @@ func (as AuthService) Register(ctx context.Context, uc m.UserCreate) (token stri
 }
 
 func (as AuthService) Login(ctx context.Context, email, password string) (token string, err error) {
-	user, err := as.userProvider.GetUserByEmail(ctx, email)
+	user, err := as.userProvider.GetAuthUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return "", ErrUserNotFound

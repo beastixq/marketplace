@@ -88,6 +88,10 @@ func (ps ProductService) GetReviewsByProductID(ctx context.Context, pid int64, o
 }
 
 func (ps ProductService) CreateProduct(ctx context.Context, actor Actor, pc m.ProductCreate) (id int64, err error) {
+	if !actor.IsAdmin() && !actor.HasRole(m.RoleSeller) {
+		return 0, ErrPermissionDenied
+	}
+
 	s, err := ps.sellerRepo.GetSellerByID(ctx, pc.SellerID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -95,8 +99,10 @@ func (ps ProductService) CreateProduct(ctx context.Context, actor Actor, pc m.Pr
 		}
 		return 0, fmt.Errorf("%w: %v", ErrGetSellerByID, err)
 	}
-	if !actor.IsAdmin() && s.UserID != actor.UserID {
-		return 0, ErrNotYourSeller
+	if !actor.IsAdmin() {
+		if s.UserID != actor.UserID {
+			return 0, ErrNotYourSeller
+		}
 	}
 
 	id, err = ps.productRepo.CreateProduct(ctx, pc)
@@ -107,6 +113,10 @@ func (ps ProductService) CreateProduct(ctx context.Context, actor Actor, pc m.Pr
 }
 
 func (ps ProductService) UpdateProduct(ctx context.Context, actor Actor, id int64, pu m.ProductUpdate) (p m.Product, err error) {
+	if !actor.IsAdmin() && !actor.HasRole(m.RoleSeller) {
+		return m.Product{}, ErrPermissionDenied
+	}
+
 	p, err = ps.productRepo.GetProductByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -122,8 +132,10 @@ func (ps ProductService) UpdateProduct(ctx context.Context, actor Actor, id int6
 		}
 		return m.Product{}, fmt.Errorf("%w: %v", ErrGetSellerByID, err)
 	}
-	if !actor.IsAdmin() && s.UserID != actor.UserID {
-		return m.Product{}, ErrNotYourSeller
+	if !actor.IsAdmin() {
+		if s.UserID != actor.UserID {
+			return m.Product{}, ErrNotYourSeller
+		}
 	}
 
 	p, err = ps.productRepo.UpdateProduct(ctx, id, pu)
@@ -134,6 +146,10 @@ func (ps ProductService) UpdateProduct(ctx context.Context, actor Actor, id int6
 }
 
 func (ps ProductService) DeleteProductByID(ctx context.Context, actor Actor, id int64) (err error) {
+	if !actor.IsAdmin() && !actor.HasRole(m.RoleSeller) {
+		return ErrPermissionDenied
+	}
+
 	p, err := ps.productRepo.GetProductByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -149,8 +165,10 @@ func (ps ProductService) DeleteProductByID(ctx context.Context, actor Actor, id 
 		}
 		return fmt.Errorf("%w: %v", ErrGetSellerByID, err)
 	}
-	if !actor.IsAdmin() && s.UserID != actor.UserID {
-		return ErrNotYourSeller
+	if !actor.IsAdmin() {
+		if s.UserID != actor.UserID {
+			return ErrNotYourSeller
+		}
 	}
 
 	err = ps.productRepo.DeleteProductByID(ctx, id)

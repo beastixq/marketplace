@@ -56,6 +56,10 @@ func (rh ReviewHandler) CreateReview(w http.ResponseWriter, r *http.Request) {
 		Comment:   req.Comment,
 	})
 	if err != nil {
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -113,6 +117,10 @@ func (rh ReviewHandler) UpdateReview(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourReview.Error())
 			return
 		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -139,6 +147,10 @@ func (rh ReviewHandler) DeleteReview(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, service.ErrNotYourReview) {
 			writeError(w, http.StatusForbidden, service.ErrNotYourReview.Error())
+			return
+		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
 			return
 		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())

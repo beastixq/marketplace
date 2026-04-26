@@ -149,7 +149,7 @@ func TestAuthLogin(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
-			userMock.EXPECT().GetUserByEmail(ctx, tCase.Email).Return(tCase.MockReturn.User, tCase.MockReturn.Error)
+			userMock.EXPECT().GetAuthUserByEmail(ctx, tCase.Email).Return(tCase.MockReturn.User, tCase.MockReturn.Error)
 
 			token, err := svc.Login(ctx, tCase.Email, tCase.Password)
 			assertError(t, err, tCase.ExpectedErr)

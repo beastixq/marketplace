@@ -42,6 +42,10 @@ func (ph PaymentHandler) GetPaymentLink(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusForbidden, service.ErrNotYourOrder.Error())
 			return
 		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		if errors.Is(err, service.ErrOrderStatusInvalid) {
 			writeError(w, http.StatusConflict, service.ErrOrderStatusInvalid.Error())
 			return

@@ -34,6 +34,10 @@ func (uh UserHandler) GetMyProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := uh.userService.GetUserByID(r.Context(), actor, actor.UserID)
 	if err != nil {
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -95,6 +99,10 @@ func (uh UserHandler) UpdateMyProfile(w http.ResponseWriter, r *http.Request) {
 		Phone:    req.Phone,
 	})
 	if err != nil {
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -108,6 +116,10 @@ func (uh UserHandler) DeleteMyAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := uh.userService.DeleteUserByID(r.Context(), actor, actor.UserID); err != nil {
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
 		return
 	}
@@ -141,6 +153,10 @@ func (uh UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	if err := uh.userService.ChangePasswordUser(r.Context(), actor, req.OldPassword, req.NewPassword); err != nil {
 		if errors.Is(err, service.ErrWrongPassword) {
 			writeError(w, http.StatusUnauthorized, service.ErrWrongPassword.Error())
+			return
+		}
+		if errors.Is(err, service.ErrPermissionDenied) {
+			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
 			return
 		}
 		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
