@@ -38,7 +38,7 @@ var russianCities = []string{
 func CreateAddresses(tx pgx.Tx, ctx context.Context, userIDs []int64, count int) (addressesIDs []int64, err error) {
 	createdInLoop := 0
 	psql := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
-	insertBuilder := psql.Insert("addresses").Columns("user_id", "city", "street", "zip_code", "is_default")
+	insertBuilder := psql.Insert("addresses").Columns("user_id", "city", "street", "zip_code", "house", "is_default")
 	addressesIDs = make([]int64, count)
 
 	hasDefault := make(map[int64]bool)
@@ -63,7 +63,8 @@ func CreateAddresses(tx pgx.Tx, ctx context.Context, userIDs []int64, count int)
 			hasDefault[userID] = true
 		}
 
-		insertBuilder = insertBuilder.Values(userID, city, street, zipCode, isDefault)
+		house := fmt.Sprintf("%d", rand.Intn(100)+1)
+		insertBuilder = insertBuilder.Values(userID, city, street, zipCode, house, isDefault)
 		createdInLoop++
 
 		if i%10 == 9 || i == count-1 {
@@ -87,7 +88,7 @@ func CreateAddresses(tx pgx.Tx, ctx context.Context, userIDs []int64, count int)
 			if err = rows.Err(); err != nil {
 				return nil, fmt.Errorf("Addresses %s: %v", ErrCloseRows, err)
 			}
-			insertBuilder = psql.Insert("addresses").Columns("user_id", "city", "street", "zip_code", "is_default")
+			insertBuilder = psql.Insert("addresses").Columns("user_id", "city", "street", "zip_code", "house", "is_default")
 			createdInLoop = 0
 		}
 	}
