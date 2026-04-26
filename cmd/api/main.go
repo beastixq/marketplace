@@ -3,16 +3,16 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
+	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	payment "github.com/beastixq/marketplace/internal/adapter/payment"
 	"github.com/beastixq/marketplace/internal/config"
 	"github.com/beastixq/marketplace/internal/handler"
+	"github.com/beastixq/marketplace/internal/logging"
 	repo "github.com/beastixq/marketplace/internal/repository"
 	svc "github.com/beastixq/marketplace/internal/service"
 	"github.com/beastixq/marketplace/internal/web"
@@ -24,16 +24,26 @@ func main() {
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
-		log.Fatalf("load config: %v", err)
+		// Logger not yet initialized; fall back to stderr.
+		fatal("load config", err)
 	}
 
-	fmt.Println("Marketplace server starting")
+	logger, logCloser, err := logging.New(cfg.Logging)
+	if err != nil {
+		fatal("init logger", err)
+	}
+	defer logCloser.Close()
+	slog.SetDefault(logger)
+
+	logger.Info("marketplace api starting", "addr", cfg.Server.Addr, "log_level", cfg.Logging.Level)
 
 	pool, err := pgxpool.New(context.Background(), cfg.Database.DSN)
 	if err != nil {
-		log.Fatalf("connect database: %v", err)
+		logger.Error("connect database", "error", err)
+		os.Exit(2)
 	}
 	defer pool.Close()
+	logger.Info("database connected")
 
 	userRepo := repo.NewUserRepo(pool)
 	sellerRepo := repo.NewSellerRepo(pool)
@@ -59,8 +69,12 @@ func main() {
 	gateway := payment.NewMockBankGateway(cfg.Payment.GatewayURL)
 	paymentService := svc.NewPaymentService(orderRepo, gateway, paymentTTL)
 
-	logger := slog.Default()
-	worker := svc.NewOrderExpirationWorker(orderService, cfg.Orders.ExpirationCheckInterval.Std(), paymentTTL, logger)
+	worker := svc.NewOrderExpirationWorker(
+		orderService,
+		cfg.Orders.ExpirationCheckInterval.Std(),
+		paymentTTL,
+		logger.With("component", "order-expiration-worker"),
+	)
 	go worker.Run(context.Background())
 
 	authHandler := handler.NewAuthHandler(authService)
@@ -75,6 +89,7 @@ func main() {
 	adminHandler := handler.NewAdminHandler(userService, sellerService)
 
 	apiRouter := handler.NewRouter(
+		logger.With("component", "http"),
 		authService,
 		authHandler,
 		userHandler,
@@ -98,8 +113,14 @@ func main() {
 	mux.Handle("/api/", apiRouter)
 	mux.Handle("/", webRouter)
 
-	fmt.Printf("Listening on %s\n", cfg.Server.Addr)
+	logger.Info("listening", "addr", cfg.Server.Addr)
 	if err := http.ListenAndServe(cfg.Server.Addr, mux); err != nil {
-		log.Fatalf("http server: %v", err)
+		logger.Error("http server stopped", "error", err)
+		os.Exit(3)
 	}
+}
+
+func fatal(stage string, err error) {
+	_, _ = os.Stderr.WriteString(stage + ": " + err.Error() + "\n")
+	os.Exit(1)
 }

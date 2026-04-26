@@ -20,3 +20,10 @@ payment:
 
 orders:
   expiration_check_interval: "1m"
+
+logging:
+  level: "info"                       # debug | info | warn | error
+  format: "json"                      # json | text
+  file: "logs/marketplace.log"        # empty disables file sink
+  console: true                       # mirror to stdout
+  add_source: false                   # include source file:line

@@ -25,6 +25,12 @@ payment:
   gateway_url: "http://localhost:9000"
 orders:
   expiration_check_interval: "1m"
+logging:
+  level: "info"
+  format: "json"
+  file: "logs/test.log"
+  console: true
+  add_source: false
 `
 
 func writeConfig(t *testing.T, body string) string {
@@ -109,6 +115,12 @@ func TestValidate(t *testing.T) {
 			Orders: config.OrdersConfig{
 				ExpirationCheckInterval: config.Duration(time.Second),
 			},
+			Logging: config.LoggingConfig{
+				Level:   "info",
+				Format:  "json",
+				File:    "logs/x.log",
+				Console: true,
+			},
 		}
 	}
 
@@ -128,6 +140,9 @@ func TestValidate(t *testing.T) {
 		{"empty gateway URL", func(c *config.Config) { c.Payment.GatewayURL = "" }, "payment.gateway_url"},
 		{"non-absolute gateway URL", func(c *config.Config) { c.Payment.GatewayURL = "/relative" }, "payment.gateway_url"},
 		{"zero orders interval", func(c *config.Config) { c.Orders.ExpirationCheckInterval = 0 }, "orders.expiration_check_interval"},
+		{"bad log level", func(c *config.Config) { c.Logging.Level = "trace" }, "logging.level"},
+		{"bad log format", func(c *config.Config) { c.Logging.Format = "xml" }, "logging.format"},
+		{"no log sinks", func(c *config.Config) { c.Logging.File = ""; c.Logging.Console = false }, "logging:"},
 	}
 
 	for _, tt := range tests {

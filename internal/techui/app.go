@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
+	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -143,13 +146,18 @@ type App struct {
 	out          io.Writer
 	token        string
 	claims       *m.TokenClaims
+	logger       *slog.Logger
 }
 
-func New(servicePorts ServicePorts, in io.Reader, out io.Writer) *App {
+func New(servicePorts ServicePorts, in io.Reader, out io.Writer, logger *slog.Logger) *App {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	return &App{
 		servicePorts: servicePorts,
 		in:           bufio.NewReader(in),
 		out:          out,
+		logger:       logger,
 	}
 }
 
@@ -218,21 +226,21 @@ func (a *App) userMenu(ctx context.Context) error {
 	}
 	switch choice {
 	case "1":
-		a.run(ctx, a.profileMenu)
+		return a.profileMenu(ctx)
 	case "2":
-		a.run(ctx, a.productsMenu)
+		return a.productsMenu(ctx)
 	case "3":
-		a.run(ctx, a.categoriesMenu)
+		return a.categoriesMenu(ctx)
 	case "4":
-		a.run(ctx, a.addressesMenu)
+		return a.addressesMenu(ctx)
 	case "5":
-		a.run(ctx, a.ordersMenu)
+		return a.ordersMenu(ctx)
 	case "6":
-		a.run(ctx, a.sellerMenu)
+		return a.sellerMenu(ctx)
 	case "7":
-		a.run(ctx, a.reviewsMenu)
+		return a.reviewsMenu(ctx)
 	case "8":
-		a.run(ctx, a.adminMenu)
+		return a.adminMenu(ctx)
 	case "9":
 		a.run(ctx, a.logout)
 	case "0":
@@ -329,19 +337,19 @@ func (a *App) profileMenu(ctx context.Context) error {
 	}
 	switch choice {
 	case "1":
-		return a.showProfile(ctx)
+		a.run(ctx, a.showProfile)
 	case "2":
-		return a.updateProfile(ctx)
+		a.run(ctx, a.updateProfile)
 	case "3":
-		return a.changePassword(ctx)
+		a.run(ctx, a.changePassword)
 	case "4":
-		return a.deleteProfile(ctx)
+		a.run(ctx, a.deleteProfile)
 	case "0":
 		return nil
 	default:
 		a.println("Unknown command")
-		return nil
 	}
+	return nil
 }
 
 func (a *App) showProfile(ctx context.Context) error {
@@ -440,25 +448,25 @@ func (a *App) productsMenu(ctx context.Context) error {
 	}
 	switch choice {
 	case "1":
-		return a.listProducts(ctx)
+		a.run(ctx, a.listProducts)
 	case "2":
-		return a.showProduct(ctx)
+		a.run(ctx, a.showProduct)
 	case "3":
-		return a.productPriceHistory(ctx)
+		a.run(ctx, a.productPriceHistory)
 	case "4":
-		return a.productReviews(ctx)
+		a.run(ctx, a.productReviews)
 	case "5":
-		return a.createProduct(ctx)
+		a.run(ctx, a.createProduct)
 	case "6":
-		return a.updateProduct(ctx)
+		a.run(ctx, a.updateProduct)
 	case "7":
-		return a.deleteProduct(ctx)
+		a.run(ctx, a.deleteProduct)
 	case "0":
 		return nil
 	default:
 		a.println("Unknown command")
-		return nil
 	}
+	return nil
 }
 
 func (a *App) listProducts(ctx context.Context) error {
@@ -664,21 +672,21 @@ func (a *App) categoriesMenu(ctx context.Context) error {
 	}
 	switch choice {
 	case "1":
-		return a.listCategories(ctx)
+		a.run(ctx, a.listCategories)
 	case "2":
-		return a.showCategory(ctx)
+		a.run(ctx, a.showCategory)
 	case "3":
-		return a.createCategory(ctx)
+		a.run(ctx, a.createCategory)
 	case "4":
-		return a.updateCategory(ctx)
+		a.run(ctx, a.updateCategory)
 	case "5":
-		return a.deleteCategory(ctx)
+		a.run(ctx, a.deleteCategory)
 	case "0":
 		return nil
 	default:
 		a.println("Unknown command")
-		return nil
 	}
+	return nil
 }
 
 func (a *App) listCategories(ctx context.Context) error {
@@ -789,19 +797,19 @@ func (a *App) addressesMenu(ctx context.Context) error {
 	}
 	switch choice {
 	case "1":
-		return a.listAddresses(ctx)
+		a.run(ctx, a.listAddresses)
 	case "2":
-		return a.createAddress(ctx)
+		a.run(ctx, a.createAddress)
 	case "3":
-		return a.updateAddress(ctx)
+		a.run(ctx, a.updateAddress)
 	case "4":
-		return a.deleteAddress(ctx)
+		a.run(ctx, a.deleteAddress)
 	case "0":
 		return nil
 	default:
 		a.println("Unknown command")
-		return nil
 	}
+	return nil
 }
 
 func (a *App) listAddresses(ctx context.Context) error {
@@ -934,35 +942,35 @@ func (a *App) ordersMenu(ctx context.Context) error {
 	}
 	switch choice {
 	case "1":
-		return a.showCart(ctx)
+		a.run(ctx, a.showCart)
 	case "2":
-		return a.addCartItem(ctx)
+		a.run(ctx, a.addCartItem)
 	case "3":
-		return a.changeCartItem(ctx)
+		a.run(ctx, a.changeCartItem)
 	case "4":
-		return a.deleteCartItem(ctx)
+		a.run(ctx, a.deleteCartItem)
 	case "5":
-		return a.checkout(ctx)
+		a.run(ctx, a.checkout)
 	case "6":
-		return a.listOrders(ctx)
+		a.run(ctx, a.listOrders)
 	case "7":
-		return a.showOrder(ctx)
+		a.run(ctx, a.showOrder)
 	case "8":
-		return a.showOrderItems(ctx)
+		a.run(ctx, a.showOrderItems)
 	case "9":
-		return a.paymentURL(ctx)
+		a.run(ctx, a.paymentURL)
 	case "10":
-		return a.processPayment(ctx)
+		a.run(ctx, a.processPayment)
 	case "11":
-		return a.payOrderDirectly(ctx)
+		a.run(ctx, a.payOrderDirectly)
 	case "12":
-		return a.cancelOrder(ctx)
+		a.run(ctx, a.cancelOrder)
 	case "0":
 		return nil
 	default:
 		a.println("Unknown command")
-		return nil
 	}
+	return nil
 }
 
 func (a *App) showCart(ctx context.Context) error {
@@ -1182,29 +1190,29 @@ func (a *App) sellerMenu(ctx context.Context) error {
 	}
 	switch choice {
 	case "1":
-		return a.mySeller(ctx)
+		a.run(ctx, a.mySeller)
 	case "2":
-		return a.createSeller(ctx)
+		a.run(ctx, a.createSeller)
 	case "3":
-		return a.showSeller(ctx)
+		a.run(ctx, a.showSeller)
 	case "4":
-		return a.updateSeller(ctx)
+		a.run(ctx, a.updateSeller)
 	case "5":
-		return a.deleteSeller(ctx)
+		a.run(ctx, a.deleteSeller)
 	case "6":
-		return a.sellerStats(ctx)
+		a.run(ctx, a.sellerStats)
 	case "7":
-		return a.sellerOrders(ctx)
+		a.run(ctx, a.sellerOrders)
 	case "8":
-		return a.shipOrder(ctx)
+		a.run(ctx, a.shipOrder)
 	case "9":
-		return a.deliverOrder(ctx)
+		a.run(ctx, a.deliverOrder)
 	case "0":
 		return nil
 	default:
 		a.println("Unknown command")
-		return nil
 	}
+	return nil
 }
 
 func (a *App) mySeller(ctx context.Context) error {
@@ -1375,19 +1383,19 @@ func (a *App) reviewsMenu(ctx context.Context) error {
 	}
 	switch choice {
 	case "1":
-		return a.createReview(ctx)
+		a.run(ctx, a.createReview)
 	case "2":
-		return a.showReview(ctx)
+		a.run(ctx, a.showReview)
 	case "3":
-		return a.updateReview(ctx)
+		a.run(ctx, a.updateReview)
 	case "4":
-		return a.deleteReview(ctx)
+		a.run(ctx, a.deleteReview)
 	case "0":
 		return nil
 	default:
 		a.println("Unknown command")
-		return nil
 	}
+	return nil
 }
 
 func (a *App) createReview(ctx context.Context) error {
@@ -1493,19 +1501,19 @@ func (a *App) adminMenu(ctx context.Context) error {
 	}
 	switch choice {
 	case "1":
-		return a.adminListUsers(ctx)
+		a.run(ctx, a.adminListUsers)
 	case "2":
-		return a.adminShowUser(ctx)
+		a.run(ctx, a.adminShowUser)
 	case "3":
-		return a.adminUpdateUserRole(ctx)
+		a.run(ctx, a.adminUpdateUserRole)
 	case "4":
-		return a.adminDeleteUser(ctx)
+		a.run(ctx, a.adminDeleteUser)
 	case "0":
 		return nil
 	default:
 		a.println("Unknown command")
-		return nil
 	}
+	return nil
 }
 
 func (a *App) adminListUsers(ctx context.Context) error {
@@ -1590,15 +1598,42 @@ func (a *App) adminDeleteUser(ctx context.Context) error {
 }
 
 func (a *App) run(ctx context.Context, fn func(context.Context) error) {
+	action := actionName(fn)
+	start := time.Now()
 	err := fn(ctx)
+	attrs := []any{
+		slog.String("action", action),
+		slog.Duration("duration", time.Since(start)),
+	}
+	if a.claims != nil {
+		attrs = append(attrs,
+			slog.Int64("user_id", a.claims.UserID),
+			slog.String("role", string(a.claims.Role)),
+		)
+	}
+
 	switch {
 	case err == nil:
 		a.println("OK")
+		a.logger.Info("user action", attrs...)
 	case errors.Is(err, io.EOF):
 		return
 	default:
 		a.printf("ERROR: %v\n", err)
+		a.logger.Error("user action failed", append(attrs, slog.String("error", err.Error()))...)
 	}
+}
+
+// actionName extracts the unqualified method name (e.g. "login") from a
+// command function so logs identify the user action without leaking the
+// full Go path.
+func actionName(fn func(context.Context) error) string {
+	full := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
+	// e.g. "github.com/.../techui.(*App).login-fm" -> "login"
+	if i := strings.LastIndex(full, "."); i >= 0 {
+		full = full[i+1:]
+	}
+	return strings.TrimSuffix(full, "-fm")
 }
 
 func (a *App) requireAuth() (m.TokenClaims, bool) {

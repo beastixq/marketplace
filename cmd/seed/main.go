@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"log/slog"
 	"time"
 
 	"github.com/go-faker/faker/v4"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/beastixq/marketplace/cmd/seed/generators"
 	"github.com/beastixq/marketplace/internal/config"
+	"github.com/beastixq/marketplace/internal/logging"
 )
 
 // type UsersGenerator interface {
@@ -39,6 +41,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v\n", err)
 	}
+
+	logger, closer, err := logging.New(cfg.Logging)
+	if err != nil {
+		log.Fatalf("Failed to init logger: %v\n", err)
+	}
+	defer closer.Close()
+	// Route stdlib log.* through slog so the existing log.Println/Printf
+	// calls below land in the configured file/stdout sinks unchanged.
+	slog.SetDefault(logger)
 
 	log.Println("Start seeding...")
 

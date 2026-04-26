@@ -3,6 +3,7 @@ package techui
 import (
 	"context"
 	"io"
+	"log/slog"
 
 	servicecomponent "github.com/beastixq/marketplace/internal/component/service"
 	ui "github.com/beastixq/marketplace/internal/techui"
@@ -12,7 +13,7 @@ type Component struct {
 	app *ui.App
 }
 
-func New(services *servicecomponent.Component, in io.Reader, out io.Writer) *Component {
+func New(services *servicecomponent.Component, in io.Reader, out io.Writer, logger *slog.Logger) *Component {
 	return &Component{
 		app: ui.New(ui.ServicePorts{
 			Auth:               services.Auth,
@@ -31,7 +32,7 @@ func New(services *servicecomponent.Component, in io.Reader, out io.Writer) *Com
 			SellerOrders:       services.Order,
 			Payments:           services.Payment,
 			ReviewManagement:   services.Review,
-		}, in, out),
+		}, in, out, logger),
 	}
 }
 

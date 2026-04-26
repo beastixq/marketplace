@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/beastixq/marketplace/internal/middleware"
@@ -10,6 +11,7 @@ import (
 )
 
 func NewRouter(
+	logger *slog.Logger,
 	authService service.AuthService,
 	authHandler AuthHandler,
 	userHandler UserHandler,
@@ -23,6 +25,14 @@ func NewRouter(
 	adminHandler AdminHandler,
 ) http.Handler {
 	r := chi.NewRouter()
+
+	// Order matters: ActorHolder publishes a context cell, AuthMiddleware
+	// (deeper in protected groups) fills it, RequestLogger reads it after
+	// the handler returns. Without the holder claims wouldn't be visible
+	// to outer middleware (Request.Context() does not propagate up).
+	r.Use(middleware.ActorHolder())
+	r.Use(middleware.RequestLogger(logger))
+	r.Use(middleware.Recoverer(logger))
 
 	// Public routes — no auth
 	r.Post("/api/v1/auth/register", authHandler.Register)

@@ -23,6 +23,7 @@ type Config struct {
 	Auth     AuthConfig     `yaml:"auth"`
 	Payment  PaymentConfig  `yaml:"payment"`
 	Orders   OrdersConfig   `yaml:"orders"`
+	Logging  LoggingConfig  `yaml:"logging"`
 }
 
 type ServerConfig struct {
@@ -46,6 +47,14 @@ type PaymentConfig struct {
 
 type OrdersConfig struct {
 	ExpirationCheckInterval Duration `yaml:"expiration_check_interval"`
+}
+
+type LoggingConfig struct {
+	Level     string `yaml:"level"`      // debug|info|warn|error
+	Format    string `yaml:"format"`     // json|text
+	File      string `yaml:"file"`       // path to log file; empty disables file sink
+	Console   bool   `yaml:"console"`    // also write to stdout
+	AddSource bool   `yaml:"add_source"` // include source file:line
 }
 
 // Duration wraps time.Duration with YAML support for human-readable strings ("15m", "24h").
@@ -119,6 +128,24 @@ func (c *Config) Validate() error {
 	}
 	if c.Orders.ExpirationCheckInterval <= 0 {
 		return errors.New("orders.expiration_check_interval must be positive")
+	}
+	return c.Logging.validate()
+}
+
+var (
+	validLogLevels  = map[string]struct{}{"debug": {}, "info": {}, "warn": {}, "error": {}}
+	validLogFormats = map[string]struct{}{"json": {}, "text": {}}
+)
+
+func (l LoggingConfig) validate() error {
+	if _, ok := validLogLevels[l.Level]; !ok {
+		return fmt.Errorf("logging.level must be one of debug|info|warn|error, got %q", l.Level)
+	}
+	if _, ok := validLogFormats[l.Format]; !ok {
+		return fmt.Errorf("logging.format must be one of json|text, got %q", l.Format)
+	}
+	if l.File == "" && !l.Console {
+		return errors.New("logging: at least one sink must be enabled (file or console)")
 	}
 	return nil
 }
