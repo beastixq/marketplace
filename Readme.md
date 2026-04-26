@@ -160,10 +160,6 @@ DATABASE_URL="postgres://..." go run ./cmd/techui
 
 #### Компонент доступа к данным (Repository)
 
-Интерфейсы репозиториев (определены в пакете `service`):
-
-![C4 L4 Interfaces](diagrams/out/C4_L4_Interfaces.png)
-
 Реализации и DB entities (пакет `repository`):
 
 ![C4 L4 Repository](diagrams/out/C4_L4_Repository.png)
