@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -29,11 +28,7 @@ func (ah AddressHandler) GetAddresses(w http.ResponseWriter, r *http.Request) {
 
 	addrs, err := ah.addressService.GetAddressesByUserID(r.Context(), actor)
 	if err != nil {
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	result := make([]AddressDTO, len(addrs))
@@ -88,11 +83,7 @@ func (ah AddressHandler) CreateAddress(w http.ResponseWriter, r *http.Request) {
 		IsDefault: req.IsDefault,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]int64{"id": id})
@@ -151,19 +142,7 @@ func (ah AddressHandler) UpdateAddress(w http.ResponseWriter, r *http.Request) {
 		IsDefault: req.IsDefault,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrAddressNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrAddressNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrNotYourAddress) {
-			writeError(w, http.StatusForbidden, service.ErrNotYourAddress.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, addressDTO(addr))
@@ -183,19 +162,7 @@ func (ah AddressHandler) DeleteAddress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ah.addressService.DeleteAddressByID(r.Context(), actor, id); err != nil {
-		if errors.Is(err, service.ErrAddressNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrAddressNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrNotYourAddress) {
-			writeError(w, http.StatusForbidden, service.ErrNotYourAddress.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

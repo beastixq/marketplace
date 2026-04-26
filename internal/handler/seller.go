@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -33,11 +32,7 @@ func (sh SellerHandler) GetSellerByID(w http.ResponseWriter, r *http.Request) {
 	}
 	seller, err := sh.sellerService.GetSellerByID(r.Context(), id)
 	if err != nil {
-		if errors.Is(err, service.ErrSellerNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrSellerNotFound.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, sellerDTO(seller))
@@ -66,11 +61,7 @@ func (sh SellerHandler) CreateSeller(w http.ResponseWriter, r *http.Request) {
 		Description: req.Description,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]int64{"id": id})
@@ -105,19 +96,7 @@ func (sh SellerHandler) UpdateSeller(w http.ResponseWriter, r *http.Request) {
 		Description: req.Description,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrSellerNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrSellerNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrNotYourSeller) {
-			writeError(w, http.StatusForbidden, service.ErrNotYourSeller.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, sellerDTO(seller))
@@ -138,19 +117,7 @@ func (sh SellerHandler) DeleteSeller(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := sh.sellerService.DeleteSellerByID(r.Context(), actor, sellerID); err != nil {
-		if errors.Is(err, service.ErrSellerNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrSellerNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrNotYourSeller) {
-			writeError(w, http.StatusForbidden, service.ErrNotYourSeller.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -188,15 +155,7 @@ func (sh SellerHandler) GetSellerStats(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := sh.sellerService.GetSellerStats(r.Context(), sellerID, dateFrom, dateTo)
 	if err != nil {
-		if errors.Is(err, service.ErrSellerNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrSellerNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, sellerStatsDTO(stats))
@@ -218,11 +177,7 @@ func (sh SellerHandler) GetSellerOrders(w http.ResponseWriter, r *http.Request) 
 
 	ordersService, err := sh.orderService.GetSellerOrdersByUserID(r.Context(), actor, pg)
 	if err != nil {
-		if errors.Is(err, service.ErrSellerNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrSellerNotFound.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	orders := make([]OrderDTO, len(ordersService))

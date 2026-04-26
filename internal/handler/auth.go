@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 
@@ -72,15 +71,7 @@ func (ah AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Role:     req.Role,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrAccountWithEmailAlreadyExists) {
-			writeError(w, http.StatusConflict, service.ErrAccountWithEmailAlreadyExists.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		w.WriteHeader(http.StatusInternalServerError)
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"token": token})
@@ -111,15 +102,7 @@ func (ah AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	token, err := ah.authService.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
-		if errors.Is(err, service.ErrWrongPassword) {
-			writeError(w, http.StatusUnauthorized, service.ErrWrongPassword.Error())
-			return
-		}
-		if errors.Is(err, service.ErrUserNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrUserNotFound.Error())
-			return
-		}
-		w.WriteHeader(http.StatusInternalServerError)
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"token": token})
@@ -133,7 +116,7 @@ func (ah AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ah.authService.Logout(r.Context(), claims); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		writeServiceError(w, err)
 		return
 	}
 

@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -42,19 +41,7 @@ func (ah AdminHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := ah.userService.GetUserByID(r.Context(), actor, id)
 	if err != nil {
-		if errors.Is(err, service.ErrUserNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrUserNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrNotYourUser) {
-			writeError(w, http.StatusForbidden, service.ErrNotYourUser.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, userDTO(user))
@@ -105,19 +92,7 @@ func (ah AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		Role:     req.Role,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrUserNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrUserNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrNotYourUser) {
-			writeError(w, http.StatusForbidden, service.ErrNotYourUser.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, userDTO(user))
@@ -138,19 +113,7 @@ func (ah AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ah.userService.DeleteUserByID(r.Context(), actor, id); err != nil {
-		if errors.Is(err, service.ErrUserNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrUserNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrNotYourUser) {
-			writeError(w, http.StatusForbidden, service.ErrNotYourUser.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -171,15 +134,7 @@ func (ah AdminHandler) DeleteSeller(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ah.sellerService.DeleteSellerByID(r.Context(), actor, id); err != nil {
-		if errors.Is(err, service.ErrSellerNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrSellerNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

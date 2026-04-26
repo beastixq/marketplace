@@ -44,8 +44,8 @@ var (
 	ErrInvalidSortingOrder          = errors.New("Invalid sorting_order, expected 'asc' or 'desc'")
 
 	// CategoryHandler validation
-	ErrCategoryNameRequired  = errors.New("Category name is required")
-	ErrUpdateCategoryAllNil  = errors.New("No updates in body")
+	ErrCategoryNameRequired = errors.New("Category name is required")
+	ErrUpdateCategoryAllNil = errors.New("No updates in body")
 
 	// AddressHandler validation
 	ErrAddressCityRequired    = errors.New("City is required")

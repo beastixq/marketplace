@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -83,11 +82,7 @@ func (ph ProductHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 	}
 	productsService, err := ph.productService.GetProducts(r.Context(), options)
 	if err != nil {
-		if errors.Is(err, service.ErrNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrNotFound.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	products := make([]ProductDTO, len(productsService))
@@ -106,11 +101,7 @@ func (ph ProductHandler) GetProduct(w http.ResponseWriter, r *http.Request) {
 	}
 	product, err := ph.productService.GetProductByID(r.Context(), id)
 	if err != nil {
-		if errors.Is(err, service.ErrNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrNotFound.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, productDTO(product))
@@ -150,11 +141,7 @@ func (ph ProductHandler) GetProductPriceHistory(w http.ResponseWriter, r *http.R
 
 	priceHistoryService, err := ph.productService.GetProductPriceHistory(r.Context(), id, dateFrom, dateTo)
 	if err != nil {
-		if errors.Is(err, service.ErrProductNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrProductNotFound.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	priceHistory := make([]ProductPriceHistoryDTO, len(priceHistoryService))
@@ -180,11 +167,7 @@ func (ph ProductHandler) GetProductReviews(w http.ResponseWriter, r *http.Reques
 
 	reviewsService, err := ph.productService.GetReviewsByProductID(r.Context(), id, pg)
 	if err != nil {
-		if errors.Is(err, service.ErrProductNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrProductNotFound.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	reviews := make([]ReviewDTO, len(reviewsService))
@@ -241,19 +224,7 @@ func (ph ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 		StockQuantity: req.StockQuantity,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrSellerNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrSellerNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrNotYourSeller) {
-			writeError(w, http.StatusForbidden, service.ErrNotYourSeller.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]int64{"id": id})
@@ -314,19 +285,7 @@ func (ph ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		ChangedBy:     &changedBy,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrProductNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrProductNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrNotYourSeller) {
-			writeError(w, http.StatusForbidden, service.ErrNotYourSeller.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, productDTO(product))
@@ -346,19 +305,7 @@ func (ph ProductHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ph.productService.DeleteProductByID(r.Context(), actor, id); err != nil {
-		if errors.Is(err, service.ErrProductNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrProductNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrNotYourSeller) {
-			writeError(w, http.StatusForbidden, service.ErrNotYourSeller.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

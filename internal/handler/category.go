@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -29,7 +28,7 @@ func (ch CategoryHandler) GetCategories(w http.ResponseWriter, r *http.Request) 
 
 	categories, err := ch.categoryService.GetCategories(r.Context(), pg)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	result := make([]CategoryDTO, len(categories))
@@ -76,11 +75,7 @@ func (ch CategoryHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 		Description: req.Description,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]int64{"id": id})
@@ -132,15 +127,7 @@ func (ch CategoryHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		Description: req.Description,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		if errors.Is(err, service.ErrCategoryNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrCategoryNotFound.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, categoryDTO(category))
@@ -161,15 +148,7 @@ func (ch CategoryHandler) DeleteCategory(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := ch.categoryService.DeleteCategoryByID(r.Context(), actor, id); err != nil {
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		if errors.Is(err, service.ErrCategoryNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrCategoryNotFound.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -56,11 +55,7 @@ func (rh ReviewHandler) CreateReview(w http.ResponseWriter, r *http.Request) {
 		Comment:   req.Comment,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]int64{"id": id})
@@ -109,19 +104,7 @@ func (rh ReviewHandler) UpdateReview(w http.ResponseWriter, r *http.Request) {
 		Comment: req.Comment,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrReviewNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrReviewNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrNotYourReview) {
-			writeError(w, http.StatusForbidden, service.ErrNotYourReview.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, reviewDTO(review))
@@ -141,19 +124,7 @@ func (rh ReviewHandler) DeleteReview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := rh.reviewService.DeleteReviewByID(r.Context(), actor, id); err != nil {
-		if errors.Is(err, service.ErrReviewNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrReviewNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrNotYourReview) {
-			writeError(w, http.StatusForbidden, service.ErrNotYourReview.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

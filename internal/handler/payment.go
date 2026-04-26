@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -34,27 +33,7 @@ func (ph PaymentHandler) GetPaymentLink(w http.ResponseWriter, r *http.Request) 
 
 	paymentURL, expiresAt, err := ph.paymentService.GetOrderPaymentURL(r.Context(), actor, id)
 	if err != nil {
-		if errors.Is(err, service.ErrOrderNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrOrderNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrNotYourOrder) {
-			writeError(w, http.StatusForbidden, service.ErrNotYourOrder.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPermissionDenied) {
-			writeError(w, http.StatusForbidden, service.ErrPermissionDenied.Error())
-			return
-		}
-		if errors.Is(err, service.ErrOrderStatusInvalid) {
-			writeError(w, http.StatusConflict, service.ErrOrderStatusInvalid.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPaymentExpired) {
-			writeError(w, http.StatusGone, service.ErrPaymentExpired.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 
@@ -83,27 +62,7 @@ func (ph PaymentHandler) MockBankCallback(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := ph.paymentService.ProcessOrderPayment(r.Context(), req.Token); err != nil {
-		if errors.Is(err, service.ErrOrderNotFound) {
-			writeError(w, http.StatusNotFound, service.ErrOrderNotFound.Error())
-			return
-		}
-		if errors.Is(err, service.ErrOrderStatusInvalid) {
-			writeError(w, http.StatusConflict, service.ErrOrderStatusInvalid.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPaymentExpired) {
-			writeError(w, http.StatusGone, service.ErrPaymentExpired.Error())
-			return
-		}
-		if errors.Is(err, service.ErrPaymentDeclined) {
-			writeError(w, http.StatusUnprocessableEntity, service.ErrPaymentDeclined.Error())
-			return
-		}
-		if errors.Is(err, service.ErrInvalidPaymentAmount) {
-			writeError(w, http.StatusUnprocessableEntity, service.ErrInvalidPaymentAmount.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, ErrInternalServer.Error())
+		writeServiceError(w, err)
 		return
 	}
 
