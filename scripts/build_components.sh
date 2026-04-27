@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-out_dir="${1:-dist/lab6}"
+out_dir="${1:-dist}"
 component_dir="$out_dir/components"
 
 mkdir -p "$component_dir"

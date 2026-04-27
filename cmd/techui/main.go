@@ -14,6 +14,7 @@ import (
 	techuicomponent "github.com/beastixq/marketplace/internal/component/techui"
 	"github.com/beastixq/marketplace/internal/config"
 	"github.com/beastixq/marketplace/internal/logging"
+	svc "github.com/beastixq/marketplace/internal/service"
 )
 
 func main() {
@@ -36,7 +37,8 @@ func main() {
 
 	logger.Info("techui starting")
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	repositories, err := repocomponent.New(ctx, cfg.Database.DSN)
 	if err != nil {
@@ -53,6 +55,15 @@ func main() {
 		PaymentTTL:            cfg.Payment.TTL.Std(),
 		PaymentGatewayBaseURL: cfg.Payment.GatewayURL,
 	})
+	paymentTTL := cfg.Payment.TTL.Std()
+	worker := svc.NewOrderExpirationWorker(
+		services.Order,
+		cfg.Orders.ExpirationCheckInterval.Std(),
+		paymentTTL,
+		logger.With("component", "order-expiration-worker"),
+	)
+	go worker.Run(ctx)
+
 	app := techuicomponent.New(services, os.Stdin, os.Stdout, logger.With("component", "techui"))
 
 	if err := app.Run(ctx); err != nil && !errors.Is(err, io.EOF) {
