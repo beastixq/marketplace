@@ -3,28 +3,76 @@
 
 title Онлайн-маркетплейс — Компоненты приложения (C4 L3)
 
-Person(user, "Пользователь")
+Person(user, "Пользователь", "Работает через Web/API")
 
-Container_Boundary(webapp, "Веб-приложение") {
-    Component(handler, "Handler", "Go, chi, html/template", "HTTP-обработчики, рендеринг HTML-страниц")
-    Component(techui, "TechUI", "Go, console", "Интерактивные меню и сценарии\nсистемного тестирования")
-    Component(service, "Service", "Go", "Бизнес-логика приложения")
-    Component(cache, "Cache Decorators", "Go, go-redis/v9", "Декораторы над репозиториями,\nпаттерн cache-aside (Product, Category)")
-    Component(repository, "Repository", "Go, pgx/v5", "Доступ к данным PostgreSQL")
+Container_Boundary(api, "cmd/api — HTTP/Web приложение") {
+    Component(apiMain, "cmd/api main", "Go", "Точка сборки: читает config,\nсоздаёт logger, pool, services и router")
+    Component(router, "Router", "chi.Router", "Маршрутизирует REST API и Web GUI маршруты")
+    Component(apiHandlers, "API Handlers", "Go, net/http", "Обрабатывают JSON/API запросы и переводят service errors в HTTP status")
+    Component(webHandlers, "Web Handlers", "Go, html/template", "Текущая заготовка Web GUI;\nполноценная доработка планируется в ЛР7")
+    Component(authMiddleware, "AuthMiddleware / RequireRole", "Go middleware", "Проверяет JWT и роли пользователя")
+    Component(loggingMiddleware, "RequestLogger / Recoverer", "slog middleware", "Логирует HTTP-запросы,\nстатусы, данные actor и stack при panic")
+}
+
+Container_Boundary(techuiContainer, "cmd/techui — технологический UI") {
+    Component(techuiMain, "cmd/techui main", "Go", "Точка сборки: читает config,\nсоздаёт logger и связывает компоненты")
+    Component(techuiComponent, "component/techui", "Go facade", "Собирает TechUI App из ServicePorts")
+    Component(techuiApp, "techui.App", "Go, console", "Меню, ввод/вывод, логирование конкретных команд пользователя")
+}
+
+Container_Boundary(seedContainer, "cmd/seed — генератор данных") {
+    Component(seedMain, "cmd/seed main", "Go, go-faker", "Создаёт тестовые данные для БД")
+}
+
+Container_Boundary(serviceLayer, "Компонент бизнес-логики") {
+    Component(serviceComponent, "component/service", "Go facade", "Создаёт и связывает Auth/User/Product/Order/... services")
+    Component(domainServices, "Service package", "Go", "Бизнес-правила, RBAC, checkout,\nоплата, статусы заказов, отзывы, категории")
+    Component(paymentService, "PaymentService", "Go", "Формирует payment URL и обрабатывает результат оплаты")
+    Component(paymentGateway, "MockBankGateway", "Go adapter", "Адаптер платёжного контура")
+    Component(orderWorker, "OrderExpirationWorker", "Go goroutine", "Периодически отменяет просроченные заказы в status pending")
+}
+
+Container_Boundary(repositoryLayer, "Компонент доступа к данным") {
+    Component(repositoryComponent, "component/repository", "Go facade", "Создаёт pgxpool, repositories и TxManager")
+    Component(repositories, "Repository package", "Go, pgx/v5, squirrel", "SQL-запросы и преобразование rows -> model")
+    Component(txManager, "PgxTxManager", "Go, pgx.Tx", "Единая граница транзакций для service layer")
 }
 
 ContainerDb(postgres, "База данных", "PostgreSQL 16", "")
-ContainerDb(redis, "Кэш", "Redis 7", "")
+System_Ext(bank, "Mock Bank", "HTTP payment mock")
 
-Rel(user, handler, "HTTP-запросы", "HTTPS")
-Rel(user, techui, "Команды технологического UI", "terminal")
-Rel(handler, service, "Вызывает", "интерфейс")
-Rel(techui, service, "Вызывает", "интерфейсы сервисов")
-Rel(service, cache, "Вызывает", "интерфейс ProductRepo, CategoryRepo")
-Rel(service, repository, "Вызывает напрямую", "прочие интерфейсы")
-Rel(cache, repository, "Делегирует (cache miss)", "интерфейс")
-Rel(cache, redis, "GET / SET / DEL", "go-redis/v9")
-Rel(repository, postgres, "SQL-запросы", "pgx/v5")
+Rel(user, router, "HTTP/Web requests", "HTTPS")
+Rel(router, loggingMiddleware, "Оборачивает запросы", "middleware")
+Rel(router, authMiddleware, "Защищает закрытые маршруты", "middleware")
+Rel(router, apiHandlers, "Передаёт API requests", "net/http")
+Rel(router, webHandlers, "Передаёт Web GUI requests", "net/http")
+
+Rel(apiHandlers, domainServices, "Вызывает use cases", "интерфейсы service layer")
+Rel(apiHandlers, paymentService, "Получает payment URL и обрабатывает callback", "Payments")
+Rel(webHandlers, domainServices, "Вызывает use cases", "интерфейсы service layer")
+Rel(orderWorker, domainServices, "Отменяет просроченные заказы", "OrderExpirer")
+
+Rel(user, techuiApp, "Команды технологического UI", "terminal")
+Rel(techuiComponent, techuiApp, "Создаёт", "ServicePorts")
+Rel(techuiApp, domainServices, "Вызывает use cases", "интерфейсы service layer")
+Rel(techuiApp, paymentService, "Проверяет оплату", "Payments")
+Rel(apiMain, orderWorker, "Запускает", "goroutine")
+Rel(techuiMain, orderWorker, "Запускает", "goroutine")
+
+Rel(serviceComponent, domainServices, "Создаёт services", "constructors")
+Rel(serviceComponent, paymentService, "Создаёт payment service", "constructor")
+Rel(domainServices, repositories, "Читает/изменяет данные", "repository interfaces")
+Rel(paymentService, repositories, "Читает/изменяет заказ", "OrderRepo")
+Rel(domainServices, txManager, "Открывает транзакции", "TxManager")
+Rel(paymentService, paymentGateway, "Запрашивает/обрабатывает оплату", "PaymentGateway")
+Rel(paymentGateway, bank, "HTTP URL / token", "HTTP")
+
+Rel(repositoryComponent, repositories, "Создаёт repositories", "constructors")
+Rel(repositoryComponent, txManager, "Создаёт", "constructor")
+Rel(repositories, postgres, "SQL", "pgx/v5")
+Rel(txManager, postgres, "BEGIN / COMMIT / ROLLBACK", "pgx.Tx")
+
+Rel(seedMain, postgres, "Записывает тестовые данные", "pgx/v5")
 
 LAYOUT_WITH_LEGEND()
 

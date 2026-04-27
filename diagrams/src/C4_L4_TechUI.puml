@@ -1,12 +1,79 @@
 @startuml C4_L4_TechUI
-title Компонент технологического UI — пакет techui (C4 L4)
+title Технологический UI и сборка компонентов — cmd/techui, component/techui, techui.App (C4 L4)
 
 skinparam classAttributeIconSize 0
 left to right direction
 
 package "cmd/techui" {
-    class main {
+    class TechUIMain as "main" {
         +main(): void
+    }
+}
+
+package "config" {
+    class Config {
+        +Server: ServerConfig
+        +Database: DatabaseConfig
+        +Auth: AuthConfig
+        +Payment: PaymentConfig
+        +Orders: OrdersConfig
+        +Logging: LoggingConfig
+    }
+
+    class ConfigLoader as "Load" {
+        +Load(path string): *Config, error
+    }
+}
+
+package "logging" {
+    class LoggerFactory as "New" {
+        +New(cfg LoggingConfig): *slog.Logger, io.Closer, error
+    }
+}
+
+package "component/repository" {
+    class RepositoryComponent as "Component" {
+        +Pool: *pgxpool.Pool
+        +User: UserRepo
+        +Seller: SellerRepo
+        +Address: AddressRepo
+        +Review: ReviewRepo
+        +Product: ProductRepo
+        +Order: OrderRepo
+        +OrderItem: OrderItemRepo
+        +Category: CategoryRepo
+        +TxManager: TxManager
+        +Close(): void
+    }
+}
+
+package "component/service" {
+    class ServiceComponent as "Component" {
+        +User: UserService
+        +Seller: SellerService
+        +Address: AddressService
+        +Review: ReviewService
+        +Product: ProductService
+        +Order: OrderService
+        +Category: CategoryService
+        +Auth: AuthService
+        +Payment: *PaymentService
+    }
+
+    class ServiceConfig as "Config" {
+        +BcryptCost: int
+        +JWTSecret: string
+        +TokenTTL: time.Duration
+        +PaymentTTL: time.Duration
+        +PaymentGatewayBaseURL: string
+        +TokenBlocklist: TokenBlocklist
+    }
+}
+
+package "component/techui" {
+    class TechUIComponent as "Component" {
+        -app: *techui.App
+        +Run(ctx): error
     }
 }
 
@@ -17,7 +84,10 @@ package "techui" {
         -out: io.Writer
         -token: string
         -claims: *TokenClaims
+        -logger: *slog.Logger
         +Run(ctx): error
+        -run(ctx, fn): void
+        -actionName(fn): string
     }
 
     class ServicePorts {
@@ -58,32 +128,32 @@ package "techui" {
 }
 
 package "service" {
-    class AuthServiceImpl as "AuthService"
-    class UserServiceImpl as "UserService"
-    class SellerServiceImpl as "SellerService"
-    class ProductServiceImpl as "ProductService"
-    class CategoryServiceImpl as "CategoryService"
-    class AddressServiceImpl as "AddressService"
-    class OrderServiceImpl as "OrderService"
-    class PaymentServiceImpl as "PaymentService"
-    class ReviewServiceImpl as "ReviewService"
+    class AuthService
+    class UserService
+    class SellerService
+    class ProductService
+    class CategoryService
+    class AddressService
+    class OrderService
+    class PaymentService
+    class ReviewService
 }
 
-package "repository" {
-    class UserRepoImpl
-    class SellerRepoImpl
-    class ProductRepoImpl
-    class CategoryRepoImpl
-    class AddressRepoImpl
-    class OrderRepoImpl
-    class OrderItemRepoImpl
-    class ReviewRepoImpl
-    class PgxTxManager
-}
+TechUIMain ..> ConfigLoader : читает -config
+TechUIMain ..> LoggerFactory : создаёт root logger
+TechUIMain ..> RepositoryComponent : создаёт компонент доступа к данным
+TechUIMain ..> ServiceConfig : формирует из Config
+TechUIMain ..> ServiceComponent : создаёт компонент бизнес-логики
+TechUIMain ..> TechUIComponent : создаёт компонент UI
+TechUIMain ..> App : запускает Run
 
-main ..> App : создает
-main ..> ServicePorts : внедряет зависимости
-App o--> ServicePorts : агрегация
+ConfigLoader ..> Config : возвращает
+LoggerFactory ..> App : передаёт *slog.Logger
+RepositoryComponent --> ServiceComponent : repositories + TxManager
+ServiceConfig --> ServiceComponent : параметры auth/payment
+ServiceComponent --> TechUIComponent : services
+TechUIComponent *-- App : владеет
+App o-- ServicePorts : вызывает use cases через порты
 
 ServicePorts o--> AuthSession
 ServicePorts o--> UserProfile
@@ -102,45 +172,35 @@ ServicePorts o--> SellerOrders
 ServicePorts o--> Payments
 ServicePorts o--> ReviewManagement
 
-AuthSession <|.. AuthServiceImpl
-UserProfile <|.. UserServiceImpl
-UserAdministration <|.. UserServiceImpl
-SellerProfile <|.. SellerServiceImpl
-SellerStatistics <|.. SellerServiceImpl
-ProductCatalog <|.. ProductServiceImpl
-ProductDetails <|.. ProductServiceImpl
-ProductManagement <|.. ProductServiceImpl
-CategoryBrowser <|.. CategoryServiceImpl
-CategoryManagement <|.. CategoryServiceImpl
-AddressBook <|.. AddressServiceImpl
-Cart <|.. OrderServiceImpl
-BuyerOrders <|.. OrderServiceImpl
-SellerOrders <|.. OrderServiceImpl
-Payments <|.. PaymentServiceImpl
-ReviewManagement <|.. ReviewServiceImpl
-
-AuthServiceImpl o--> UserServiceImpl
-UserServiceImpl o--> UserRepoImpl
-SellerServiceImpl o--> SellerRepoImpl
-ProductServiceImpl o--> ProductRepoImpl
-ProductServiceImpl o--> ReviewRepoImpl
-ProductServiceImpl o--> SellerRepoImpl
-CategoryServiceImpl o--> CategoryRepoImpl
-AddressServiceImpl o--> AddressRepoImpl
-OrderServiceImpl o--> OrderRepoImpl
-OrderServiceImpl o--> OrderItemRepoImpl
-OrderServiceImpl o--> ProductRepoImpl
-OrderServiceImpl o--> SellerRepoImpl
-OrderServiceImpl o--> PgxTxManager
-PaymentServiceImpl o--> OrderRepoImpl
-ReviewServiceImpl o--> ReviewRepoImpl
+AuthSession <|.. AuthService
+UserProfile <|.. UserService
+UserAdministration <|.. UserService
+SellerProfile <|.. SellerService
+SellerStatistics <|.. SellerService
+ProductCatalog <|.. ProductService
+ProductDetails <|.. ProductService
+ProductManagement <|.. ProductService
+CategoryBrowser <|.. CategoryService
+CategoryManagement <|.. CategoryService
+AddressBook <|.. AddressService
+Cart <|.. OrderService
+BuyerOrders <|.. OrderService
+SellerOrders <|.. OrderService
+Payments <|.. PaymentService
+ReviewManagement <|.. ReviewService
 
 note right of App
-  Меню покрывают основные Use Case:
-  регистрация/вход, каталог, корзина,
-  оформление и оплата заказа, профиль
-  продавца, товары, статистика, отзывы,
-  адреса, категории и администрирование.
+  TechUI не использует HTTP middleware:
+  ввод идёт через stdin, вывод через stdout.
+  Поэтому действия пользователя логируются
+  в App.run, где известны command name,
+  user_id, role, duration и error.
+end note
+
+note bottom of TechUIMain
+  cmd/techui является точкой сборки:
+  он связывает repository, service и techui
+  в единое запускаемое приложение.
 end note
 
 @enduml

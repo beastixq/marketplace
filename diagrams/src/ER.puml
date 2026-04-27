@@ -1,101 +1,150 @@
-@startuml ER3
+@startuml ER
 
 hide circle
 skinparam linetype ortho
 skinparam nodesep 100
 skinparam ranksep 130
 
-entity "Пользователь" {
-  * email
+entity "Пользователь" as users {
+  * id
   --
-  полное_имя
-  телефон
-  роль
+  email <<unique>>
+  password_hash
+  full_name
+  phone <<unique>>
+  role
+  created_at
+  deleted_at
 }
 
-entity "Продавец" {
-  * название_компании
+entity "Продавец" as sellers {
+  * id
   --
-  описание
-  рейтинг
+  user_id <<unique>>
+  company_name
+  description
+  rating
+  created_at
 }
 
-entity "Товар" {
-  * название
+entity "Товар" as products {
+  * id
   --
-  описание
-  цена
-  количество_на_складе
-  зарезервировано
-  рейтинг
+  seller_id
+  name
+  description
+  price
+  stock_quantity
+  reserved_quantity
+  rating
+  created_at
+  deleted_at
 }
 
-entity "Категория" {
-  * название
+entity "Категория" as categories {
+  * id
   --
-  описание
+  parent_id
+  name <<unique>>
+  description
 }
 
-entity "Заказ" {
-  * номер_заказа
-  --
-  статус
-  итоговая_сумма
-  дата_заказа
+entity "Категория товара" as product_categories {
+  * product_id
+  * category_id
 }
 
-entity "Позиция заказа" {
-  * номер_позиции
+entity "Адрес" as addresses {
+  * id
   --
-  количество
-  цена_на_момент_покупки
+  user_id
+  city
+  street
+  house
+  apartment
+  zip_code
+  is_default
+  created_at
 }
 
-entity "Отзыв" {
-  * пользователь
-  * товар
+entity "Заказ" as orders {
+  * id
   --
-  оценка
-  комментарий
-  дата_отзыва
+  user_id
+  address_id
+  seller_id
+  status
+  total_amount
+  created_at
+  updated_at
 }
 
-entity "Адрес" {
-  * город
-  * улица
-  * дом
-  * индекс
+entity "Позиция заказа" as order_items {
+  * id
   --
-  квартира
-  основной_или_нет
+  order_id
+  product_id
+  quantity
+  price_at_purchase
 }
 
-entity "История цен" {
-  * дата_изменения
+entity "Отзыв" as reviews {
+  * id
   --
-  старая_цена
-  новая_цена
+  user_id
+  product_id
+  rating
+  comment
+  created_at
 }
 
-' === Связи ===
+entity "История цен" as product_price_history {
+  * id
+  --
+  product_id
+  old_price
+  new_price
+  changed_at
+  changed_by
+}
 
-Пользователь ||--o| Продавец : "имеет профиль"
-Пользователь ||--o{ Заказ : "оформляет"
-Пользователь ||--o{ Адрес : "имеет"
-Пользователь ||--o{ Отзыв : "оставляет"
+users ||--o| sellers : "имеет профиль"
+users ||--o{ orders : "оформляет"
+users ||--o{ addresses : "имеет"
+users ||--o{ reviews : "оставляет"
 
-Продавец ||--o{ Товар : "владеет"
-Продавец ||--o{ Заказ : "обрабатывает"
+sellers ||--o{ products : "владеет"
+sellers ||--o{ orders : "обрабатывает"
 
-Товар }o--o{ Категория : "относится к"
-Товар ||--o{ Отзыв : "написан на"
-Товар ||--o{ "История цен" : "имеет"
+products ||--o{ product_categories : "связан"
+categories ||--o{ product_categories : "содержит"
+categories |o--o{ categories : "родительская"
 
-Категория ||--o{ Категория : "содержит"
+products ||--o{ reviews : "получает"
+products ||--o{ product_price_history : "имеет историю"
+products ||--o{ order_items : "включён"
 
-Заказ ||--o{ "Позиция заказа" : "содержит"
-Заказ }o--o| Адрес : "доставляется на"
+orders ||--o{ order_items : "содержит"
+orders }o--o| addresses : "доставляется на"
 
-"Позиция заказа" }o--|| Товар : "включает"
+note right of products
+  reserved_quantity показывает количество,
+  зарезервированное в pending-заказах.
+  Инвариант БД:
+  reserved_quantity <= stock_quantity
+end note
+
+note right of reviews
+  Уникальность:
+  один пользователь может оставить
+  один отзыв на один товар.
+end note
+
+note right of orders
+  status: draft, pending, paid,
+  shipped, delivered, cancelled.
+  seller_id и address_id могут отсутствовать
+  на промежуточных этапах корзины/заказа.
+end note
 
 @enduml
