@@ -18,15 +18,16 @@ type Config struct {
 }
 
 type Component struct {
-	User     svc.UserService
-	Seller   svc.SellerService
-	Address  svc.AddressService
-	Review   svc.ReviewService
-	Product  svc.ProductService
-	Order    svc.OrderService
-	Category svc.CategoryService
-	Auth     svc.AuthService
-	Payment  *svc.PaymentService
+	User       svc.UserService
+	Seller     svc.SellerService
+	Address    svc.AddressService
+	Review     svc.ReviewService
+	Product    svc.ProductService
+	Order      svc.OrderService
+	Category   svc.CategoryService
+	Backoffice svc.BackofficeService
+	Auth       svc.AuthService
+	Payment    *svc.PaymentService
 }
 
 func New(repos *repocomponent.Component, cfg Config) *Component {
@@ -39,20 +40,22 @@ func New(repos *repocomponent.Component, cfg Config) *Component {
 	product := svc.NewProductService(repos.Product, repos.Review, repos.Seller)
 	order := svc.NewOrderService(repos.Order, repos.OrderItem, repos.Product, repos.Seller, repos.TxManager)
 	category := svc.NewCategoryService(repos.Category)
+	backoffice := svc.NewBackofficeService(repos.Backoffice)
 	auth := svc.NewAuthService(user, cfg.TokenBlocklist, cfg.JWTSecret, cfg.TokenTTL)
 	gateway := payment.NewMockBankGateway(cfg.PaymentGatewayBaseURL)
 	payments := svc.NewPaymentService(repos.Order, gateway, cfg.PaymentTTL)
 
 	return &Component{
-		User:     user,
-		Seller:   seller,
-		Address:  address,
-		Review:   review,
-		Product:  product,
-		Order:    order,
-		Category: category,
-		Auth:     auth,
-		Payment:  payments,
+		User:       user,
+		Seller:     seller,
+		Address:    address,
+		Review:     review,
+		Product:    product,
+		Order:      order,
+		Category:   category,
+		Backoffice: backoffice,
+		Auth:       auth,
+		Payment:    payments,
 	}
 }
 

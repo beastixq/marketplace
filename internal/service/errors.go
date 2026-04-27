@@ -57,6 +57,7 @@ var (
 	// orders
 	ErrGetOrderByID           = errors.New("Failed to get order by id")
 	ErrGetOrderItemByID       = errors.New("Failed to get order item by id")
+	ErrGetAdminOrders         = errors.New("Failed to get admin orders")
 	ErrGetOrdersByUserID      = errors.New("Failed to get orders by user id")
 	ErrGetOrdersBySellerID    = errors.New("Failed to get orders by seller id")
 	ErrGetOrderItemsByOrderID = errors.New("Failed to get order items by order id")
@@ -110,6 +111,9 @@ var (
 	ErrGetReviewsByProductID = errors.New("Failed to get reviews by product id")
 	ErrNotYourReview         = errors.New("It's not your review")
 	ErrReviewNotFound        = errors.New("Review not found")
+
+	// backoffice
+	ErrGetPlatformStats = errors.New("Failed to get platform stats")
 )
 
 // For repos usage

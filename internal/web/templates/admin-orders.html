@@ -30,6 +30,9 @@
 {{if .Success}}
 <div class="alert alert--success">{{.Success}}</div>
 {{end}}
+{{if .Error}}
+<div class="alert alert--error">{{.Error}}</div>
+{{end}}
 
 <div style="overflow-x: auto;">
 <table style="width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">

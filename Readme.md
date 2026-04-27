@@ -146,6 +146,18 @@
 
 ### L4 — Классы
 
+#### Компонент пользовательского Web GUI
+
+Пользовательский GUI реализован как server-side MPA: Go-приложение принимает HTTP-запросы, вызывает сервисы бизнес-логики и рендерит HTML через `html/template`. Для ЛР7 используется MVC/MV* вариант, естественный для Go MPA:
+
+- Controller: `web.WebHandler` и `web.NewWebRouter`;
+- View: HTML-шаблоны `internal/web/templates/*.html` и статические стили;
+- Model/Application layer: структуры `model`, сервисы `service` и репозитории `repository`.
+
+`WebHandler` не выполняет SQL напрямую: страницы admin panel и analyst dashboard получают данные через `BackofficeService`, а SQL-запросы находятся в `BackofficeRepo`.
+
+![C4 L4 Web GUI](diagrams/out/C4_L4_WebGUI.png)
+
 #### Компонент технологического UI
 
 Технологический UI реализован как отдельная команда `cmd/techui`. Консольное приложение не обращается к HTTP-обработчикам и использует те же сервисы бизнес-логики, что и web/API слой: `AuthService`, `UserService`, `ProductService`, `OrderService`, `PaymentService` и остальные сервисы предметной области. Это позволяет проходить пользовательские сценарии регистрации, каталога, корзины, оформления и оплаты заказа, управления товарами продавца, статистики, отзывов, адресов, категорий и администрирования напрямую через компонент бизнес-логики.

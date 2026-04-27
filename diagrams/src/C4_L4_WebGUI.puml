@@ -1,0 +1,169 @@
+@startuml C4_L4_WebGUI
+title Пользовательский Web GUI — MVC/MV* структура (C4 L4)
+
+skinparam classAttributeIconSize 0
+left to right direction
+
+package "cmd/api" {
+    class APIMain as "main" {
+        +main(): void
+    }
+}
+
+package "web" {
+    class WebRouter as "NewWebRouter" {
+        +NewWebRouter(wh): http.Handler
+    }
+
+    class WebHandler {
+        -productService: ProductService
+        -categoryService: CategoryService
+        -authService: AuthService
+        -userService: UserService
+        -orderService: OrderService
+        -addressService: AddressService
+        -sellerService: SellerService
+        -reviewService: ReviewService
+        -backofficeService: BackofficeService
+        -templates: map[string]*template.Template
+        +Catalog(w, r): void
+        +ProductDetail(w, r): void
+        +Profile(w, r): void
+        +Orders(w, r): void
+        +Cart(w, r): void
+        +SellerDashboard(w, r): void
+        +AdminUsers(w, r): void
+        +AdminOrders(w, r): void
+        +AnalystDashboard(w, r): void
+    }
+
+    class TemplateSet as "templates/*.html" {
+        +layout.html
+        +catalog.html
+        +product.html
+        +profile.html
+        +orders.html
+        +cart.html
+        +seller.html
+        +admin-users.html
+        +admin-orders.html
+        +analyst.html
+    }
+
+    class StaticFiles as "static/" {
+        +css/style.css
+    }
+
+    class UserInfo {
+        +UserID: int64
+        +Role: string
+        +FullName: string
+        +actor(): service.Actor
+    }
+}
+
+package "service" {
+    class AuthService
+    class UserService
+    class ProductService
+    class CategoryService
+    class AddressService
+    class OrderService
+    class SellerService
+    class ReviewService
+    class BackofficeService
+}
+
+package "model" {
+    class User
+    class Product
+    class Category
+    class Address
+    class Order
+    class Seller
+    class Review
+    class PlatformStats
+    class AdminOrderListOptions
+}
+
+package "repository" {
+    interface UserRepo
+    interface ProductRepo
+    interface CategoryRepo
+    interface AddressRepo
+    interface OrderRepo
+    interface SellerRepo
+    interface ReviewRepo
+    interface BackofficeRepo
+}
+
+class "PostgreSQL" as postgres <<database>>
+
+APIMain ..> WebHandler : создаёт
+APIMain ..> WebRouter : монтирует в mux
+WebRouter *-- WebHandler : route -> handler method
+WebRouter ..> StaticFiles : отдаёт /static/*
+
+WebHandler *-- TemplateSet : parseFS + ExecuteTemplate
+WebHandler ..> UserInfo : JWT cookie -> actor
+
+WebHandler o--> AuthService
+WebHandler o--> UserService
+WebHandler o--> ProductService
+WebHandler o--> CategoryService
+WebHandler o--> AddressService
+WebHandler o--> OrderService
+WebHandler o--> SellerService
+WebHandler o--> ReviewService
+WebHandler o--> BackofficeService
+
+WebHandler ..> User : template data
+WebHandler ..> Product : template data
+WebHandler ..> Category : template data
+WebHandler ..> Address : template data
+WebHandler ..> Order : template data
+WebHandler ..> Seller : template data
+WebHandler ..> Review : template data
+WebHandler ..> PlatformStats : template data
+WebHandler ..> AdminOrderListOptions : query -> options
+
+UserService o--> UserRepo
+ProductService o--> ProductRepo
+CategoryService o--> CategoryRepo
+AddressService o--> AddressRepo
+OrderService o--> OrderRepo
+SellerService o--> SellerRepo
+ReviewService o--> ReviewRepo
+BackofficeService o--> BackofficeRepo
+
+UserRepo --> postgres : SQL
+ProductRepo --> postgres : SQL
+CategoryRepo --> postgres : SQL
+AddressRepo --> postgres : SQL
+OrderRepo --> postgres : SQL
+SellerRepo --> postgres : SQL
+ReviewRepo --> postgres : SQL
+BackofficeRepo --> postgres : SQL для admin/analytics read models
+
+note right of WebHandler
+  В терминах MVC это Controller:
+  принимает HTTP request, читает form/query,
+  проверяет роль через cookie/JWT,
+  вызывает service layer и передаёт data во View.
+  SQL здесь не выполняется.
+end note
+
+note bottom of TemplateSet
+  Это View слой серверного MPA:
+  html/template получает готовые model/view data
+  и формирует HTML-страницу.
+end note
+
+note bottom of service
+  Model в Go-проекте разделён:
+  model содержит структуры данных,
+  service содержит use cases и RBAC,
+  repository реализует доступ к PostgreSQL.
+end note
+
+@enduml

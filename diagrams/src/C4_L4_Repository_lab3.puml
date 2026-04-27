@@ -15,6 +15,7 @@ package "component/repository" {
         +Order: OrderRepo
         +OrderItem: OrderItemRepo
         +Category: CategoryRepo
+        +Backoffice: BackofficeRepo
         +TxManager: TxManager
         +Close(): void
     }
@@ -44,6 +45,11 @@ package "repository" {
     }
     class CategoryRepoImpl {
         -pool: *pgxpool.Pool
+    }
+    class BackofficeRepoImpl {
+        -pool: *pgxpool.Pool
+        +GetAdminOrders(ctx, opts): []Order, error
+        +GetPlatformStats(ctx): PlatformStats, error
     }
     class PgxTxManager {
         -pool: *pgxpool.Pool
@@ -128,6 +134,10 @@ package "service interfaces" {
         +UpdateCategory(ctx, id, cu): Category, error
         +DeleteCategoryByID(ctx, id): error
     }
+    interface BackofficeRepo {
+        +GetAdminOrders(ctx, opts): []Order, error
+        +GetPlatformStats(ctx): PlatformStats, error
+    }
     interface TxManager {
         +WithTransaction(ctx, fn): error
     }
@@ -176,6 +186,7 @@ RepositoryComponent *-- ProductRepoImpl
 RepositoryComponent *-- OrderRepoImpl
 RepositoryComponent *-- OrderItemRepoImpl
 RepositoryComponent *-- CategoryRepoImpl
+RepositoryComponent *-- BackofficeRepoImpl
 RepositoryComponent *-- PgxTxManager
 
 UserRepoImpl ..|> UserRepo
@@ -187,6 +198,7 @@ ProductRepoImpl ..|> ProductRepo
 OrderRepoImpl ..|> OrderRepo
 OrderItemRepoImpl ..|> OrderItemRepo
 CategoryRepoImpl ..|> CategoryRepo
+BackofficeRepoImpl ..|> BackofficeRepo
 PgxTxManager ..|> TxManager
 
 UserRepoImpl ..> DBTX : getConn(ctx)
@@ -197,6 +209,7 @@ ProductRepoImpl ..> DBTX : getConn(ctx)
 OrderRepoImpl ..> DBTX : getConn(ctx)
 OrderItemRepoImpl ..> DBTX : getConn(ctx)
 CategoryRepoImpl ..> DBTX : getConn(ctx)
+BackofficeRepoImpl ..> DBTX : getConn(ctx)
 PgxTxManager ..> postgres : BEGIN / COMMIT / ROLLBACK
 DBTX ..> postgres : SQL
 
@@ -210,6 +223,7 @@ ProductRepoImpl ..> productPriceHistoryRow : scan
 OrderRepoImpl ..> orderRow : scan
 OrderItemRepoImpl ..> orderItemRow : scan
 CategoryRepoImpl ..> categoryRow : scan
+BackofficeRepoImpl ..> orderRow : scan
 
 note right of RepositoryComponent
   component/repository является единицей сборки

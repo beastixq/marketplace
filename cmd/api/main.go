@@ -53,6 +53,7 @@ func main() {
 	orderRepo := repo.NewOrderRepo(pool)
 	orderItemRepo := repo.NewOrderItemRepo(pool)
 	categoryRepo := repo.NewCategoryRepo(pool)
+	backofficeRepo := repo.NewBackofficeRepo(pool)
 	txManager := repo.NewPgxTxManager(pool)
 
 	userService := svc.NewUserService(userRepo, cfg.Auth.BcryptCost)
@@ -62,6 +63,7 @@ func main() {
 	productService := svc.NewProductService(productRepo, reviewRepo, sellerRepo)
 	orderService := svc.NewOrderService(orderRepo, orderItemRepo, productRepo, sellerRepo, txManager)
 	categoryService := svc.NewCategoryService(categoryRepo)
+	backofficeService := svc.NewBackofficeService(backofficeRepo)
 	// TODO: replace with Redis TokenBlocklist implementation
 	authService := svc.NewAuthService(userService, nil, cfg.Auth.JWTSecret, cfg.Auth.JWTTTL.Std())
 
@@ -103,7 +105,7 @@ func main() {
 		adminHandler,
 	)
 
-	webHandler := web.NewWebHandler(productService, categoryService, authService, userService, orderService, addressService, sellerService, reviewService, pool)
+	webHandler := web.NewWebHandler(productService, categoryService, authService, userService, orderService, addressService, sellerService, reviewService, backofficeService)
 	webRouter := web.NewWebRouter(webHandler)
 
 	// API routes already include /api/v1/ prefix, so mount both at root.

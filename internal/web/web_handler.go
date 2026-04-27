@@ -16,7 +16,6 @@ import (
 	"github.com/beastixq/marketplace/internal/service"
 	"github.com/beastixq/marketplace/internal/validators"
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 )
 
@@ -38,16 +37,16 @@ var funcMap = template.FuncMap{
 }
 
 type WebHandler struct {
-	productService  service.ProductService
-	categoryService service.CategoryService
-	authService     service.AuthService
-	userService     service.UserService
-	orderService    service.OrderService
-	addressService  service.AddressService
-	sellerService   service.SellerService
-	reviewService   service.ReviewService
-	dbPool          *pgxpool.Pool
-	templates       map[string]*template.Template
+	productService    service.ProductService
+	categoryService   service.CategoryService
+	authService       service.AuthService
+	userService       service.UserService
+	orderService      service.OrderService
+	addressService    service.AddressService
+	sellerService     service.SellerService
+	reviewService     service.ReviewService
+	backofficeService service.BackofficeService
+	templates         map[string]*template.Template
 }
 
 func NewWebHandler(
@@ -59,7 +58,7 @@ func NewWebHandler(
 	addressSvc service.AddressService,
 	sellerSvc service.SellerService,
 	reviewSvc service.ReviewService,
-	dbPool *pgxpool.Pool,
+	backofficeSvc service.BackofficeService,
 ) *WebHandler {
 	pages := []string{"catalog", "product", "login", "register", "categories", "profile", "orders", "cart", "addresses", "seller", "product-edit", "seller-profile", "order-detail", "seller-orders", "seller-products", "admin-users", "admin-user-edit", "admin-categories", "admin-orders", "analyst"}
 	templates := make(map[string]*template.Template, len(pages))
@@ -73,16 +72,16 @@ func NewWebHandler(
 		)
 	}
 	return &WebHandler{
-		productService:  productSvc,
-		categoryService: categorySvc,
-		authService:     authSvc,
-		userService:     userSvc,
-		orderService:    orderSvc,
-		addressService:  addressSvc,
-		sellerService:   sellerSvc,
-		reviewService:   reviewSvc,
-		dbPool:          dbPool,
-		templates:       templates,
+		productService:    productSvc,
+		categoryService:   categorySvc,
+		authService:       authSvc,
+		userService:       userSvc,
+		orderService:      orderSvc,
+		addressService:    addressSvc,
+		sellerService:     sellerSvc,
+		reviewService:     reviewSvc,
+		backofficeService: backofficeSvc,
+		templates:         templates,
 	}
 }
 
@@ -1608,27 +1607,23 @@ func (wh *WebHandler) AdminOrders(w http.ResponseWriter, r *http.Request) {
 	}
 	const perPage = 50
 	statusFilter := r.URL.Query().Get("status")
+	status, ok := parseAdminOrderStatus(statusFilter)
 
-	ctx := r.Context()
-	query := `SELECT id, user_id, address_id, seller_id, status, total_amount, created_at, updated_at
-		FROM orders WHERE status != 'draft'`
-	args := []any{}
-	if statusFilter != "" {
-		query += " AND status = $1"
-		args = append(args, statusFilter)
-	}
-	query += " ORDER BY created_at DESC LIMIT $" + strconv.Itoa(len(args)+1) + " OFFSET $" + strconv.Itoa(len(args)+2)
-	args = append(args, perPage, (page-1)*perPage)
-
-	rows, err := wh.dbPool.Query(ctx, query, args...)
 	var orders []model.Order
-	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var o model.Order
-			if rows.Scan(&o.ID, &o.UserID, &o.AddressID, &o.SellerID, &o.Status, &o.TotalAmount, &o.CreatedAt, &o.UpdatedAt) == nil {
-				orders = append(orders, o)
-			}
+	var errorMsg string
+	if !ok {
+		errorMsg = service.ErrOrderStatusInvalid.Error()
+	} else {
+		var err error
+		orders, err = wh.backofficeService.GetAdminOrders(r.Context(), user.actor(), model.AdminOrderListOptions{
+			Status: status,
+			Pagination: model.PaginationOpts{
+				Page:  page,
+				Limit: perPage,
+			},
+		})
+		if err != nil {
+			errorMsg = err.Error()
 		}
 	}
 
@@ -1639,7 +1634,21 @@ func (wh *WebHandler) AdminOrders(w http.ResponseWriter, r *http.Request) {
 		"HasMore": len(orders) == perPage,
 		"Status":  statusFilter,
 		"Success": r.URL.Query().Get("success"),
+		"Error":   errorMsg,
 	})
+}
+
+func parseAdminOrderStatus(raw string) (*model.OrderStatus, bool) {
+	if raw == "" {
+		return nil, true
+	}
+	status := model.OrderStatus(raw)
+	switch status {
+	case model.StatusPending, model.StatusPaid, model.StatusShipped, model.StatusDelivered, model.StatusCancelled:
+		return &status, true
+	default:
+		return nil, false
+	}
 }
 
 // Admin moderation: delete product (bypasses ownership check)
@@ -1655,8 +1664,7 @@ func (wh *WebHandler) AdminProductDelete(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	_, err = wh.dbPool.Exec(r.Context(), "UPDATE products SET deleted_at = NOW() WHERE id = $1", id)
-	if err != nil {
+	if err = wh.productService.DeleteProductByID(r.Context(), user.actor(), id); err != nil {
 		log.Printf("AdminProductDelete error: %v", err)
 	}
 	http.Redirect(w, r, fmt.Sprintf("/products/%d", id), http.StatusSeeOther)
@@ -1675,8 +1683,7 @@ func (wh *WebHandler) AdminSellerDelete(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	_, err = wh.dbPool.Exec(r.Context(), "DELETE FROM sellers WHERE id = $1", id)
-	if err != nil {
+	if err = wh.sellerService.DeleteSellerByID(r.Context(), user.actor(), id); err != nil {
 		log.Printf("AdminSellerDelete error: %v", err)
 	}
 	http.Redirect(w, r, "/admin/users?success=Seller+deleted", http.StatusSeeOther)
@@ -1697,10 +1704,12 @@ func (wh *WebHandler) AdminReviewDelete(w http.ResponseWriter, r *http.Request) 
 
 	// Get product ID for redirect
 	var productID int64
-	wh.dbPool.QueryRow(r.Context(), "SELECT product_id FROM reviews WHERE id = $1", id).Scan(&productID)
+	review, err := wh.reviewService.GetReviewByID(r.Context(), id)
+	if err == nil {
+		productID = review.ProductID
+	}
 
-	_, err = wh.dbPool.Exec(r.Context(), "DELETE FROM reviews WHERE id = $1", id)
-	if err != nil {
+	if err = wh.reviewService.DeleteReviewByID(r.Context(), user.actor(), id); err != nil {
 		log.Printf("AdminReviewDelete error: %v", err)
 	}
 
@@ -1713,94 +1722,16 @@ func (wh *WebHandler) AdminReviewDelete(w http.ResponseWriter, r *http.Request) 
 
 // --- Analyst Dashboard ---
 
-type platformStats struct {
-	TotalUsers     int
-	TotalSellers   int
-	TotalProducts  int
-	TotalOrders    int
-	TotalRevenue   string
-	TotalReviews   int
-	UsersByRole    []roleCount
-	OrdersByStatus []statusCount
-	TopProducts    []topProduct
-}
-
-type roleCount struct {
-	Role  string
-	Count int
-}
-
-type statusCount struct {
-	Status string
-	Count  int
-}
-
-type topProduct struct {
-	ID        int64
-	Name      string
-	Revenue   string
-	UnitsSold int
-}
-
 func (wh *WebHandler) AnalystDashboard(w http.ResponseWriter, r *http.Request) {
 	user := wh.requireRole(w, r, "analyst", "admin")
 	if user == nil {
 		return
 	}
 
-	ctx := r.Context()
-	stats := platformStats{}
-
-	// Total counts
-	wh.dbPool.QueryRow(ctx, "SELECT count(*) FROM users WHERE deleted_at IS NULL").Scan(&stats.TotalUsers)
-	wh.dbPool.QueryRow(ctx, "SELECT count(*) FROM sellers").Scan(&stats.TotalSellers)
-	wh.dbPool.QueryRow(ctx, "SELECT count(*) FROM products WHERE deleted_at IS NULL").Scan(&stats.TotalProducts)
-	wh.dbPool.QueryRow(ctx, "SELECT count(*) FROM orders WHERE status != 'draft'").Scan(&stats.TotalOrders)
-	wh.dbPool.QueryRow(ctx, "SELECT count(*) FROM reviews").Scan(&stats.TotalReviews)
-	wh.dbPool.QueryRow(ctx, "SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE status IN ('paid','shipped','delivered')").Scan(&stats.TotalRevenue)
-
-	// Users by role
-	rows, err := wh.dbPool.Query(ctx, "SELECT role, count(*) FROM users WHERE deleted_at IS NULL GROUP BY role ORDER BY count(*) DESC")
-	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var rc roleCount
-			if rows.Scan(&rc.Role, &rc.Count) == nil {
-				stats.UsersByRole = append(stats.UsersByRole, rc)
-			}
-		}
-	}
-
-	// Orders by status
-	rows2, err := wh.dbPool.Query(ctx, "SELECT status, count(*) FROM orders GROUP BY status ORDER BY count(*) DESC")
-	if err == nil {
-		defer rows2.Close()
-		for rows2.Next() {
-			var sc statusCount
-			if rows2.Scan(&sc.Status, &sc.Count) == nil {
-				stats.OrdersByStatus = append(stats.OrdersByStatus, sc)
-			}
-		}
-	}
-
-	// Top 10 products by revenue
-	rows3, err := wh.dbPool.Query(ctx, `
-		SELECT p.id, p.name, COALESCE(SUM(oi.price_at_purchase * oi.quantity), 0) as revenue, COALESCE(SUM(oi.quantity), 0) as units
-		FROM products p
-		JOIN order_items oi ON oi.product_id = p.id
-		JOIN orders o ON o.id = oi.order_id AND o.status IN ('paid','shipped','delivered')
-		GROUP BY p.id, p.name
-		ORDER BY revenue DESC
-		LIMIT 10
-	`)
-	if err == nil {
-		defer rows3.Close()
-		for rows3.Next() {
-			var tp topProduct
-			if rows3.Scan(&tp.ID, &tp.Name, &tp.Revenue, &tp.UnitsSold) == nil {
-				stats.TopProducts = append(stats.TopProducts, tp)
-			}
-		}
+	stats, err := wh.backofficeService.GetPlatformStats(r.Context(), user.actor())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	wh.render(w, "analyst", map[string]any{
