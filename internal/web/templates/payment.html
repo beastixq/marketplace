@@ -1,0 +1,29 @@
+{{define "title"}}Mock Bank Payment{{end}}
+
+{{define "content"}}
+<div class="form-card" style="max-width: 520px; margin: 0 auto;">
+    <h1 style="margin-bottom: 1rem;">Mock Bank Payment</h1>
+
+    {{if .Error}}
+    <div class="alert alert--error">{{.Error}}</div>
+    {{else}}
+    <div style="margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
+            <span style="color: var(--text-muted);">Order</span>
+            <strong>#{{.OrderID}}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
+            <span style="color: var(--text-muted);">Amount</span>
+            <strong>{{.Amount}} &#8381;</strong>
+        </div>
+    </div>
+
+    <form method="POST" action="/mock_bank/payment" style="display: flex; gap: 0.75rem;">
+        <input type="hidden" name="token" value="{{.Token}}">
+        <button type="submit" name="result" value="paid" class="btn btn--primary">Pay</button>
+        <button type="submit" name="result" value="declined" class="btn btn--danger">Decline</button>
+        <a href="/orders/{{.OrderID}}" class="btn" style="text-decoration: none; background: var(--bg); border: 1px solid var(--border);">Back</a>
+    </form>
+    {{end}}
+</div>
+{{end}}

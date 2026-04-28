@@ -25,16 +25,20 @@ package "web" {
         -sellerService: SellerService
         -reviewService: ReviewService
         -backofficeService: BackofficeService
+        -paymentService: *PaymentService
         -templates: map[string]*template.Template
         +Catalog(w, r): void
         +ProductDetail(w, r): void
         +Profile(w, r): void
         +Orders(w, r): void
+        +OrderPay(w, r): void
         +Cart(w, r): void
         +SellerDashboard(w, r): void
         +AdminUsers(w, r): void
         +AdminOrders(w, r): void
         +AnalystDashboard(w, r): void
+        +MockBankPaymentPage(w, r): void
+        +MockBankPaymentSubmit(w, r): void
     }
 
     class TemplateSet as "templates/*.html" {
@@ -72,6 +76,7 @@ package "service" {
     class SellerService
     class ReviewService
     class BackofficeService
+    class PaymentService
 }
 
 package "model" {
@@ -116,6 +121,7 @@ WebHandler o--> OrderService
 WebHandler o--> SellerService
 WebHandler o--> ReviewService
 WebHandler o--> BackofficeService
+WebHandler o--> PaymentService
 
 WebHandler ..> User : template data
 WebHandler ..> Product : template data
@@ -135,6 +141,7 @@ OrderService o--> OrderRepo
 SellerService o--> SellerRepo
 ReviewService o--> ReviewRepo
 BackofficeService o--> BackofficeRepo
+PaymentService o--> OrderRepo
 
 UserRepo --> postgres : SQL
 ProductRepo --> postgres : SQL

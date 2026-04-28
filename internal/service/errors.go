@@ -102,6 +102,8 @@ var (
 	ErrDeleteProduct          = errors.New("Failed to delete product")
 	ErrQuantityTooBig         = errors.New("Quantity too big, stock is less than that")
 	ErrProductNotFound        = errors.New("Product not found")
+	ErrProductDeleted         = errors.New("Product is deleted")
+	ErrStockBelowReserved     = errors.New("Stock quantity cannot be less than reserved quantity")
 
 	// review
 	ErrCreateReview          = errors.New("Failed to create review")
@@ -111,6 +113,7 @@ var (
 	ErrGetReviewsByProductID = errors.New("Failed to get reviews by product id")
 	ErrNotYourReview         = errors.New("It's not your review")
 	ErrReviewNotFound        = errors.New("Review not found")
+	ErrReviewAlreadyExists   = errors.New("You have already reviewed this product")
 
 	// backoffice
 	ErrGetPlatformStats = errors.New("Failed to get platform stats")

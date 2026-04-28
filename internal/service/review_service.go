@@ -44,6 +44,9 @@ func (rs ReviewService) CreateReview(ctx context.Context, actor Actor, rc m.Revi
 	rc.UserID = actor.UserID
 	id, err = rs.reviewRepo.CreateReview(ctx, rc)
 	if err != nil {
+		if errors.Is(err, ErrReviewAlreadyExists) {
+			return 0, ErrReviewAlreadyExists
+		}
 		return 0, fmt.Errorf("%w: %v", ErrCreateReview, err)
 	}
 	return id, nil

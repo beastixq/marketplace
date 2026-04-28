@@ -13,7 +13,10 @@
     <div class="cart-item">
         <div class="cart-item__info">
             <a href="/products/{{.ProductID}}" class="cart-item__name">{{.ProductName}}</a>
-            <span class="cart-item__qty">{{.PriceAtPurchase}} &#8381; &times;</span>
+            {{if .DeletedAt}}
+            <span class="cart-item__qty" style="color: var(--danger);">deleted {{.DeletedAt.Format "02.01.2006 15:04"}}</span>
+            {{end}}
+            <span class="cart-item__qty">{{.UnitPrice}} &#8381; &times;</span>
             <form method="POST" action="/cart/items/{{.ID}}/update" style="display:inline-flex;align-items:center;gap:0.25rem;">
                 <input type="number" name="quantity" value="{{.Quantity}}" min="1" style="width:60px;padding:0.25rem 0.4rem;border:1px solid var(--border);border-radius:4px;text-align:center;">
                 <button type="submit" class="btn btn--primary btn--sm">Update</button>
@@ -28,12 +31,15 @@
 </div>
 
 <div class="cart-total">
-    <strong>Total: {{.Cart.TotalAmount}} &#8381;</strong>
+    <strong>Total: {{.CartTotal}} &#8381;</strong>
 </div>
 
 {{if .Addresses}}
 <div class="cart-checkout">
     <h2>Checkout</h2>
+    {{if .HasDeletedItems}}
+    <div class="alert alert--error">Remove deleted products before checkout.</div>
+    {{else}}
     <form method="POST" action="/cart/checkout">
         <div class="form-group">
             <label for="address_id">Delivery Address</label>
@@ -45,6 +51,7 @@
         </div>
         <button type="submit" class="btn btn--primary">Place Order</button>
     </form>
+    {{end}}
 </div>
 {{else}}
 <div class="alert alert--error">You need to <a href="/addresses">add a delivery address</a> before checkout.</div>

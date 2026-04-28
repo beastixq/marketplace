@@ -15,7 +15,7 @@
     {{range .Orders}}
     <div class="order-card">
         <div class="order-card__header">
-            <span class="order-card__id">Order #{{.ID}}</span>
+            <a href="/orders/{{.ID}}" class="order-card__id" style="text-decoration:none;">Order #{{.ID}}</a>
             <span class="order-card__status order-card__status--{{.Status}}">{{.Status}}</span>
         </div>
         <div class="order-card__details">

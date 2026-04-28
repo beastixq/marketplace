@@ -9,7 +9,9 @@ import (
 	m "github.com/beastixq/marketplace/internal/model"
 	"github.com/beastixq/marketplace/internal/service"
 
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -74,6 +76,10 @@ func (rr ReviewRepoImpl) CreateReview(ctx context.Context, rc m.ReviewCreate) (i
 	}
 	row := getConn(ctx, rr.pool).QueryRow(ctx, sql, args...)
 	if err = row.Scan(&id); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			return 0, service.ErrReviewAlreadyExists
+		}
 		return 0, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return id, nil

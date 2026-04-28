@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/beastixq/marketplace/internal/config"
 	"github.com/beastixq/marketplace/internal/handler"
 	"github.com/beastixq/marketplace/internal/logging"
+	"github.com/beastixq/marketplace/internal/middleware"
 	repo "github.com/beastixq/marketplace/internal/repository"
 	svc "github.com/beastixq/marketplace/internal/service"
 	"github.com/beastixq/marketplace/internal/web"
@@ -37,12 +39,18 @@ func main() {
 
 	logger.Info("marketplace api starting", "addr", cfg.Server.Addr, "log_level", cfg.Logging.Level)
 
-	pool, err := pgxpool.New(context.Background(), cfg.Database.DSN)
+	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer dbCancel()
+	pool, err := pgxpool.New(dbCtx, cfg.Database.DSN)
 	if err != nil {
 		logger.Error("connect database", "error", err)
 		os.Exit(2)
 	}
 	defer pool.Close()
+	if err = pool.Ping(dbCtx); err != nil {
+		logger.Error("ping database", "error", err)
+		os.Exit(2)
+	}
 	logger.Info("database connected")
 
 	userRepo := repo.NewUserRepo(pool)
@@ -105,15 +113,21 @@ func main() {
 		adminHandler,
 	)
 
-	webHandler := web.NewWebHandler(productService, categoryService, authService, userService, orderService, addressService, sellerService, reviewService, backofficeService)
+	webHandler := web.NewWebHandler(productService, categoryService, authService, userService, orderService, addressService, sellerService, reviewService, backofficeService, paymentService)
 	webRouter := web.NewWebRouter(webHandler)
+	webLogger := logger.With("component", "web")
+	webHandlerWithLogs := middleware.ActorHolder()(
+		middleware.RequestLogger(webLogger)(
+			middleware.Recoverer(webLogger)(webRouter),
+		),
+	)
 
 	// API routes already include /api/v1/ prefix, so mount both at root.
 	// chi matches the most specific route, so no conflicts between
 	// /api/v1/* (API) and /* (web).
 	mux := http.NewServeMux()
 	mux.Handle("/api/", apiRouter)
-	mux.Handle("/", webRouter)
+	mux.Handle("/", webHandlerWithLogs)
 
 	logger.Info("listening", "addr", cfg.Server.Addr)
 	if err := http.ListenAndServe(cfg.Server.Addr, mux); err != nil {

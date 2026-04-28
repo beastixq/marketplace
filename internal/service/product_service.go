@@ -124,6 +124,12 @@ func (ps ProductService) UpdateProduct(ctx context.Context, actor Actor, id int6
 		}
 		return m.Product{}, fmt.Errorf("%w: %v", ErrGetProductByID, err)
 	}
+	if p.DeletedAt != nil {
+		return m.Product{}, ErrProductDeleted
+	}
+	if pu.StockQuantity != nil && *pu.StockQuantity < p.ReservedQuantity {
+		return m.Product{}, ErrStockBelowReserved
+	}
 
 	s, err := ps.sellerRepo.GetSellerByID(ctx, p.SellerID)
 	if err != nil {
@@ -140,6 +146,9 @@ func (ps ProductService) UpdateProduct(ctx context.Context, actor Actor, id int6
 
 	p, err = ps.productRepo.UpdateProduct(ctx, id, pu)
 	if err != nil {
+		if errors.Is(err, ErrStockBelowReserved) {
+			return m.Product{}, ErrStockBelowReserved
+		}
 		return m.Product{}, fmt.Errorf("%w: %v", ErrUpdateProduct, err)
 	}
 	return p, nil

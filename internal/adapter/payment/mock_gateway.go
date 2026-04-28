@@ -37,7 +37,7 @@ func (g *MockBankGateway) GetPaymentURL(ctx context.Context, payload port.Paymen
 	}
 
 	token := base64.URLEncoding.EncodeToString(raw)
-	return fmt.Sprintf("%s/pay?token=%s", g.baseURL, token), nil
+	return fmt.Sprintf("%s/mock_bank/payment?token=%s", g.baseURL, token), nil
 }
 
 func (g *MockBankGateway) ProcessPayment(ctx context.Context, token string) (port.PaymentResult, error) {

@@ -3,6 +3,8 @@ package web
 import (
 	"context"
 	"embed"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -12,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/beastixq/marketplace/internal/middleware"
 	"github.com/beastixq/marketplace/internal/model"
 	"github.com/beastixq/marketplace/internal/service"
 	"github.com/beastixq/marketplace/internal/validators"
@@ -34,6 +37,12 @@ var funcMap = template.FuncMap{
 	"emptyStarRange": func(n int8) []struct{} {
 		return make([]struct{}, 5-n)
 	},
+	"ratingValue": func(rating *float32) string {
+		if rating == nil {
+			return ""
+		}
+		return fmt.Sprintf("%.1f", *rating)
+	},
 }
 
 type WebHandler struct {
@@ -46,6 +55,7 @@ type WebHandler struct {
 	sellerService     service.SellerService
 	reviewService     service.ReviewService
 	backofficeService service.BackofficeService
+	paymentService    *service.PaymentService
 	templates         map[string]*template.Template
 }
 
@@ -59,8 +69,9 @@ func NewWebHandler(
 	sellerSvc service.SellerService,
 	reviewSvc service.ReviewService,
 	backofficeSvc service.BackofficeService,
+	paymentSvc *service.PaymentService,
 ) *WebHandler {
-	pages := []string{"catalog", "product", "login", "register", "categories", "profile", "orders", "cart", "addresses", "seller", "product-edit", "seller-profile", "order-detail", "seller-orders", "seller-products", "admin-users", "admin-user-edit", "admin-categories", "admin-orders", "analyst"}
+	pages := []string{"catalog", "product", "login", "register", "categories", "profile", "orders", "cart", "addresses", "seller", "product-edit", "seller-profile", "order-detail", "seller-orders", "seller-products", "admin-users", "admin-user-edit", "admin-categories", "admin-orders", "analyst", "payment"}
 	templates := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
 		templates[page] = template.Must(
@@ -81,6 +92,7 @@ func NewWebHandler(
 		sellerService:     sellerSvc,
 		reviewService:     reviewSvc,
 		backofficeService: backofficeSvc,
+		paymentService:    paymentSvc,
 		templates:         templates,
 	}
 }
@@ -107,6 +119,7 @@ func (wh *WebHandler) userFromCookie(r *http.Request) *userInfo {
 	if err != nil {
 		return nil
 	}
+	middleware.PublishActor(r.Context(), claims)
 	return &userInfo{UserID: claims.UserID, Role: string(claims.Role), FullName: fmt.Sprintf("User #%d", claims.UserID)}
 }
 
@@ -275,10 +288,16 @@ func (wh *WebHandler) ProductDetail(w http.ResponseWriter, r *http.Request) {
 	priceHistory, _ := wh.productService.GetProductPriceHistory(r.Context(), id, dateFrom, dateTo)
 
 	reviews, _ := wh.productService.GetReviewsByProductID(r.Context(), id, model.PaginationOpts{Page: 1, Limit: 50})
+	user := wh.userFromCookie(r)
 
 	// Build user names map for reviews
 	reviewUserNames := make(map[int64]string, len(reviews))
+	var currentUserReview *model.Review
 	for _, rv := range reviews {
+		if user != nil && user.Role == "buyer" && rv.UserID == user.UserID {
+			review := rv
+			currentUserReview = &review
+		}
 		if _, ok := reviewUserNames[rv.UserID]; !ok {
 			u, err := wh.userService.GetAuthUserByID(r.Context(), rv.UserID)
 			if err == nil {
@@ -292,14 +311,16 @@ func (wh *WebHandler) ProductDetail(w http.ResponseWriter, r *http.Request) {
 	seller, _ := wh.sellerService.GetSellerByID(r.Context(), product.SellerID)
 
 	wh.render(w, "product", map[string]any{
-		"Product":         product,
-		"Seller":          seller,
-		"PriceHistory":    priceHistory,
-		"PriceRange":      rangeParam,
-		"Reviews":         reviews,
-		"ReviewUserNames": reviewUserNames,
-		"User":            wh.userFromCookie(r),
-		"Notice":          r.URL.Query().Get("notice"),
+		"Product":           product,
+		"Seller":            seller,
+		"PriceHistory":      priceHistory,
+		"PriceRange":        rangeParam,
+		"Reviews":           reviews,
+		"ReviewUserNames":   reviewUserNames,
+		"CurrentUserReview": currentUserReview,
+		"User":              user,
+		"Notice":            r.URL.Query().Get("notice"),
+		"ReviewError":       r.URL.Query().Get("review_error"),
 	})
 }
 
@@ -582,6 +603,8 @@ func (wh *WebHandler) Orders(w http.ResponseWriter, r *http.Request) {
 		"CurrentOrders":   currentOrders,
 		"CompletedOrders": completedOrders,
 		"Tab":             tab,
+		"Payment":         r.URL.Query().Get("payment"),
+		"PaymentError":    r.URL.Query().Get("payment_error"),
 	})
 }
 
@@ -591,11 +614,6 @@ func (wh *WebHandler) OrderDetail(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	if user.Role == "seller" {
-		http.Redirect(w, r, "/seller", http.StatusSeeOther)
-		return
-	}
-
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -611,7 +629,7 @@ func (wh *WebHandler) OrderDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	items, _ := wh.orderService.GetOrderItemsByOrderID(r.Context(), actor, order.ID)
-	displayItems := wh.buildCartDisplay(r.Context(), items)
+	displayItems := wh.buildOrderItemsDisplay(r.Context(), items)
 
 	var seller *model.Seller
 	if order.SellerID != nil {
@@ -622,7 +640,7 @@ func (wh *WebHandler) OrderDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var address *model.Address
-	if order.AddressID != nil {
+	if user.Role == "buyer" && order.AddressID != nil {
 		addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), actor)
 		for _, a := range addresses {
 			if a.ID == *order.AddressID {
@@ -633,11 +651,13 @@ func (wh *WebHandler) OrderDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	wh.render(w, "order-detail", map[string]any{
-		"User":    user,
-		"Order":   order,
-		"Items":   displayItems,
-		"Seller":  seller,
-		"Address": address,
+		"User":         user,
+		"Order":        order,
+		"Items":        displayItems,
+		"Seller":       seller,
+		"Address":      address,
+		"Payment":      r.URL.Query().Get("payment"),
+		"PaymentError": r.URL.Query().Get("payment_error"),
 	})
 }
 
@@ -659,8 +679,82 @@ func (wh *WebHandler) OrderPay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = wh.orderService.PayOrder(r.Context(), user.actor(), id)
-	http.Redirect(w, r, "/orders", http.StatusSeeOther)
+	paymentURL, _, err := wh.paymentService.GetOrderPaymentURL(r.Context(), user.actor(), id)
+	if err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/orders/%d?payment=failed&payment_error=%s", id, url.QueryEscape(err.Error())), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, paymentURL, http.StatusSeeOther)
+}
+
+type mockPaymentPayload struct {
+	OrderID int64           `json:"order_id"`
+	Amount  decimal.Decimal `json:"amount"`
+	Success bool            `json:"success"`
+}
+
+func decodeMockPaymentToken(token string) (mockPaymentPayload, error) {
+	raw, err := base64.URLEncoding.DecodeString(token)
+	if err != nil {
+		return mockPaymentPayload{}, err
+	}
+	var payload mockPaymentPayload
+	if err = json.Unmarshal(raw, &payload); err != nil {
+		return mockPaymentPayload{}, err
+	}
+	return payload, nil
+}
+
+func encodeMockPaymentToken(payload mockPaymentPayload) (string, error) {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(raw), nil
+}
+
+func (wh *WebHandler) MockBankPaymentPage(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	payload, err := decodeMockPaymentToken(token)
+	if token == "" || err != nil {
+		wh.render(w, "payment", map[string]any{
+			"User":  wh.userFromCookie(r),
+			"Error": "Invalid payment token",
+		})
+		return
+	}
+
+	wh.render(w, "payment", map[string]any{
+		"User":    wh.userFromCookie(r),
+		"Token":   token,
+		"OrderID": payload.OrderID,
+		"Amount":  payload.Amount,
+	})
+}
+
+func (wh *WebHandler) MockBankPaymentSubmit(w http.ResponseWriter, r *http.Request) {
+	token := r.FormValue("token")
+	payload, err := decodeMockPaymentToken(token)
+	if err != nil {
+		http.Redirect(w, r, "/orders?payment=failed&payment_error="+url.QueryEscape("Invalid payment token"), http.StatusSeeOther)
+		return
+	}
+
+	if r.FormValue("result") == "declined" {
+		payload.Success = false
+		token, err = encodeMockPaymentToken(payload)
+		if err != nil {
+			http.Redirect(w, r, fmt.Sprintf("/orders/%d?payment=failed&payment_error=%s", payload.OrderID, url.QueryEscape(err.Error())), http.StatusSeeOther)
+			return
+		}
+	}
+
+	redirectURL := fmt.Sprintf("/orders/%d", payload.OrderID)
+	if err = wh.paymentService.ProcessOrderPayment(r.Context(), token); err != nil {
+		http.Redirect(w, r, redirectURL+"?payment=failed&payment_error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, redirectURL+"?payment=success", http.StatusSeeOther)
 }
 
 func (wh *WebHandler) OrderCancel(w http.ResponseWriter, r *http.Request) {
@@ -690,20 +784,61 @@ func (wh *WebHandler) OrderCancel(w http.ResponseWriter, r *http.Request) {
 type cartItemDisplay struct {
 	model.OrderItem
 	ProductName string
+	UnitPrice   decimal.Decimal
 	TotalPrice  string
+	DeletedAt   *time.Time
 }
 
-func (wh *WebHandler) buildCartDisplay(ctx context.Context, items []model.OrderItem) []cartItemDisplay {
+func (wh *WebHandler) buildOrderItemsDisplay(ctx context.Context, items []model.OrderItem) []cartItemDisplay {
 	display := make([]cartItemDisplay, 0, len(items))
 	for _, item := range items {
-		p, _ := wh.productService.GetProductByID(ctx, item.ProductID)
+		productName := fmt.Sprintf("Product #%d", item.ProductID)
+		var deletedAt *time.Time
+		if p, err := wh.productService.GetProductByID(ctx, item.ProductID); err == nil {
+			productName = p.Name
+			deletedAt = p.DeletedAt
+		}
+		unitPrice := item.PriceAtPurchase
+		itemTotal := unitPrice.Mul(decimal.NewFromInt(int64(item.Quantity)))
 		display = append(display, cartItemDisplay{
 			OrderItem:   item,
-			ProductName: p.Name,
-			TotalPrice:  item.PriceAtPurchase.Mul(decimal.NewFromInt(int64(item.Quantity))).String(),
+			ProductName: productName,
+			UnitPrice:   unitPrice,
+			TotalPrice:  itemTotal.String(),
+			DeletedAt:   deletedAt,
 		})
 	}
 	return display
+}
+
+func (wh *WebHandler) buildCartDisplay(ctx context.Context, items []model.OrderItem) ([]cartItemDisplay, decimal.Decimal, bool) {
+	display := make([]cartItemDisplay, 0, len(items))
+	total := decimal.Zero
+	hasDeletedItems := false
+	for _, item := range items {
+		productName := fmt.Sprintf("Product #%d", item.ProductID)
+		unitPrice := item.PriceAtPurchase
+		var deletedAt *time.Time
+		if p, err := wh.productService.GetProductByID(ctx, item.ProductID); err == nil {
+			productName = p.Name
+			unitPrice = p.Price
+			deletedAt = p.DeletedAt
+			if deletedAt != nil {
+				hasDeletedItems = true
+			}
+		}
+
+		itemTotal := unitPrice.Mul(decimal.NewFromInt(int64(item.Quantity)))
+		total = total.Add(itemTotal)
+		display = append(display, cartItemDisplay{
+			OrderItem:   item,
+			ProductName: productName,
+			UnitPrice:   unitPrice,
+			TotalPrice:  itemTotal.String(),
+			DeletedAt:   deletedAt,
+		})
+	}
+	return display, total, hasDeletedItems
 }
 
 func (wh *WebHandler) Cart(w http.ResponseWriter, r *http.Request) {
@@ -725,14 +860,17 @@ func (wh *WebHandler) Cart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), actor)
+	displayItems, cartTotal, hasDeletedItems := wh.buildCartDisplay(r.Context(), items)
 
 	wh.render(w, "cart", map[string]any{
-		"User":      user,
-		"Cart":      cart,
-		"Items":     wh.buildCartDisplay(r.Context(), items),
-		"HasCart":   err == nil,
-		"Addresses": addresses,
-		"Error":     "",
+		"User":            user,
+		"Cart":            cart,
+		"Items":           displayItems,
+		"CartTotal":       cartTotal.String(),
+		"HasCart":         err == nil,
+		"Addresses":       addresses,
+		"Error":           "",
+		"HasDeletedItems": hasDeletedItems,
 	})
 }
 
@@ -763,6 +901,10 @@ func (wh *WebHandler) CartAdd(w http.ResponseWriter, r *http.Request) {
 	if err = wh.orderService.AddItemToCart(r.Context(), user.actor(), productID, quantity); err != nil {
 		if errors.Is(err, service.ErrProductAlreadyInCart) {
 			http.Redirect(w, r, fmt.Sprintf("/products/%d?notice=already-in-cart", productID), http.StatusSeeOther)
+			return
+		}
+		if errors.Is(err, service.ErrProductDeleted) {
+			http.Redirect(w, r, fmt.Sprintf("/products/%d?notice=product-deleted", productID), http.StatusSeeOther)
 			return
 		}
 		log.Printf("CartAdd error: %v", err)
@@ -851,13 +993,16 @@ func (wh *WebHandler) CartCheckout(w http.ResponseWriter, r *http.Request) {
 			items, _ = wh.orderService.GetOrderItemsByOrderID(r.Context(), actor, cart.ID)
 		}
 		addresses, _ := wh.addressService.GetAddressesByUserID(r.Context(), actor)
+		displayItems, cartTotal, hasDeletedItems := wh.buildCartDisplay(r.Context(), items)
 		wh.render(w, "cart", map[string]any{
-			"User":      user,
-			"Cart":      cart,
-			"Items":     wh.buildCartDisplay(r.Context(), items),
-			"HasCart":   cartErr == nil,
-			"Addresses": addresses,
-			"Error":     "Checkout failed: " + err.Error(),
+			"User":            user,
+			"Cart":            cart,
+			"Items":           displayItems,
+			"CartTotal":       cartTotal.String(),
+			"HasCart":         cartErr == nil,
+			"Addresses":       addresses,
+			"Error":           "Checkout failed: " + err.Error(),
+			"HasDeletedItems": hasDeletedItems,
 		})
 		return
 	}
@@ -1361,10 +1506,86 @@ func (wh *WebHandler) ReviewSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err = wh.reviewService.CreateReview(r.Context(), user.actor(), rc); err != nil {
-		log.Printf("ReviewSubmit error: %v", err)
+		http.Redirect(w, r, fmt.Sprintf("/products/%d?review_error=%s", productID, url.QueryEscape(err.Error())), http.StatusSeeOther)
+		return
 	}
 
 	http.Redirect(w, r, fmt.Sprintf("/products/%d", productID), http.StatusSeeOther)
+}
+
+func (wh *WebHandler) ReviewUpdate(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	review, err := wh.reviewService.GetReviewByID(r.Context(), id)
+	if err != nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	ratingStr := r.FormValue("rating")
+	ratingRaw, err := strconv.Atoi(ratingStr)
+	if err != nil || ratingRaw < 1 || ratingRaw > 5 {
+		http.Redirect(w, r, fmt.Sprintf("/products/%d?review_error=%s", review.ProductID, url.QueryEscape("Rating must be between 1 and 5")), http.StatusSeeOther)
+		return
+	}
+	rating := int8(ratingRaw)
+	comment := r.FormValue("comment")
+
+	_, err = wh.reviewService.UpdateReview(r.Context(), user.actor(), id, model.ReviewUpdate{
+		Rating:  &rating,
+		Comment: &comment,
+	})
+	if err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/products/%d?review_error=%s", review.ProductID, url.QueryEscape(err.Error())), http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/products/%d", review.ProductID), http.StatusSeeOther)
+}
+
+func (wh *WebHandler) ReviewDelete(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	var productID int64
+	review, err := wh.reviewService.GetReviewByID(r.Context(), id)
+	if err == nil {
+		productID = review.ProductID
+	}
+
+	if err = wh.reviewService.DeleteReviewByID(r.Context(), user.actor(), id); err != nil {
+		if productID > 0 {
+			http.Redirect(w, r, fmt.Sprintf("/products/%d?review_error=%s", productID, url.QueryEscape(err.Error())), http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	if productID > 0 {
+		http.Redirect(w, r, fmt.Sprintf("/products/%d", productID), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // --- Public Seller Profile ---
@@ -1543,13 +1764,14 @@ func (wh *WebHandler) AdminCategories(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	categories, _ := wh.categoryService.GetCategories(r.Context(), model.PaginationOpts{Page: 1, Limit: 500})
+	categories, _ := wh.categoryService.GetCategories(r.Context(), model.PaginationOpts{Page: 1, Limit: 5000})
 
 	wh.render(w, "admin-categories", map[string]any{
-		"User":       user,
-		"Categories": categories,
-		"Success":    r.URL.Query().Get("success"),
-		"Error":      r.URL.Query().Get("error"),
+		"User":             user,
+		"Categories":       categories,
+		"ParentCategories": categories,
+		"Success":          r.URL.Query().Get("success"),
+		"Error":            r.URL.Query().Get("error"),
 	})
 }
 
@@ -1561,10 +1783,19 @@ func (wh *WebHandler) AdminCategoryCreate(w http.ResponseWriter, r *http.Request
 
 	name := r.FormValue("name")
 	description := r.FormValue("description")
+	parentIDRaw := r.FormValue("parent_id")
 
 	cc := model.CategoryCreate{Name: name}
 	if description != "" {
 		cc.Description = &description
+	}
+	if parentIDRaw != "" {
+		parentID, err := strconv.ParseInt(parentIDRaw, 10, 64)
+		if err != nil {
+			http.Redirect(w, r, "/admin/categories?error="+url.QueryEscape("Invalid parent category"), http.StatusSeeOther)
+			return
+		}
+		cc.ParentID = &parentID
 	}
 
 	_, err := wh.categoryService.CreateCategory(r.Context(), user.actor(), cc)
@@ -1573,6 +1804,37 @@ func (wh *WebHandler) AdminCategoryCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 	http.Redirect(w, r, "/admin/categories?success=Category+created", http.StatusSeeOther)
+}
+
+func (wh *WebHandler) AdminCategoryUpdate(w http.ResponseWriter, r *http.Request) {
+	user := wh.requireRole(w, r, "admin")
+	if user == nil {
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/admin/categories?error="+url.QueryEscape("Invalid category id"), http.StatusSeeOther)
+		return
+	}
+
+	name := r.FormValue("name")
+	if name == "" {
+		http.Redirect(w, r, "/admin/categories?error="+url.QueryEscape("Category name is required"), http.StatusSeeOther)
+		return
+	}
+	description := r.FormValue("description")
+
+	update := model.CategoryUpdate{
+		Name:        &name,
+		Description: &description,
+	}
+
+	if _, err = wh.categoryService.UpdateCategory(r.Context(), user.actor(), id, update); err != nil {
+		http.Redirect(w, r, "/admin/categories?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/admin/categories?success=Category+updated", http.StatusSeeOther)
 }
 
 func (wh *WebHandler) AdminCategoryDelete(w http.ResponseWriter, r *http.Request) {

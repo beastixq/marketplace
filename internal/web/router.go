@@ -34,6 +34,8 @@ func NewWebRouter(wh *WebHandler) http.Handler {
 	r.Get("/orders/{id}", wh.OrderDetail)
 	r.Post("/orders/{id}/pay", wh.OrderPay)
 	r.Post("/orders/{id}/cancel", wh.OrderCancel)
+	r.Get("/mock_bank/payment", wh.MockBankPaymentPage)
+	r.Post("/mock_bank/payment", wh.MockBankPaymentSubmit)
 	r.Get("/cart", wh.Cart)
 	r.Post("/cart/add", wh.CartAdd)
 	r.Post("/cart/items/{id}/update", wh.CartUpdateQuantity)
@@ -61,6 +63,8 @@ func NewWebRouter(wh *WebHandler) http.Handler {
 
 	// Reviews
 	r.Post("/products/{id}/review", wh.ReviewSubmit)
+	r.Post("/reviews/{id}/edit", wh.ReviewUpdate)
+	r.Post("/reviews/{id}/delete", wh.ReviewDelete)
 
 	// Admin
 	r.Get("/admin/users", wh.AdminUsers)
@@ -69,6 +73,7 @@ func NewWebRouter(wh *WebHandler) http.Handler {
 	r.Post("/admin/users/{id}/delete", wh.AdminUserDelete)
 	r.Get("/admin/categories", wh.AdminCategories)
 	r.Post("/admin/categories", wh.AdminCategoryCreate)
+	r.Post("/admin/categories/{id}", wh.AdminCategoryUpdate)
 	r.Post("/admin/categories/{id}/delete", wh.AdminCategoryDelete)
 	r.Get("/admin/orders", wh.AdminOrders)
 	r.Post("/admin/products/{id}/delete", wh.AdminProductDelete)

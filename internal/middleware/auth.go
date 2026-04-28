@@ -44,6 +44,15 @@ func ActorFromHolder(ctx context.Context) (m.TokenClaims, bool) {
 	return *h.Claims, true
 }
 
+// PublishActor stores already-validated claims in the request-scoped holder.
+// It is used by non-API frontends that authenticate without AuthMiddleware
+// but still want RequestLogger to include actor fields.
+func PublishActor(ctx context.Context, claims m.TokenClaims) {
+	if h, ok := ctx.Value(actorHolderKey).(*actorHolder); ok && h != nil {
+		h.Claims = &claims
+	}
+}
+
 // ActorHolder installs a request-scoped holder so that downstream auth
 // middleware can publish the authenticated actor to outer middleware.
 func ActorHolder() func(http.Handler) http.Handler {

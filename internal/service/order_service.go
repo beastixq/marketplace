@@ -222,6 +222,9 @@ func (os OrderService) AddItemToCart(ctx context.Context, actor Actor, productID
 			}
 			return fmt.Errorf("%w: %v", ErrGetProductByID, err)
 		}
+		if product.DeletedAt != nil {
+			return ErrProductDeleted
+		}
 		if product.AvailableQuantity() < quantity {
 			return ErrQuantityTooBig
 		}
@@ -369,6 +372,9 @@ func (os OrderService) Checkout(ctx context.Context, actor Actor, addressID int6
 					return ErrProductNotFound
 				}
 				return fmt.Errorf("%w: %v", ErrGetProductByID, err)
+			}
+			if product.DeletedAt != nil {
+				return ErrProductDeleted
 			}
 			qty := qtyByProductID[productID]
 			if product.AvailableQuantity() < qty {
@@ -545,10 +551,12 @@ func (os OrderService) ExpireOrders(ctx context.Context, deadline time.Time) err
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrGetOrdersByUserID, err)
 	}
+	var expireErrors []error
 	for _, order := range orders {
 		items, err := os.orderItemRepo.GetOrderItemsByOrderID(ctx, order.ID)
 		if err != nil {
-			return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
+			expireErrors = append(expireErrors, fmt.Errorf("order %d: %w: %v", order.ID, ErrGetOrderItemsByOrderID, err))
+			continue
 		}
 		if err = os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
 			err = os.orderRepo.UpdateOrderStatus(ctx, order.ID,
@@ -574,10 +582,11 @@ func (os OrderService) ExpireOrders(ctx context.Context, deadline time.Time) err
 			}
 			return nil
 		}); err != nil {
-			return err
+			expireErrors = append(expireErrors, fmt.Errorf("order %d: %w", order.ID, err))
+			continue
 		}
 	}
-	return nil
+	return errors.Join(expireErrors...)
 }
 
 func (os OrderService) ShipOrder(ctx context.Context, actor Actor, orderID int64) (err error) {

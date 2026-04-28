@@ -3,16 +3,22 @@
 {{define "content"}}
 <div class="product-detail">
     <div class="product-detail__name">{{.Product.Name}}</div>
+    {{if .Product.DeletedAt}}
+    <div class="alert alert--error" style="margin-bottom: 1rem;">
+        This product was deleted at {{.Product.DeletedAt.Format "02.01.2006 15:04"}}. It is no longer available for new orders.
+    </div>
+    {{end}}
     <div class="product-detail__price">{{.Product.Price}} &#8381;</div>
     {{with .Product.Rating}}
     <div style="font-size: 1.1rem; color: #f59e0b; margin-bottom: 0.5rem;">
-        {{printf "%.1f" .}} &#9733; <span style="color: var(--text-muted); font-size: 0.9rem;">product rating</span>
+        {{ratingValue $.Product.Rating}} &#9733; <span style="color: var(--text-muted); font-size: 0.9rem;">product rating</span>
     </div>
     {{end}}
     <div class="product-detail__meta">
         In stock: {{.Product.StockQuantity}} &bull;
         <a href="/sellers/{{.Seller.ID}}">{{.Seller.CompanyName}}</a> &bull;
         Added: {{.Product.CreatedAt.Format "02.01.2006"}}
+        {{if .Product.DeletedAt}} &bull; Deleted: {{.Product.DeletedAt.Format "02.01.2006 15:04"}}{{end}}
     </div>
     {{if .Product.Description}}
     <div class="product-detail__desc">{{.Product.Description}}</div>
@@ -24,6 +30,10 @@
     {{if eq .Notice "added-to-cart"}}
     <div class="alert alert--success" style="margin-bottom: 1rem;">Added to cart! <a href="/cart">Go to cart</a></div>
     {{end}}
+    {{if eq .Notice "product-deleted"}}
+    <div class="alert alert--error" style="margin-bottom: 1rem;">This product is deleted and cannot be added to cart.</div>
+    {{end}}
+    {{if not .Product.DeletedAt}}
     <form method="POST" action="/cart/add" class="product-detail__cart-form">
         <input type="hidden" name="product_id" value="{{.Product.ID}}">
         <label for="quantity">Quantity:</label>
@@ -31,9 +41,10 @@
         <button type="submit" class="btn btn--primary">Add to Cart</button>
     </form>
     {{end}}
+    {{end}}
 </div>
 
-{{if and .User (eq .User.Role "admin")}}
+{{if and .User (eq .User.Role "admin") (not .Product.DeletedAt)}}
 <div style="margin-top: 1rem;">
     <form method="POST" action="/admin/products/{{.Product.ID}}/delete" style="display: inline;">
         <button type="submit" class="btn btn--danger btn--sm" onclick="return confirm('Delete this product?')">Delete Product (Admin)</button>
@@ -92,6 +103,32 @@
 
 {{if and .User (eq .User.Role "buyer")}}
 <div class="form-card" style="margin-top: 2rem; margin-bottom: 2rem;">
+    {{if .ReviewError}}
+    <div class="alert alert--error">{{.ReviewError}}</div>
+    {{end}}
+    {{if .CurrentUserReview}}
+    <h2>Your Review</h2>
+    <form method="POST" action="/reviews/{{.CurrentUserReview.ID}}/edit">
+        <div class="form-group">
+            <label for="rating">Rating</label>
+            <select id="rating" name="rating">
+                <option value="5" {{if eq .CurrentUserReview.Rating 5}}selected{{end}}>&#9733;&#9733;&#9733;&#9733;&#9733; (5)</option>
+                <option value="4" {{if eq .CurrentUserReview.Rating 4}}selected{{end}}>&#9733;&#9733;&#9733;&#9733;&#9734; (4)</option>
+                <option value="3" {{if eq .CurrentUserReview.Rating 3}}selected{{end}}>&#9733;&#9733;&#9733;&#9734;&#9734; (3)</option>
+                <option value="2" {{if eq .CurrentUserReview.Rating 2}}selected{{end}}>&#9733;&#9733;&#9734;&#9734;&#9734; (2)</option>
+                <option value="1" {{if eq .CurrentUserReview.Rating 1}}selected{{end}}>&#9733;&#9734;&#9734;&#9734;&#9734; (1)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="comment">Comment (optional)</label>
+            <textarea id="comment" name="comment" rows="3" placeholder="Share your experience...">{{with .CurrentUserReview.Comment}}{{.}}{{end}}</textarea>
+        </div>
+        <button type="submit" class="btn btn--primary">Update Review</button>
+    </form>
+    <form method="POST" action="/reviews/{{.CurrentUserReview.ID}}/delete" style="margin-top: 0.75rem;">
+        <button type="submit" class="btn btn--danger" onclick="return confirm('Delete your review?')">Delete Review</button>
+    </form>
+    {{else}}
     <h2>Leave a Review</h2>
     <form method="POST" action="/products/{{.Product.ID}}/review">
         <div class="form-group">
@@ -110,6 +147,7 @@
         </div>
         <button type="submit" class="btn btn--primary">Submit Review</button>
     </form>
+    {{end}}
 </div>
 {{end}}
 
@@ -126,6 +164,10 @@
             {{if and $.User (eq $.User.Role "admin")}}
             <form method="POST" action="/admin/reviews/{{.ID}}/delete" style="margin:0;">
                 <button type="submit" class="btn btn--danger btn--sm" onclick="return confirm('Delete this review?')">Delete</button>
+            </form>
+            {{else if and $.User (eq $.User.Role "buyer") (eq $.User.UserID .UserID)}}
+            <form method="POST" action="/reviews/{{.ID}}/delete" style="margin:0;">
+                <button type="submit" class="btn btn--danger btn--sm" onclick="return confirm('Delete your review?')">Delete</button>
             </form>
             {{end}}
         </div>

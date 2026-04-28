@@ -40,6 +40,9 @@ var serviceErrorResponses = []serviceErrorResponse{
 	{service.ErrProductAlreadyInCart, http.StatusConflict},
 	{service.ErrInsufficientStock, http.StatusConflict},
 	{service.ErrSellerNotSet, http.StatusConflict},
+	{service.ErrProductDeleted, http.StatusConflict},
+	{service.ErrStockBelowReserved, http.StatusConflict},
+	{service.ErrReviewAlreadyExists, http.StatusConflict},
 
 	{service.ErrEmptyCart, http.StatusBadRequest},
 	{service.ErrQuantityTooBig, http.StatusBadRequest},

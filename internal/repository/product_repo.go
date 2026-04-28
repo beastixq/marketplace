@@ -208,6 +208,10 @@ func (pr ProductRepoImpl) UpdateProduct(ctx context.Context, id int64, pu m.Prod
 			if errors.Is(err, pgx.ErrNoRows) {
 				return m.Product{}, service.ErrNotFound
 			}
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.CheckViolation && pgErr.ConstraintName == "chk_products_reserved_le_stock" {
+				return m.Product{}, service.ErrStockBelowReserved
+			}
 			return m.Product{}, fmt.Errorf("%w: %v", ErrToScan, err)
 		}
 		return product.toModel(), nil

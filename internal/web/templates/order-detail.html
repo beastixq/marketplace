@@ -2,8 +2,21 @@
 
 {{define "content"}}
 <div style="margin-bottom: 1rem;">
+    {{if and .User (eq .User.Role "seller")}}
+    <a href="/seller/orders">&larr; Back to Seller Orders</a>
+    {{else if and .User (eq .User.Role "admin")}}
+    <a href="/admin/orders">&larr; Back to Admin Orders</a>
+    {{else}}
     <a href="/orders">&larr; Back to Orders</a>
+    {{end}}
 </div>
+
+{{if eq .Payment "success"}}
+<div class="alert alert--success">Payment completed successfully.</div>
+{{end}}
+{{if eq .Payment "failed"}}
+<div class="alert alert--error">Payment failed{{if .PaymentError}}: {{.PaymentError}}{{end}}</div>
+{{end}}
 
 <div class="order-card" style="margin-bottom: 2rem;">
     <div class="order-card__header">
@@ -14,7 +27,7 @@
         <span>Created: {{.Order.CreatedAt.Format "02.01.2006 15:04"}}</span>
     </div>
     <div class="order-card__actions">
-        {{if eq (printf "%s" .Order.Status) "pending"}}
+        {{if and .User (eq .User.Role "buyer") (eq (printf "%s" .Order.Status) "pending")}}
             <form method="POST" action="/orders/{{.Order.ID}}/pay" style="display:inline">
                 <button type="submit" class="btn btn--primary btn--sm">Pay</button>
             </form>
@@ -22,9 +35,19 @@
                 <button type="submit" class="btn btn--danger btn--sm">Cancel</button>
             </form>
         {{end}}
-        {{if eq (printf "%s" .Order.Status) "paid"}}
+        {{if and .User (eq .User.Role "buyer") (eq (printf "%s" .Order.Status) "paid")}}
             <form method="POST" action="/orders/{{.Order.ID}}/cancel" style="display:inline">
                 <button type="submit" class="btn btn--danger btn--sm">Cancel</button>
+            </form>
+        {{end}}
+        {{if and .User (eq .User.Role "seller") (eq (printf "%s" .Order.Status) "paid")}}
+            <form method="POST" action="/seller/orders/{{.Order.ID}}/ship" style="display:inline">
+                <button type="submit" class="btn btn--primary btn--sm">Ship</button>
+            </form>
+        {{end}}
+        {{if and .User (eq .User.Role "seller") (eq (printf "%s" .Order.Status) "shipped")}}
+            <form method="POST" action="/seller/orders/{{.Order.ID}}/deliver" style="display:inline">
+                <button type="submit" class="btn btn--primary btn--sm">Mark Delivered</button>
             </form>
         {{end}}
     </div>
@@ -56,7 +79,10 @@
     <tbody>
         {{range .Items}}
         <tr style="border-bottom: 1px solid var(--border);">
-            <td style="padding: 0.5rem;"><a href="/products/{{.ProductID}}">{{.ProductName}}</a></td>
+            <td style="padding: 0.5rem;">
+                <a href="/products/{{.ProductID}}">{{.ProductName}}</a>
+                {{if .DeletedAt}}<span style="color: var(--danger); font-size: 0.85rem;">deleted</span>{{end}}
+            </td>
             <td style="padding: 0.5rem;">{{.PriceAtPurchase}} &#8381;</td>
             <td style="padding: 0.5rem;">{{.Quantity}}</td>
             <td style="padding: 0.5rem; text-align:right;">{{.TotalPrice}} &#8381;</td>

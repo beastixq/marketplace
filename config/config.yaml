@@ -7,7 +7,7 @@ server:
 
 database:
   # Local dev default. Override via DATABASE_URL in prod.
-  dsn: "postgres://marketplace:marketplace@localhost:5432/marketplace?sslmode=disable"
+  dsn: "postgres://postgres:postgres@localhost:5432/marketplace?sslmode=disable"
 
 auth:
   jwt_secret: "dev-secret-change-me"
@@ -15,15 +15,15 @@ auth:
   bcrypt_cost: 10
 
 payment:
-  ttl: "15m"
+  ttl: "2m"
   gateway_url: "http://localhost:8080"
 
 orders:
   expiration_check_interval: "1m"
 
 logging:
-  level: "info"                       # debug | info | warn | error
-  format: "json"                      # json | text
-  file: "logs/marketplace.log"        # empty disables file sink
-  console: true                       # mirror to stdout
-  add_source: false                   # include source file:line
+  level: "info" # debug | info | warn | error
+  format: "json" # json | text
+  file: "logs/marketplace.log" # empty disables file sink
+  console: true # mirror to stdout
+  add_source: false # include source file:line
