@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PGPASSWORD=marketplace psql -h localhost -U marketplace_app -d marketplace -c \"SELECT email, role FROM users LIMIT 5;\")",
+      "Bash(source /home/roman/bmstu/6sem/marketplace/.env)",
+      "Bash(psql \"$DATABASE_URL\" -c \"SELECT email, role FROM users LIMIT 5;\")",
+      "Bash(psql \"$DATABASE_URL\" -c \"SELECT email, role FROM users WHERE role = ''buyer'' LIMIT 3;\")",
+      "Bash(go test:*)",
+      "Bash(mockgen -package mock_service -destination ./internal/mocks/service/mock_category_repo.go github.com/beastixq/marketplace/internal/service CategoryRepo)",
+      "Bash(go generate:*)",
+      "Bash(grep -n \"ValidateToken\" /home/roman/bmstu/6sem/marketplace/internal/service/*.go)",
+      "Bash(grep -n \"^type.*Service interface\" /home/roman/bmstu/6sem/marketplace/internal/service/*.go)",
+      "Bash(grep -n \"^func \\(.*Service\\)\" /home/roman/bmstu/6sem/marketplace/internal/service/*.go)",
+      "Bash(pdflatex -interaction=nonstopmode report.tex)",
+      "Bash(go tool:*)"
+    ]
+  }
+}

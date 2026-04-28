@@ -1,15 +1,10 @@
-.claude
-CLAUDE.md
 PPO_labs
 scripts/sql
 plantuml.jar
-Makefile
 DBCourseWork
 .env
-todo.md
 requests.http
 .playwright-mcp
-docs/
 .vscode
 problems.md
 .codex
