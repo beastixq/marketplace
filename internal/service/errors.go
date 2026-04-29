@@ -116,7 +116,10 @@ var (
 	ErrReviewAlreadyExists   = errors.New("You have already reviewed this product")
 
 	// backoffice
-	ErrGetPlatformStats = errors.New("Failed to get platform stats")
+	ErrGetPlatformStats     = errors.New("Failed to get platform stats")
+	ErrGetOrderDynamics     = errors.New("Failed to get order dynamics")
+	ErrGetSalesByCategory   = errors.New("Failed to get sales by category")
+	ErrInvalidReportOptions = errors.New("Invalid report options")
 )
 
 // For repos usage
