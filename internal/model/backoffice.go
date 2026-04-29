@@ -1,6 +1,10 @@
 package model
 
-import "github.com/shopspring/decimal"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type AdminOrderListOptions struct {
 	Status     *OrderStatus
@@ -34,4 +38,33 @@ type TopProductStats struct {
 	Name      string
 	Revenue   decimal.Decimal
 	UnitsSold int64
+}
+
+type ReportPeriod string
+
+const (
+	ReportPeriodDay   ReportPeriod = "day"
+	ReportPeriodWeek  ReportPeriod = "week"
+	ReportPeriodMonth ReportPeriod = "month"
+)
+
+type ReportOptions struct {
+	DateFrom *time.Time
+	DateTo   *time.Time
+	Period   ReportPeriod
+	Limit    int
+}
+
+type OrderDynamicsPoint struct {
+	PeriodStart time.Time
+	OrdersCount int64
+	Revenue     decimal.Decimal
+}
+
+type CategorySalesStats struct {
+	CategoryID   int64
+	CategoryName string
+	OrdersCount  int64
+	UnitsSold    int64
+	Revenue      decimal.Decimal
 }

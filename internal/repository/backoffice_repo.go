@@ -142,3 +142,114 @@ func (br BackofficeRepoImpl) GetPlatformStats(ctx context.Context) (m.PlatformSt
 
 	return stats, nil
 }
+
+func (br BackofficeRepoImpl) GetOrderDynamics(ctx context.Context, opts m.ReportOptions) ([]m.OrderDynamicsPoint, error) {
+	period, err := reportPeriodSQL(opts.Period)
+	if err != nil {
+		return nil, err
+	}
+
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	qb := psql.
+		Select(
+			fmt.Sprintf("date_trunc('%s', created_at) AS period_start", period),
+			"count(*) AS orders_count",
+			"COALESCE(SUM(CASE WHEN status IN ('paid', 'shipped', 'delivered') THEN total_amount ELSE 0 END), 0) AS revenue",
+		).
+		From("orders").
+		Where(sq.NotEq{"status": m.StatusDraft}).
+		GroupBy("period_start").
+		OrderBy("period_start ASC")
+	if opts.DateFrom != nil {
+		qb = qb.Where(sq.GtOrEq{"created_at": *opts.DateFrom})
+	}
+	if opts.DateTo != nil {
+		qb = qb.Where(sq.LtOrEq{"created_at": *opts.DateTo})
+	}
+
+	sql, args, err := qb.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	rows, err := getConn(ctx, br.pool).Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
+	}
+	defer rows.Close()
+
+	points := make([]m.OrderDynamicsPoint, 0)
+	for rows.Next() {
+		var point m.OrderDynamicsPoint
+		if err = rows.Scan(&point.PeriodStart, &point.OrdersCount, &point.Revenue); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrToScan, err)
+		}
+		points = append(points, point)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrRowsIteration, err)
+	}
+	return points, nil
+}
+
+func (br BackofficeRepoImpl) GetSalesByCategory(ctx context.Context, opts m.ReportOptions) ([]m.CategorySalesStats, error) {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	qb := psql.
+		Select(
+			"c.id",
+			"c.name",
+			"count(DISTINCT o.id) AS orders_count",
+			"COALESCE(SUM(oi.quantity), 0) AS units_sold",
+			"COALESCE(SUM(oi.price_at_purchase * oi.quantity), 0) AS revenue",
+		).
+		From("categories c").
+		Join("product_categories pc ON pc.category_id = c.id").
+		Join("order_items oi ON oi.product_id = pc.product_id").
+		Join("orders o ON o.id = oi.order_id AND o.status IN ('paid', 'shipped', 'delivered')").
+		GroupBy("c.id", "c.name").
+		OrderBy("revenue DESC", "c.name ASC")
+	if opts.DateFrom != nil {
+		qb = qb.Where(sq.GtOrEq{"o.created_at": *opts.DateFrom})
+	}
+	if opts.DateTo != nil {
+		qb = qb.Where(sq.LtOrEq{"o.created_at": *opts.DateTo})
+	}
+	if opts.Limit > 0 {
+		qb = qb.Limit(uint64(opts.Limit))
+	}
+
+	sql, args, err := qb.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	rows, err := getConn(ctx, br.pool).Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
+	}
+	defer rows.Close()
+
+	stats := make([]m.CategorySalesStats, 0)
+	for rows.Next() {
+		var stat m.CategorySalesStats
+		if err = rows.Scan(&stat.CategoryID, &stat.CategoryName, &stat.OrdersCount, &stat.UnitsSold, &stat.Revenue); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrToScan, err)
+		}
+		stats = append(stats, stat)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrRowsIteration, err)
+	}
+	return stats, nil
+}
+
+func reportPeriodSQL(period m.ReportPeriod) (string, error) {
+	switch period {
+	case "", m.ReportPeriodDay:
+		return "day", nil
+	case m.ReportPeriodWeek:
+		return "week", nil
+	case m.ReportPeriodMonth:
+		return "month", nil
+	default:
+		return "", fmt.Errorf("invalid report period: %s", period)
+	}
+}
