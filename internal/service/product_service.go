@@ -120,30 +120,7 @@ func (ps ProductService) UpdateProduct(ctx context.Context, actor Actor, id int6
 		return m.Product{}, ErrPermissionDenied
 	}
 
-	p, err = ps.productRepo.GetProductByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return m.Product{}, ErrProductNotFound
-		}
-		return m.Product{}, fmt.Errorf("%w: %v", ErrGetProductByID, err)
-	}
-
-	s, err := ps.sellerRepo.GetSellerByID(ctx, p.SellerID)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return m.Product{}, ErrSellerNotFound
-		}
-		return m.Product{}, fmt.Errorf("%w: %v", ErrGetSellerByID, err)
-	}
-	if !actor.IsAdmin() {
-		if s.UserID != actor.UserID {
-			return m.Product{}, ErrNotYourSeller
-		}
-	}
-
-	// Lock and validate inside tx so DeletedAt and stock-vs-reserved checks
-	// run against fresh data; concurrent checkout/cancel may have changed
-	// reserved_quantity since the outer read.
+	// Lock first, then authorize and validate against fresh product data.
 	var updated m.Product
 	if err = ps.txManager.WithTransaction(ctx, func(ctx context.Context) error {
 		locked, err := ps.productRepo.GetProductByIDForUpdate(ctx, id)
@@ -155,6 +132,16 @@ func (ps ProductService) UpdateProduct(ctx context.Context, actor Actor, id int6
 		}
 		if locked.DeletedAt != nil {
 			return ErrProductDeleted
+		}
+		s, err := ps.sellerRepo.GetSellerByID(ctx, locked.SellerID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return ErrSellerNotFound
+			}
+			return fmt.Errorf("%w: %v", ErrGetSellerByID, err)
+		}
+		if !actor.IsAdmin() && s.UserID != actor.UserID {
+			return ErrNotYourSeller
 		}
 		if pu.StockQuantity != nil && *pu.StockQuantity < locked.ReservedQuantity {
 			return ErrStockBelowReserved
