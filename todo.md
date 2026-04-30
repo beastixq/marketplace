@@ -38,14 +38,16 @@
    до `ChangeStockAndReserved`. Deadlock-free между всеми путями
    мутации products (включая checkout).
 
-3. **Более информативные ошибки worker/order lifecycle**.
-   Сейчас `ExpireOrders` продолжает обработку после ошибки конкретного заказа, но итоговый лог всё ещё бедный.
-   Он показывает `order_id`, но не показывает `product_id`, `quantity`, `reserved_quantity`.
-   Нужно логировать каждую ошибку отдельно или возвращать структурированный доменный error context.
+3. ~~**Более информативные ошибки worker/order lifecycle**~~ — done.
+   `ExpireOrders` теперь возвращает `*ExpireOrderError` со структурным
+   контекстом (`OrderID`, `ProductID`, `Quantity`, `ReservedQuantity`,
+   `Stage`, `Cause`). `OrderExpirationWorker` распаковывает joined errors
+   и эмитит per-failure `slog.Error` с именованными полями. Service
+   остаётся log-free; logging происходит на границе worker.
 
-4. **Order state machine**.
-   Вынести допустимые переходы статусов заказа в одну таблицу/методы и использовать её в service/repo status updates.
-   Сейчас переходы размазаны по `PayOrder`, `CancelOrder`, `ShipOrder`, `DeliverOrder`, `ExpireOrders`.
+4. ~~**Order state machine**~~ — done.
+   Допустимые переходы статусов заказа централизованы в service-layer таблице,
+   `OrderService`/`PaymentService` используют её для validation и CAS update.
 
 5. **Цена в draft-корзине — модель БД/API/techui**.
    Web UI уже показывает актуальную цену из `products`, checkout записывает актуальный `price_at_purchase`.

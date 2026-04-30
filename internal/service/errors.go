@@ -2,7 +2,34 @@ package service
 
 import (
 	"errors"
+	"fmt"
 )
+
+// Stages for ExpireOrderError.
+const (
+	ExpireStageGetItems     = "get_items"
+	ExpireStageUpdateStatus = "update_status"
+	ExpireStageLockProduct  = "lock_product"
+	ExpireStageReleaseStock = "release_stock"
+)
+
+// ExpireOrderError carries structured context for a single failure inside
+// OrderService.ExpireOrders so the worker can emit slog records with
+// per-failure fields (order_id, product_id, quantity, reserved_quantity).
+type ExpireOrderError struct {
+	OrderID          int64
+	ProductID        int64
+	Quantity         int
+	ReservedQuantity int
+	Stage            string
+	Cause            error
+}
+
+func (e *ExpireOrderError) Error() string {
+	return fmt.Sprintf("expire order %d at %s: %v", e.OrderID, e.Stage, e.Cause)
+}
+
+func (e *ExpireOrderError) Unwrap() error { return e.Cause }
 
 // service layer errors
 var (
