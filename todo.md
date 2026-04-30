@@ -17,19 +17,11 @@
    - unique constraint/index на `order_items(order_id, product_id)`.
    Это важно: сейчас часть защиты есть в service, но БД должна держать инвариант.
 
-4. **Ownership `address_id` при checkout** — запретить checkout на чужой адрес.
-   Перед созданием заказов проверять, что address принадлежит `actor.UserID`.
-   Чужой address должен давать доменную ошибку.
-
-5. **Review только после покупки** — запретить отзывы без покупки.
-   В `CreateReview` нужна проверка, что buyer покупал этот product в `paid`/`shipped`/`delivered` order.
-   Сейчас duplicate review обработан, но purchase check ещё нет.
-
-6. **Redis TokenBlocklist для logout** — подключить настоящий blocklist.
+4. **Redis TokenBlocklist для logout** — подключить настоящий blocklist.
    Интерфейс `TokenBlocklist` уже есть, но `cmd/api/main.go` передаёт `nil`.
    Нужно добавить Redis в config/docker-compose, реализацию blocklist и wiring в API/techui components.
 
-7. **Удалённые товары — остаточные edge cases**.
+5. **Удалённые товары — остаточные edge cases**.
    Уже сделано: web показывает deleted product, add-to-cart/checkout запрещены, cart блокирует checkout с deleted item.
    Нужно ещё проверить/доделать:
    - API DTO/ответы для deleted product;

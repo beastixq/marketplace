@@ -45,19 +45,25 @@ type SellerGetter interface {
 	GetSellerByUserID(ctx context.Context, userID int64) (s m.Seller, err error)
 }
 
+type OrderAddressRepo interface {
+	GetAddressByID(ctx context.Context, id int64) (a m.Address, err error)
+}
+
 type OrderService struct {
 	orderRepo     OrderRepo
 	orderItemRepo OrderItemRepo
 	productRepo   ProductRepo
+	addressRepo   OrderAddressRepo
 	sellerGetter  SellerGetter
 	txManager     TxManager
 }
 
-func NewOrderService(or OrderRepo, oir OrderItemRepo, pr ProductRepo, sr SellerGetter, tx TxManager) OrderService {
+func NewOrderService(or OrderRepo, oir OrderItemRepo, pr ProductRepo, ar OrderAddressRepo, sr SellerGetter, tx TxManager) OrderService {
 	return OrderService{
 		orderRepo:     or,
 		orderItemRepo: oir,
 		productRepo:   pr,
+		addressRepo:   ar,
 		sellerGetter:  sr,
 		txManager:     tx}
 }
@@ -321,6 +327,17 @@ func (os OrderService) Checkout(ctx context.Context, actor Actor, addressID int6
 		// Advisory lock serializes Checkout with parallel cart mutations of the same user.
 		if err := os.orderRepo.LockUserCart(ctx, actor.UserID); err != nil {
 			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
+		}
+
+		address, err := os.addressRepo.GetAddressByID(ctx, addressID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return ErrAddressNotFound
+			}
+			return fmt.Errorf("%w: %v", ErrGetAddressByID, err)
+		}
+		if address.UserID != actor.UserID {
+			return ErrNotYourAddress
 		}
 
 		cart, err := os.GetCart(ctx, actor)

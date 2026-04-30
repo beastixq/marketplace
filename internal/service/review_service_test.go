@@ -29,6 +29,15 @@ type MockReviewReturn struct {
 	Error  error
 }
 
+type fakeReviewPurchaseChecker struct {
+	purchased bool
+	err       error
+}
+
+func (f fakeReviewPurchaseChecker) UserPurchasedProduct(context.Context, int64, int64) (bool, error) {
+	return f.purchased, f.err
+}
+
 func assertReview(t *testing.T, got, want m.Review) {
 	t.Helper()
 	if !reflect.DeepEqual(got, want) {
@@ -38,7 +47,7 @@ func assertReview(t *testing.T, got, want m.Review) {
 
 func TestGetReviewByID(t *testing.T) {
 	mock := mock_service.NewMockReviewRepo(gomock.NewController(t))
-	svc := service.NewReviewService(mock)
+	svc := service.NewReviewService(mock, fakeReviewPurchaseChecker{})
 	ctx := context.Background()
 
 	type testCase struct {
@@ -82,7 +91,6 @@ func TestGetReviewByID(t *testing.T) {
 
 func TestCreateReview(t *testing.T) {
 	mock := mock_service.NewMockReviewRepo(gomock.NewController(t))
-	svc := service.NewReviewService(mock)
 	ctx := context.Background()
 
 	reviewCreate := m.ReviewCreate{
@@ -93,31 +101,52 @@ func TestCreateReview(t *testing.T) {
 	}
 
 	type testCase struct {
-		Description string
-		Create      m.ReviewCreate
-		MockReturn  MockCreateReturn
-		ExpectedID  int64
-		ExpectedErr error
+		Description     string
+		Create          m.ReviewCreate
+		MockPurchased   bool
+		MockPurchaseErr error
+		MockReturn      *MockCreateReturn
+		ExpectedID      int64
+		ExpectedErr     error
 	}
 
 	tCases := []testCase{
 		{
-			Description: "Success",
-			Create:      reviewCreate,
-			MockReturn:  MockCreateReturn{ID: someID},
-			ExpectedID:  someID,
+			Description:   "Success",
+			Create:        reviewCreate,
+			MockPurchased: true,
+			MockReturn:    &MockCreateReturn{ID: someID},
+			ExpectedID:    someID,
 		},
 		{
-			Description: "Repo error",
+			Description: "Product was not purchased",
 			Create:      reviewCreate,
-			MockReturn:  MockCreateReturn{Error: errors.New("some repo error")},
-			ExpectedErr: service.ErrCreateReview,
+			ExpectedErr: service.ErrReviewPurchaseRequired,
+		},
+		{
+			Description:     "Purchase check repo error",
+			Create:          reviewCreate,
+			MockPurchaseErr: errors.New("some repo error"),
+			ExpectedErr:     service.ErrCheckReviewPurchase,
+		},
+		{
+			Description:   "Create repo error",
+			Create:        reviewCreate,
+			MockPurchased: true,
+			MockReturn:    &MockCreateReturn{Error: errors.New("some repo error")},
+			ExpectedErr:   service.ErrCreateReview,
 		},
 	}
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
-			mock.EXPECT().CreateReview(ctx, tCase.Create).Return(tCase.MockReturn.ID, tCase.MockReturn.Error)
+			svc := service.NewReviewService(mock, fakeReviewPurchaseChecker{
+				purchased: tCase.MockPurchased,
+				err:       tCase.MockPurchaseErr,
+			})
+			if tCase.MockReturn != nil {
+				mock.EXPECT().CreateReview(ctx, tCase.Create).Return(tCase.MockReturn.ID, tCase.MockReturn.Error)
+			}
 			id, err := svc.CreateReview(ctx, testActor(tCase.Create.UserID, m.RoleBuyer), tCase.Create)
 			assertError(t, err, tCase.ExpectedErr)
 			if id != tCase.ExpectedID {
@@ -129,7 +158,7 @@ func TestCreateReview(t *testing.T) {
 
 func TestUpdateReview(t *testing.T) {
 	mock := mock_service.NewMockReviewRepo(gomock.NewController(t))
-	svc := service.NewReviewService(mock)
+	svc := service.NewReviewService(mock, fakeReviewPurchaseChecker{})
 	ctx := context.Background()
 
 	newRating := int8(3)
@@ -219,7 +248,7 @@ func TestUpdateReview(t *testing.T) {
 
 func TestDeleteReviewByID(t *testing.T) {
 	mock := mock_service.NewMockReviewRepo(gomock.NewController(t))
-	svc := service.NewReviewService(mock)
+	svc := service.NewReviewService(mock, fakeReviewPurchaseChecker{})
 	ctx := context.Background()
 
 	type testCase struct {

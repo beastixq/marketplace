@@ -43,6 +43,7 @@ var serviceErrorResponses = []serviceErrorResponse{
 	{service.ErrProductDeleted, http.StatusConflict},
 	{service.ErrStockBelowReserved, http.StatusConflict},
 	{service.ErrReviewAlreadyExists, http.StatusConflict},
+	{service.ErrReviewPurchaseRequired, http.StatusConflict},
 
 	{service.ErrEmptyCart, http.StatusBadRequest},
 	{service.ErrQuantityTooBig, http.StatusBadRequest},

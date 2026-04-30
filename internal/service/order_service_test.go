@@ -79,14 +79,15 @@ func newOrderService(ctrl *gomock.Controller) (
 	*mock_service.MockOrderItemRepo,
 	*mock_service.MockProductRepo,
 	*mock_service.MockSellerGetter,
-	*mock_service.MockProductRepo,
+	*mock_service.MockAddressRepo,
 ) {
 	orderMock := mock_service.NewMockOrderRepo(ctrl)
 	itemMock := mock_service.NewMockOrderItemRepo(ctrl)
 	productMock := mock_service.NewMockProductRepo(ctrl)
+	addressMock := mock_service.NewMockAddressRepo(ctrl)
 	sellerMock := mock_service.NewMockSellerGetter(ctrl)
-	svc := service.NewOrderService(orderMock, itemMock, productMock, sellerMock, passThroughTxManager{})
-	return svc, orderMock, itemMock, productMock, sellerMock, productMock
+	svc := service.NewOrderService(orderMock, itemMock, productMock, addressMock, sellerMock, passThroughTxManager{})
+	return svc, orderMock, itemMock, productMock, sellerMock, addressMock
 }
 
 func assertOrder(t *testing.T, got, want m.Order) {
@@ -728,6 +729,7 @@ func TestCheckout(t *testing.T) {
 
 	type testCase struct {
 		Description         string
+		MockAddress         *MockAddressReturn
 		MockGetOrders       MockOrderListReturn
 		MockClaimErr        *error // UpdateOrderStatus draft→pending inside tx
 		MockGetItems        *MockOrderItemListReturn
@@ -774,6 +776,20 @@ func TestCheckout(t *testing.T) {
 			Description:   "No cart",
 			MockGetOrders: MockOrderListReturn{Orders: []m.Order{}},
 			ExpectedErr:   service.ErrCartNotFound,
+		},
+		{
+			Description: "Address not found",
+			MockAddress: &MockAddressReturn{
+				Error: service.ErrNotFound,
+			},
+			ExpectedErr: service.ErrAddressNotFound,
+		},
+		{
+			Description: "Address belongs to another user",
+			MockAddress: &MockAddressReturn{
+				Address: m.Address{ID: someAddressID, UserID: otherUserID},
+			},
+			ExpectedErr: service.ErrNotYourAddress,
 		},
 		{
 			Description:   "GetOrders repo error",
@@ -866,9 +882,24 @@ func TestCheckout(t *testing.T) {
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			svc, orderMock, itemMock, productMock, _, _ := newOrderService(ctrl)
+			svc, orderMock, itemMock, productMock, _, addressMock := newOrderService(ctrl)
 
 			orderMock.EXPECT().LockUserCart(ctx, someID).Return(nil)
+			addressReturn := MockAddressReturn{Address: m.Address{ID: someAddressID, UserID: someID}}
+			if tCase.MockAddress != nil {
+				addressReturn = *tCase.MockAddress
+			}
+			addressMock.EXPECT().GetAddressByID(ctx, someAddressID).Return(addressReturn.Address, addressReturn.Error)
+			addressFailed := addressReturn.Error != nil || addressReturn.Address.UserID != someID
+			if addressFailed {
+				orderIDs, err := svc.Checkout(ctx, testActor(someID, m.RoleBuyer), someAddressID)
+				assertError(t, err, tCase.ExpectedErr)
+				if len(orderIDs) != 0 {
+					t.Fatalf("expected no order IDs, got %d", len(orderIDs))
+				}
+				return
+			}
+
 			orderMock.EXPECT().GetOrdersByUserID(ctx, someID, m.PaginationOpts{}).Return(tCase.MockGetOrders.Orders, tCase.MockGetOrders.Error)
 
 			// GetCart internally calls GetOrderItemsByOrderID for total computation

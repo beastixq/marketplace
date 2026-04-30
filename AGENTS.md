@@ -20,6 +20,20 @@ Use the project docs as the first stop for task-specific context:
 
 If docs and current code conflict, trust the current code after verifying it directly, then update the relevant doc as part of the change. Keep docs concise and maintenance-oriented.
 
+## Cost-Controlled Verification
+
+Do not run heavy verification, broad inspection, or token-heavy commands without explicit user permission.
+
+Ask first before running:
+
+* Full test suites, broad build/syntax checks, linters, formatters, code generation, or dependency downloads.
+* Broad diffs or history inspection such as `git diff`, `git show`, `git log -p`, or large patch views.
+* Commands expected to produce large output or scan most of the repository when a narrower check is enough.
+
+Prefer lightweight, targeted checks by default: `rg`, short `sed`/`nl` ranges, focused file reads, and narrow status commands such as `git status --short`.
+
+When asking permission, state the exact command or category, why it is useful, and whether it may produce large output or take noticeable time. If permission is not granted, continue with targeted checks and clearly mark any remaining verification gap.
+
 ## Learning Mode
 
 Use Learning Mode when the user asks for `Learning mode`, `learn mode`, `teach me`, `I want to do it myself`, or otherwise explicitly says they want to learn instead of having the agent generate the feature. If the user asks to make Learning Mode the default for the current conversation, keep using it until they ask to leave it.
@@ -187,6 +201,7 @@ Cache failures should not break core business behavior unless the operation expl
 
 * Cart is a draft order; there is no separate cart table.
 * `address_id` is nullable for draft orders.
+* Checkout address must belong to the buyer.
 * One order belongs to one seller.
 * Draft cart is split by seller during checkout.
 * Order lifecycle: draft -> pending -> paid -> shipped -> delivered.
@@ -194,6 +209,7 @@ Cache failures should not break core business behavior unless the operation expl
 * Seller can access only own products and own relevant orders.
 * Buyer can access only own addresses and reviews.
 * A user can leave only one review per product: `UNIQUE(user_id, product_id)`.
+* Buyer can review only products bought in `paid`/`shipped`/`delivered` orders.
 * `price_at_purchase` is fixed when draft becomes `pending`.
 * Product price history may be enforced by a database trigger as an audit/data-integrity guarantee.
 * Service logic must still explicitly enforce business rules such as fixing `price_at_purchase`.

@@ -17,12 +17,17 @@ type ReviewRepo interface {
 	DeleteReviewByID(ctx context.Context, id int64) (err error)
 }
 
-type ReviewService struct {
-	reviewRepo ReviewRepo
+type ReviewPurchaseChecker interface {
+	UserPurchasedProduct(ctx context.Context, userID int64, productID int64) (bool, error)
 }
 
-func NewReviewService(reviewRepo ReviewRepo) ReviewService {
-	return ReviewService{reviewRepo: reviewRepo}
+type ReviewService struct {
+	reviewRepo      ReviewRepo
+	purchaseChecker ReviewPurchaseChecker
+}
+
+func NewReviewService(reviewRepo ReviewRepo, purchaseChecker ReviewPurchaseChecker) ReviewService {
+	return ReviewService{reviewRepo: reviewRepo, purchaseChecker: purchaseChecker}
 }
 
 func (rs ReviewService) GetReviewByID(ctx context.Context, id int64) (r m.Review, err error) {
@@ -42,6 +47,14 @@ func (rs ReviewService) CreateReview(ctx context.Context, actor Actor, rc m.Revi
 	}
 
 	rc.UserID = actor.UserID
+	purchased, err := rs.purchaseChecker.UserPurchasedProduct(ctx, actor.UserID, rc.ProductID)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %v", ErrCheckReviewPurchase, err)
+	}
+	if !purchased {
+		return 0, ErrReviewPurchaseRequired
+	}
+
 	id, err = rs.reviewRepo.CreateReview(ctx, rc)
 	if err != nil {
 		if errors.Is(err, ErrReviewAlreadyExists) {

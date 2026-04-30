@@ -10,17 +10,18 @@ import (
 )
 
 type Component struct {
-	Pool       *pgxpool.Pool
-	User       svc.UserRepo
-	Seller     svc.SellerRepo
-	Address    svc.AddressRepo
-	Review     svc.ReviewRepo
-	Product    svc.ProductRepo
-	Order      svc.OrderRepo
-	OrderItem  svc.OrderItemRepo
-	Category   svc.CategoryRepo
-	Backoffice svc.BackofficeRepo
-	TxManager  svc.TxManager
+	Pool           *pgxpool.Pool
+	User           svc.UserRepo
+	Seller         svc.SellerRepo
+	Address        svc.AddressRepo
+	Review         svc.ReviewRepo
+	ReviewPurchase svc.ReviewPurchaseChecker
+	Product        svc.ProductRepo
+	Order          svc.OrderRepo
+	OrderItem      svc.OrderItemRepo
+	Category       svc.CategoryRepo
+	Backoffice     svc.BackofficeRepo
+	TxManager      svc.TxManager
 }
 
 func New(ctx context.Context, dbURL string) (*Component, error) {
@@ -36,18 +37,20 @@ func New(ctx context.Context, dbURL string) (*Component, error) {
 }
 
 func NewFromPool(pool *pgxpool.Pool) *Component {
+	reviewRepo := store.NewReviewRepo(pool)
 	return &Component{
-		Pool:       pool,
-		User:       store.NewUserRepo(pool),
-		Seller:     store.NewSellerRepo(pool),
-		Address:    store.NewAddressRepo(pool),
-		Review:     store.NewReviewRepo(pool),
-		Product:    store.NewProductRepo(pool),
-		Order:      store.NewOrderRepo(pool),
-		OrderItem:  store.NewOrderItemRepo(pool),
-		Category:   store.NewCategoryRepo(pool),
-		Backoffice: store.NewBackofficeRepo(pool),
-		TxManager:  store.NewPgxTxManager(pool),
+		Pool:           pool,
+		User:           store.NewUserRepo(pool),
+		Seller:         store.NewSellerRepo(pool),
+		Address:        store.NewAddressRepo(pool),
+		Review:         reviewRepo,
+		ReviewPurchase: reviewRepo,
+		Product:        store.NewProductRepo(pool),
+		Order:          store.NewOrderRepo(pool),
+		OrderItem:      store.NewOrderItemRepo(pool),
+		Category:       store.NewCategoryRepo(pool),
+		Backoffice:     store.NewBackofficeRepo(pool),
+		TxManager:      store.NewPgxTxManager(pool),
 	}
 }
 

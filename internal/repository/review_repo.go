@@ -68,6 +68,23 @@ func (rr ReviewRepoImpl) GetReviewsByProductID(ctx context.Context, pid int64, o
 	return rs, nil
 }
 
+func (rr ReviewRepoImpl) UserPurchasedProduct(ctx context.Context, userID int64, productID int64) (bool, error) {
+	const sql = `
+SELECT EXISTS (
+    SELECT 1
+    FROM orders o
+    JOIN order_items oi ON oi.order_id = o.id
+    WHERE o.user_id = $1
+      AND oi.product_id = $2
+      AND o.status IN ('paid', 'shipped', 'delivered')
+)`
+	var purchased bool
+	if err := getConn(ctx, rr.pool).QueryRow(ctx, sql, userID, productID).Scan(&purchased); err != nil {
+		return false, fmt.Errorf("%w: %v", ErrToScan, err)
+	}
+	return purchased, nil
+}
+
 func (rr ReviewRepoImpl) CreateReview(ctx context.Context, rc m.ReviewCreate) (id int64, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Insert("reviews").Columns("user_id", "product_id", "rating", "comment").Values(rc.UserID, rc.ProductID, rc.Rating, rc.Comment).Suffix("RETURNING id").ToSql()

@@ -106,14 +106,16 @@ var (
 	ErrStockBelowReserved     = errors.New("Stock quantity cannot be less than reserved quantity")
 
 	// review
-	ErrCreateReview          = errors.New("Failed to create review")
-	ErrGetReviewByID         = errors.New("Failed to get review by id")
-	ErrUpdateReview          = errors.New("Failed to update review")
-	ErrDeleteReviewByID      = errors.New("Failed to delete review")
-	ErrGetReviewsByProductID = errors.New("Failed to get reviews by product id")
-	ErrNotYourReview         = errors.New("It's not your review")
-	ErrReviewNotFound        = errors.New("Review not found")
-	ErrReviewAlreadyExists   = errors.New("You have already reviewed this product")
+	ErrCreateReview           = errors.New("Failed to create review")
+	ErrGetReviewByID          = errors.New("Failed to get review by id")
+	ErrUpdateReview           = errors.New("Failed to update review")
+	ErrDeleteReviewByID       = errors.New("Failed to delete review")
+	ErrGetReviewsByProductID  = errors.New("Failed to get reviews by product id")
+	ErrCheckReviewPurchase    = errors.New("Failed to check review purchase")
+	ErrNotYourReview          = errors.New("It's not your review")
+	ErrReviewNotFound         = errors.New("Review not found")
+	ErrReviewAlreadyExists    = errors.New("You have already reviewed this product")
+	ErrReviewPurchaseRequired = errors.New("You can review only products you have purchased")
 
 	// backoffice
 	ErrGetPlatformStats     = errors.New("Failed to get platform stats")

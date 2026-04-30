@@ -61,13 +61,14 @@ Business rules belong in service code:
 
 - Cart is an order with status `draft`; there is no separate cart table.
 - `address_id` is nullable for draft orders.
+- Checkout address must belong to the buyer.
 - One order belongs to one seller.
 - Checkout splits draft carts by seller.
 - Order lifecycle is `draft -> pending -> paid -> shipped -> delivered`.
 - Cancellation is allowed only before `shipped`.
 - Seller access is limited to own products and own relevant orders.
 - Buyer access is limited to own addresses, orders, and reviews.
-- A buyer can leave one review per product.
+- A buyer can leave one review per product, and only after buying that product in a paid, shipped, or delivered order.
 - `price_at_purchase` is fixed when draft becomes pending.
 - Product price history can be backed by a DB trigger, but service code still enforces business rules explicitly.
 

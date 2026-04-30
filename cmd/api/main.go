@@ -67,9 +67,9 @@ func main() {
 	userService := svc.NewUserService(userRepo, cfg.Auth.BcryptCost)
 	sellerService := svc.NewSellerService(sellerRepo)
 	addressService := svc.NewAddressService(addressRepo)
-	reviewService := svc.NewReviewService(reviewRepo)
+	reviewService := svc.NewReviewService(reviewRepo, reviewRepo)
 	productService := svc.NewProductService(productRepo, reviewRepo, sellerRepo)
-	orderService := svc.NewOrderService(orderRepo, orderItemRepo, productRepo, sellerRepo, txManager)
+	orderService := svc.NewOrderService(orderRepo, orderItemRepo, productRepo, addressRepo, sellerRepo, txManager)
 	categoryService := svc.NewCategoryService(categoryRepo)
 	backofficeService := svc.NewBackofficeService(backofficeRepo)
 	// TODO: replace with Redis TokenBlocklist implementation
