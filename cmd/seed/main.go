@@ -26,12 +26,12 @@ func main() {
 		buyersCount       = 1000
 		sellersCount      = 1000
 		categoriesCount   = 1000
-		productsCount     = 5000
+		productsCount     = 2000
 		addressesCount    = 2000
-		ordersCount       = 1000
+		ordersCount       = 15000
 		orderItemsCount   = 3000
-		reviewsCount      = 50000
-		priceHistoryCount = 25000
+		reviewsCount      = 10000
+		priceHistoryCount = 10000
 	)
 
 	configPath := flag.String("config", "config/config.yaml", "path to YAML config file")
@@ -134,7 +134,9 @@ func main() {
 	for sid := range productsBySeller {
 		sellersWithProducts = append(sellersWithProducts, sid)
 	}
-	ordersIDs, seedOrders, err := generators.CreateOrders(tx, ctx, usersIDs[2], addressesIDs, sellersWithProducts, ordersCount)
+	orderDateTo := time.Now()
+	orderDateFrom := time.Date(2025, time.January, 1, 0, 0, 0, 0, orderDateTo.Location())
+	ordersIDs, seedOrders, err := generators.CreateOrders(tx, ctx, usersIDs[2], addressesIDs, sellersWithProducts, ordersCount, orderDateFrom, orderDateTo)
 	if err != nil {
 		log.Printf("Failed on CreateOrders: %v\n", err)
 		return
