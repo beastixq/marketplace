@@ -60,6 +60,7 @@ DB structs and SQL-specific types do not cross into service. HTTP DTOs and web v
 Business rules belong in service code:
 
 - Cart is an order with status `draft`; there is no separate cart table.
+- Each buyer can have only one draft cart.
 - `address_id` is nullable for draft orders.
 - Checkout address must belong to the buyer.
 - One order belongs to one seller.
@@ -69,6 +70,7 @@ Business rules belong in service code:
 - Seller access is limited to own products and own relevant orders.
 - Buyer access is limited to own addresses, orders, and reviews.
 - A buyer can leave one review per product, and only after buying that product in a paid, shipped, or delivered order.
+- An order can contain a product only once; quantity changes update the existing item.
 - `price_at_purchase` is fixed when draft becomes pending.
 - Product price history can be backed by a DB trigger, but service code still enforces business rules explicitly.
 

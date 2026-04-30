@@ -200,6 +200,7 @@ Cache failures should not break core business behavior unless the operation expl
 ## Business Rules
 
 * Cart is a draft order; there is no separate cart table.
+* Each buyer can have only one draft cart.
 * `address_id` is nullable for draft orders.
 * Checkout address must belong to the buyer.
 * One order belongs to one seller.
@@ -210,6 +211,7 @@ Cache failures should not break core business behavior unless the operation expl
 * Buyer can access only own addresses and reviews.
 * A user can leave only one review per product: `UNIQUE(user_id, product_id)`.
 * Buyer can review only products bought in `paid`/`shipped`/`delivered` orders.
+* An order can contain a product only once; quantity changes update the existing item.
 * `price_at_purchase` is fixed when draft becomes `pending`.
 * Product price history may be enforced by a database trigger as an audit/data-integrity guarantee.
 * Service logic must still explicitly enforce business rules such as fixing `price_at_purchase`.

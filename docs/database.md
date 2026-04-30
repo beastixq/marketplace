@@ -30,6 +30,7 @@ export DATABASE_URL='postgres://postgres:postgres@localhost:5432/marketplace?ssl
 | `008_system_accounts.sql` | System accounts. |
 | `009_add_reserved_quantity.sql` | Product reservation accounting. |
 | `010_add_address_house.sql` | Address house/apartment fields. |
+| `011_order_cart_item_invariants.sql` | One draft cart per buyer and one product row per order. |
 
 Run:
 
@@ -66,6 +67,8 @@ Keep `docs/db-schema.md` synchronized when schema changes.
 - `products.reserved_quantity <= products.stock_quantity`.
 - `orders.status` is one of `draft`, `pending`, `paid`, `shipped`, `delivered`, `cancelled`.
 - `orders.address_id` is nullable for draft orders.
+- `orders` has one draft cart per buyer via partial unique index on `user_id` where `status = 'draft'`.
+- `order_items` has `UNIQUE(order_id, product_id)`.
 - `reviews.rating` is between 1 and 5.
 - `reviews` has `UNIQUE(user_id, product_id)`.
 

@@ -252,6 +252,9 @@ func (os OrderService) AddItemToCart(ctx context.Context, actor Actor, productID
 			PriceAtPurchase: product.Price,
 		})
 		if err != nil {
+			if errors.Is(err, ErrProductAlreadyInCart) {
+				return ErrProductAlreadyInCart
+			}
 			return fmt.Errorf("%w: %v", ErrCreateOrderItem, err)
 		}
 		return nil

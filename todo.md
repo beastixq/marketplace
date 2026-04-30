@@ -11,17 +11,11 @@
    Админ должен модерировать привязки товара к категориям.
    Сейчас схема `product_categories` есть, фильтр каталога есть, seed связи создаёт, но web UI создания товара категории не задаёт.
 
-3. **DB-инварианты корзины/order_items** — добавить constraints.
-   Нужно:
-   - partial unique index на одну draft-корзину на пользователя;
-   - unique constraint/index на `order_items(order_id, product_id)`.
-   Это важно: сейчас часть защиты есть в service, но БД должна держать инвариант.
-
-4. **Redis TokenBlocklist для logout** — подключить настоящий blocklist.
+3. **Redis TokenBlocklist для logout** — подключить настоящий blocklist.
    Интерфейс `TokenBlocklist` уже есть, но `cmd/api/main.go` передаёт `nil`.
    Нужно добавить Redis в config/docker-compose, реализацию blocklist и wiring в API/techui components.
 
-5. **Удалённые товары — остаточные edge cases**.
+4. **Удалённые товары — остаточные edge cases**.
    Уже сделано: web показывает deleted product, add-to-cart/checkout запрещены, cart блокирует checkout с deleted item.
    Нужно ещё проверить/доделать:
    - API DTO/ответы для deleted product;
