@@ -540,6 +540,17 @@ func (os OrderService) CancelOrder(ctx context.Context, actor Actor, orderID int
 		return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
 	}
 
+	// collect unique product IDs for lock ordering
+	productIDSet := make(map[int64]struct{}, len(items))
+	for _, item := range items {
+		productIDSet[item.ProductID] = struct{}{}
+	}
+	cancelProductIDs := make([]int64, 0, len(productIDSet))
+	for id := range productIDSet {
+		cancelProductIDs = append(cancelProductIDs, id)
+	}
+	slices.Sort(cancelProductIDs)
+
 	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
 		err = os.orderRepo.UpdateOrderStatus(ctx, orderID,
 			[]m.OrderStatus{m.StatusPending, m.StatusPaid}, m.StatusCancelled)
@@ -549,6 +560,16 @@ func (os OrderService) CancelOrder(ctx context.Context, actor Actor, orderID int
 				return fmt.Errorf("%w: concurrent status change", ErrOrderStatusInvalid)
 			}
 			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
+		}
+		// acquire row locks in ascending-ID order before mutating stock; prevents
+		// deadlocks when cancel/checkout/ship run concurrently on the same products
+		for _, productID := range cancelProductIDs {
+			if _, err := os.productRepo.GetProductByIDForUpdate(ctx, productID); err != nil {
+				if errors.Is(err, ErrNotFound) {
+					return fmt.Errorf("%w: product %d", ErrProductNotFound, productID)
+				}
+				return fmt.Errorf("%w: product %d: %v", ErrGetProductByID, productID, err)
+			}
 		}
 		for _, item := range items {
 			err = os.productRepo.ChangeStockAndReserved(ctx, item.ProductID, 0, -item.Quantity)
@@ -578,6 +599,17 @@ func (os OrderService) ExpireOrders(ctx context.Context, deadline time.Time) err
 			expireErrors = append(expireErrors, fmt.Errorf("order %d: %w: %v", order.ID, ErrGetOrderItemsByOrderID, err))
 			continue
 		}
+		// collect unique product IDs in ascending order for deterministic lock ordering
+		expireProductIDSet := make(map[int64]struct{}, len(items))
+		for _, item := range items {
+			expireProductIDSet[item.ProductID] = struct{}{}
+		}
+		expireProductIDs := make([]int64, 0, len(expireProductIDSet))
+		for id := range expireProductIDSet {
+			expireProductIDs = append(expireProductIDs, id)
+		}
+		slices.Sort(expireProductIDs)
+
 		if err = os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
 			err = os.orderRepo.UpdateOrderStatus(ctx, order.ID,
 				[]m.OrderStatus{m.StatusPending}, m.StatusCancelled)
@@ -587,6 +619,15 @@ func (os OrderService) ExpireOrders(ctx context.Context, deadline time.Time) err
 					return nil
 				}
 				return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
+			}
+			// acquire row locks in ascending-ID order before releasing reserved stock
+			for _, productID := range expireProductIDs {
+				if _, err := os.productRepo.GetProductByIDForUpdate(ctx, productID); err != nil {
+					if errors.Is(err, ErrNotFound) {
+						return fmt.Errorf("%w: product %d", ErrProductNotFound, productID)
+					}
+					return fmt.Errorf("%w: product %d: %v", ErrGetProductByID, productID, err)
+				}
 			}
 			for _, item := range items {
 				err = os.productRepo.ChangeStockAndReserved(ctx, item.ProductID, 0, -item.Quantity)
@@ -648,6 +689,25 @@ func (os OrderService) ShipOrder(ctx context.Context, actor Actor, orderID int64
 		items, err := os.orderItemRepo.GetOrderItemsByOrderID(ctx, orderID)
 		if err != nil {
 			return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
+		}
+		// collect unique product IDs in ascending order for deterministic lock ordering
+		shipProductIDSet := make(map[int64]struct{}, len(items))
+		for _, item := range items {
+			shipProductIDSet[item.ProductID] = struct{}{}
+		}
+		shipProductIDs := make([]int64, 0, len(shipProductIDSet))
+		for id := range shipProductIDSet {
+			shipProductIDs = append(shipProductIDs, id)
+		}
+		slices.Sort(shipProductIDs)
+		// acquire row locks in ascending-ID order before reducing stock
+		for _, productID := range shipProductIDs {
+			if _, err := os.productRepo.GetProductByIDForUpdate(ctx, productID); err != nil {
+				if errors.Is(err, ErrNotFound) {
+					return fmt.Errorf("%w: product %d", ErrProductNotFound, productID)
+				}
+				return fmt.Errorf("%w: product %d: %v", ErrGetProductByID, productID, err)
+			}
 		}
 		for _, item := range items {
 			err = os.productRepo.ChangeStockAndReserved(ctx, item.ProductID, -item.Quantity, -item.Quantity)

@@ -59,7 +59,7 @@ func newProductService(ctrl *gomock.Controller) (service.ProductService, *mock_s
 	productMock := mock_service.NewMockProductRepo(ctrl)
 	reviewMock := mock_service.NewMockReviewRepo(ctrl)
 	sellerMock := mock_service.NewMockSellerRepo(ctrl)
-	svc := service.NewProductService(productMock, reviewMock, sellerMock)
+	svc := service.NewProductService(productMock, reviewMock, sellerMock, passThroughTxManager{})
 	return svc, productMock, reviewMock, sellerMock
 }
 
@@ -416,7 +416,9 @@ func TestUpdateProduct(t *testing.T) {
 			if tCase.MockSeller != nil {
 				sellerMock.EXPECT().GetSellerByID(ctx, someProduct.SellerID).Return(tCase.MockSeller.Seller, tCase.MockSeller.Error)
 			}
+			// GetProductByIDForUpdate is called inside the tx for any case that reaches the update
 			if tCase.MockUpdate != nil {
+				productMock.EXPECT().GetProductByIDForUpdate(ctx, someID).Return(tCase.MockGetByID.Product, nil)
 				productMock.EXPECT().UpdateProduct(ctx, someID, productUpdate).Return(tCase.MockUpdate.Product, tCase.MockUpdate.Error)
 			}
 
@@ -427,6 +429,29 @@ func TestUpdateProduct(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUpdateProductLockFires(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	svc, productMock, _, sellerMock := newProductService(ctrl)
+	ctx := context.Background()
+
+	newName := "Lock test product"
+	productUpdate := m.ProductUpdate{Name: &newName}
+	updatedProduct := someProduct
+	updatedProduct.Name = newName
+
+	// happy path: verify GetProductByIDForUpdate is called exactly once before UpdateProduct
+	productMock.EXPECT().GetProductByID(ctx, someID).Return(someProduct, nil)
+	sellerMock.EXPECT().GetSellerByID(ctx, someProduct.SellerID).Return(someSeller, nil)
+	productMock.EXPECT().GetProductByIDForUpdate(ctx, someID).Return(someProduct, nil)
+	productMock.EXPECT().UpdateProduct(ctx, someID, productUpdate).Return(updatedProduct, nil)
+
+	got, err := svc.UpdateProduct(ctx, testActor(someSellerUserID, m.RoleSeller), someID, productUpdate)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assertProduct(t, got, updatedProduct)
 }
 
 func TestDeleteProduct(t *testing.T) {

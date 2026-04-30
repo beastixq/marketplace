@@ -1060,6 +1060,7 @@ func TestCancelOrder(t *testing.T) {
 		MockGet          MockOrderReturn
 		MockGetItems     bool
 		MockUpdateStatus *error // UpdateOrderStatus result
+		MockLock         bool   // GetProductByIDForUpdate called after status CAS
 		MockRelease      bool
 		ExpectedErr      error
 	}
@@ -1070,6 +1071,7 @@ func TestCancelOrder(t *testing.T) {
 			MockGet:          MockOrderReturn{Order: pendingOrder},
 			MockGetItems:     true,
 			MockUpdateStatus: ptrErr(nil),
+			MockLock:         true,
 			MockRelease:      true,
 		},
 		{
@@ -1077,6 +1079,7 @@ func TestCancelOrder(t *testing.T) {
 			MockGet:          MockOrderReturn{Order: paidOrder},
 			MockGetItems:     true,
 			MockUpdateStatus: ptrErr(nil),
+			MockLock:         true,
 			MockRelease:      true,
 		},
 		{
@@ -1135,6 +1138,9 @@ func TestCancelOrder(t *testing.T) {
 			if tCase.MockUpdateStatus != nil {
 				orderMock.EXPECT().UpdateOrderStatus(ctx, someOrderID, gomock.Any(), m.StatusCancelled).Return(*tCase.MockUpdateStatus)
 			}
+			if tCase.MockLock {
+				productMock.EXPECT().GetProductByIDForUpdate(ctx, someProductID).Return(m.Product{}, nil)
+			}
 			if tCase.MockRelease {
 				productMock.EXPECT().ChangeStockAndReserved(ctx, someProductID, 0, -cancelItems[0].Quantity).Return(nil)
 			}
@@ -1142,6 +1148,29 @@ func TestCancelOrder(t *testing.T) {
 			err := svc.CancelOrder(ctx, testActor(someID, m.RoleBuyer), someOrderID)
 			assertError(t, err, tCase.ExpectedErr)
 		})
+	}
+}
+
+func TestCancelOrderLockFires(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	svc, orderMock, itemMock, productMock, _, _ := newOrderService(ctrl)
+	ctx := context.Background()
+
+	pendingOrder := someOrder
+	cancelItems := []m.OrderItem{
+		{ID: 1, OrderID: someOrderID, ProductID: someProductID, Quantity: 3},
+	}
+
+	orderMock.EXPECT().GetOrderByID(ctx, someOrderID).Return(pendingOrder, nil)
+	itemMock.EXPECT().GetOrderItemsByOrderID(ctx, someOrderID).Return(cancelItems, nil)
+	orderMock.EXPECT().UpdateOrderStatus(ctx, someOrderID, gomock.Any(), m.StatusCancelled).Return(nil)
+	// lock must fire for the product ID before the stock is released
+	productMock.EXPECT().GetProductByIDForUpdate(ctx, someProductID).Return(m.Product{}, nil)
+	productMock.EXPECT().ChangeStockAndReserved(ctx, someProductID, 0, -cancelItems[0].Quantity).Return(nil)
+
+	err := svc.CancelOrder(ctx, testActor(someID, m.RoleBuyer), someOrderID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -1170,6 +1199,7 @@ func TestShipOrder(t *testing.T) {
 		MockGet          *MockOrderReturn
 		MockUpdateStatus *error
 		MockItems        bool
+		MockLock         bool // GetProductByIDForUpdate fires before ChangeStockAndReserved
 		MockChangeStock  bool
 		ExpectedErr      error
 	}
@@ -1181,6 +1211,7 @@ func TestShipOrder(t *testing.T) {
 			MockGet:          &MockOrderReturn{Order: paidOrderWithSeller},
 			MockUpdateStatus: ptrErr(nil),
 			MockItems:        true,
+			MockLock:         true,
 			MockChangeStock:  true,
 		},
 		{
@@ -1264,6 +1295,9 @@ func TestShipOrder(t *testing.T) {
 			}
 			if tCase.MockItems {
 				itemMock.EXPECT().GetOrderItemsByOrderID(ctx, someOrderID).Return(someOrderItems, nil)
+			}
+			if tCase.MockLock {
+				productMock.EXPECT().GetProductByIDForUpdate(ctx, someProductID).Return(m.Product{}, nil)
 			}
 			if tCase.MockChangeStock {
 				productMock.EXPECT().ChangeStockAndReserved(ctx, someProductID, -someOrderItems[0].Quantity, -someOrderItems[0].Quantity).Return(nil)

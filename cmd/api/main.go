@@ -68,7 +68,7 @@ func main() {
 	sellerService := svc.NewSellerService(sellerRepo)
 	addressService := svc.NewAddressService(addressRepo)
 	reviewService := svc.NewReviewService(reviewRepo, reviewRepo, productRepo)
-	productService := svc.NewProductService(productRepo, reviewRepo, sellerRepo)
+	productService := svc.NewProductService(productRepo, reviewRepo, sellerRepo, txManager)
 	orderService := svc.NewOrderService(orderRepo, orderItemRepo, productRepo, addressRepo, sellerRepo, txManager)
 	categoryService := svc.NewCategoryService(categoryRepo)
 	backofficeService := svc.NewBackofficeService(backofficeRepo)

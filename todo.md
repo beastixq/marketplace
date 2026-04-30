@@ -15,27 +15,28 @@
    Интерфейс `TokenBlocklist` уже есть, но `cmd/api/main.go` передаёт `nil`.
    Нужно добавить Redis в config/docker-compose, реализацию blocklist и wiring в API/techui components.
 
-4. **Удалённые товары — остаточные edge cases**.
-   Уже сделано: web показывает deleted product, add-to-cart/checkout запрещены, cart блокирует checkout с deleted item.
-   Нужно ещё проверить/доделать:
-   - API DTO/ответы для deleted product;
-   - policy для review на deleted product;
-   - старые pending/paid orders с deleted product;
-   - seller/admin операции над deleted product.
+4. ~~**Удалённые товары — остаточные edge cases**~~ — done.
+   Web показывает deleted product, add-to-cart/checkout запрещены,
+   cart блокирует checkout с deleted item, `ProductDTO.deleted_at`
+   exposed для order-detail/admin клиентов, review на deleted product
+   запрещён через `ErrProductDeleted` (409). Старые pending/paid orders
+   и lifecycle проверены — repo joins не фильтруют `deleted_at`,
+   ничего не сломалось. Seller own-product list остаётся скрывать
+   deleted (current behavior); admin видит всё. Re-delete идемпотентен.
 
 ## P1 — важные бизнес-инварианты и конкурентность
 
-1. **Конкурентность stock update / checkout / cancel / ship / expire**.
-   `UpdateProduct(stock_quantity)` сейчас работает абсолютным значением.
-   Нужна стратегия:
-   - блокировать product rows через `FOR UPDATE`;
-   - считать delta stock;
-   - не давать гонкам ломать `stock_quantity`/`reserved_quantity`.
-   Спорный дизайн: оставить абсолютный `stock_quantity` в UI или перейти на операции "увеличить/уменьшить на N".
+1. ~~**Конкурентность stock update / checkout / cancel / ship / expire**~~ — done.
+   `UpdateProduct` теперь оборачивается в tx, берёт `FOR UPDATE` через
+   `GetProductByIDForUpdate` и валидирует stock-vs-reserved уже после
+   локирования (свежие данные). Stock semantics остаются абсолютными;
+   delta-операции не вводились.
 
-2. **Конкурентность cancel/ship/expire**.
-   Как в checkout, блокировать products в детерминированном порядке (`FOR UPDATE`), затем release/deduct stock.
-   Сейчас БД constraint страхует, но ошибки могут всплывать поздно.
+2. ~~**Конкурентность cancel/ship/expire**~~ — done.
+   `CancelOrder`, `ExpireOrders`, `ShipOrder` берут row locks на
+   все затронутые products в порядке возрастания id внутри tx
+   до `ChangeStockAndReserved`. Deadlock-free между всеми путями
+   мутации products (включая checkout).
 
 3. **Более информативные ошибки worker/order lifecycle**.
    Сейчас `ExpireOrders` продолжает обработку после ошибки конкретного заказа, но итоговый лог всё ещё бедный.
@@ -88,6 +89,31 @@
 5. **Денормализация rating/total_amount**.
    Проверить, где `rating` и `total_amount` могут drift из-за ручных SQL/seed/bugs.
    Для performance это нормально, но инварианты должны быть понятны.
+
+6. **Web cleanup после `ProductService.UpdateProduct` lock**.
+   В рамках P1 #1 BL-фикса `NewProductService` получил `TxManager` зависимость.
+   `internal/web/web_handler_test.go` поэтому теперь несёт локальный
+   `passThroughTxManager` mock — это рабочая заглушка, не подходит для
+   долгосрочного дизайна. Решить:
+   - либо вынести этот mock в общий test helper;
+   - либо пересмотреть DI так, чтобы web tests не зависели от tx-инфры
+     (например, отдельный use case для seller stock update).
+   Web handlers сами не меняли — только тестовая фабрика. BL правка чистая.
+
+7. **Load / concurrency testing**.
+   Промерить, сколько concurrent requests держит сервер до деградации
+   latency/error rate. Не "hardware tests" — правильные термины:
+   - **load testing** — ожидаемая нагрузка, мерим latency/throughput;
+   - **stress testing** — давим выше предела, ищем breaking point;
+   - **capacity / concurrency testing** — наш вопрос "сколько RPS";
+   - **soak testing** — долго гоняем, ищем утечки/деградацию.
+   Инструменты: `k6` (JS scripts, удобный для Go-сервисов),
+   `vegeta` (Go-нативный, простой CLI), `hey`, `wrk`, JMeter, Locust.
+   Что мерить: p50/p95/p99 latency, RPS, error rate, DB pool exhaustion,
+   FOR UPDATE contention на checkout/cancel. Сценарии:
+   catalog GET (read-heavy), concurrent checkout одного товара
+   (write contention), смешанный buyer/seller flow.
+   Для ЛР не блокирует, но красиво для отчёта/защиты.
 
 ## P3 — архитектурные улучшения на потом
 
