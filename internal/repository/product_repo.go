@@ -86,7 +86,7 @@ func (pr ProductRepoImpl) GetProducts(ctx context.Context, options m.CatalogOpti
 }
 
 func (pr ProductRepoImpl) GetProductByIDForUpdate(ctx context.Context, id int64) (p m.Product, err error) {
-	tx, ok := service.GetTxFromCtx(ctx)
+	tx, ok := GetTxFromCtx(ctx)
 	if !ok {
 		return m.Product{}, service.ErrMustBeInTransaction
 	}
@@ -217,19 +217,30 @@ func (pr ProductRepoImpl) UpdateProduct(ctx context.Context, id int64, pu m.Prod
 		return product.toModel(), nil
 	}
 
+	updateWithConn := func(conn DBTX) (m.Product, error) {
+		if pu.ChangedBy != nil {
+			if _, err := conn.Exec(ctx, "SELECT set_config('app.current_user', $1, true)", *pu.ChangedBy); err != nil {
+				return m.Product{}, fmt.Errorf("%w: %v", ErrExec, err)
+			}
+		}
+		return scanProduct(conn.QueryRow(ctx, updateSQL, args...))
+	}
+
+	if tx, ok := GetTxFromCtx(ctx); ok {
+		return updateWithConn(tx)
+	}
+
 	if pu.ChangedBy != nil {
 		var result m.Product
 		err = pgx.BeginFunc(ctx, pr.pool, func(tx pgx.Tx) error {
-			if _, err := tx.Exec(ctx, "SELECT set_config('app.current_user', $1, true)", *pu.ChangedBy); err != nil {
-				return fmt.Errorf("%w: %v", ErrExec, err)
-			}
-			result, err = scanProduct(tx.QueryRow(ctx, updateSQL, args...))
+			var err error
+			result, err = updateWithConn(tx)
 			return err
 		})
 		return result, err
 	}
 
-	return scanProduct(getConn(ctx, pr.pool).QueryRow(ctx, updateSQL, args...))
+	return updateWithConn(pr.pool)
 }
 
 func (pr ProductRepoImpl) ChangeStockAndReserved(ctx context.Context, productID int64, stockDelta int, reservedDelta int) error {

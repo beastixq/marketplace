@@ -13,6 +13,12 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+type passThroughTxManager struct{}
+
+func (passThroughTxManager) WithTransaction(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
 func TestTemplatesParse(t *testing.T) {
 	handler := NewWebHandler(
 		service.ProductService{},
@@ -81,7 +87,7 @@ func TestBuildCartDisplayUsesCurrentProductPrice(t *testing.T) {
 		}, nil)
 
 	handler := &WebHandler{
-		productService: service.NewProductService(productRepo, nil, nil),
+		productService: service.NewProductService(productRepo, nil, nil, passThroughTxManager{}),
 	}
 	items := []model.OrderItem{{
 		ID:              1,
@@ -121,7 +127,7 @@ func TestBuildCartDisplayMarksDeletedProducts(t *testing.T) {
 		}, nil)
 
 	handler := &WebHandler{
-		productService: service.NewProductService(productRepo, nil, nil),
+		productService: service.NewProductService(productRepo, nil, nil, passThroughTxManager{}),
 	}
 	items := []model.OrderItem{{
 		ID:              1,
@@ -153,7 +159,7 @@ func TestBuildOrderItemsDisplayUsesSnapshotPrice(t *testing.T) {
 		}, nil)
 
 	handler := &WebHandler{
-		productService: service.NewProductService(productRepo, nil, nil),
+		productService: service.NewProductService(productRepo, nil, nil, passThroughTxManager{}),
 	}
 	items := []model.OrderItem{{
 		ID:              1,

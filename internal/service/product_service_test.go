@@ -59,7 +59,7 @@ func newProductService(ctrl *gomock.Controller) (service.ProductService, *mock_s
 	productMock := mock_service.NewMockProductRepo(ctrl)
 	reviewMock := mock_service.NewMockReviewRepo(ctrl)
 	sellerMock := mock_service.NewMockSellerRepo(ctrl)
-	svc := service.NewProductService(productMock, reviewMock, sellerMock)
+	svc := service.NewProductService(productMock, reviewMock, sellerMock, passThroughTxManager{})
 	return svc, productMock, reviewMock, sellerMock
 }
 
@@ -283,11 +283,11 @@ func TestCreateProduct(t *testing.T) {
 	}
 
 	type testCase struct {
-		Description  string
-		UserID       int64
-		MockSeller   MockSellerReturn
-		MockCreate   *MockCreateReturn
-		ExpectedErr  error
+		Description string
+		UserID      int64
+		MockSeller  MockSellerReturn
+		MockCreate  *MockCreateReturn
+		ExpectedErr error
 	}
 
 	tCases := []testCase{
@@ -353,7 +353,7 @@ func TestUpdateProduct(t *testing.T) {
 	type testCase struct {
 		Description string
 		UserID      int64
-		MockGetByID MockProductReturn
+		MockLock    MockProductReturn
 		MockSeller  *MockSellerReturn
 		MockUpdate  *MockProductReturn
 		ExpectedErr error
@@ -363,47 +363,47 @@ func TestUpdateProduct(t *testing.T) {
 		{
 			Description: "Success",
 			UserID:      someSellerUserID,
-			MockGetByID: MockProductReturn{Product: someProduct},
+			MockLock:    MockProductReturn{Product: someProduct},
 			MockSeller:  &MockSellerReturn{Seller: someSeller},
 			MockUpdate:  &MockProductReturn{Product: updatedProduct},
 		},
 		{
 			Description: "Product not found",
 			UserID:      someSellerUserID,
-			MockGetByID: MockProductReturn{Error: service.ErrNotFound},
+			MockLock:    MockProductReturn{Error: service.ErrNotFound},
 			ExpectedErr: service.ErrProductNotFound,
 		},
 		{
-			Description: "GetProductByID error",
+			Description: "GetProductByIDForUpdate error",
 			UserID:      someSellerUserID,
-			MockGetByID: MockProductReturn{Error: errors.New("db error")},
+			MockLock:    MockProductReturn{Error: errors.New("db error")},
 			ExpectedErr: service.ErrGetProductByID,
 		},
 		{
 			Description: "Seller not found",
 			UserID:      someSellerUserID,
-			MockGetByID: MockProductReturn{Product: someProduct},
+			MockLock:    MockProductReturn{Product: someProduct},
 			MockSeller:  &MockSellerReturn{Error: service.ErrNotFound},
 			ExpectedErr: service.ErrSellerNotFound,
 		},
 		{
 			Description: "GetSellerByID error",
 			UserID:      someSellerUserID,
-			MockGetByID: MockProductReturn{Product: someProduct},
+			MockLock:    MockProductReturn{Product: someProduct},
 			MockSeller:  &MockSellerReturn{Error: errors.New("db error")},
 			ExpectedErr: service.ErrGetSellerByID,
 		},
 		{
 			Description: "Not your seller",
 			UserID:      otherUserID,
-			MockGetByID: MockProductReturn{Product: someProduct},
+			MockLock:    MockProductReturn{Product: someProduct},
 			MockSeller:  &MockSellerReturn{Seller: someSeller},
 			ExpectedErr: service.ErrNotYourSeller,
 		},
 		{
 			Description: "UpdateProduct repo error",
 			UserID:      someSellerUserID,
-			MockGetByID: MockProductReturn{Product: someProduct},
+			MockLock:    MockProductReturn{Product: someProduct},
 			MockSeller:  &MockSellerReturn{Seller: someSeller},
 			MockUpdate:  &MockProductReturn{Error: errors.New("db error")},
 			ExpectedErr: service.ErrUpdateProduct,
@@ -412,7 +412,7 @@ func TestUpdateProduct(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
-			productMock.EXPECT().GetProductByID(ctx, someID).Return(tCase.MockGetByID.Product, tCase.MockGetByID.Error)
+			productMock.EXPECT().GetProductByIDForUpdate(ctx, someID).Return(tCase.MockLock.Product, tCase.MockLock.Error)
 			if tCase.MockSeller != nil {
 				sellerMock.EXPECT().GetSellerByID(ctx, someProduct.SellerID).Return(tCase.MockSeller.Seller, tCase.MockSeller.Error)
 			}
@@ -427,6 +427,27 @@ func TestUpdateProduct(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUpdateProductLockFires(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	svc, productMock, _, sellerMock := newProductService(ctrl)
+	ctx := context.Background()
+
+	newName := "Lock test product"
+	productUpdate := m.ProductUpdate{Name: &newName}
+	updatedProduct := someProduct
+	updatedProduct.Name = newName
+
+	productMock.EXPECT().GetProductByIDForUpdate(ctx, someID).Return(someProduct, nil)
+	sellerMock.EXPECT().GetSellerByID(ctx, someProduct.SellerID).Return(someSeller, nil)
+	productMock.EXPECT().UpdateProduct(ctx, someID, productUpdate).Return(updatedProduct, nil)
+
+	got, err := svc.UpdateProduct(ctx, testActor(someSellerUserID, m.RoleSeller), someID, productUpdate)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assertProduct(t, got, updatedProduct)
 }
 
 func TestDeleteProduct(t *testing.T) {

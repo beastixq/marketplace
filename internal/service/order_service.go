@@ -45,19 +45,25 @@ type SellerGetter interface {
 	GetSellerByUserID(ctx context.Context, userID int64) (s m.Seller, err error)
 }
 
+type OrderAddressRepo interface {
+	GetAddressByID(ctx context.Context, id int64) (a m.Address, err error)
+}
+
 type OrderService struct {
 	orderRepo     OrderRepo
 	orderItemRepo OrderItemRepo
 	productRepo   ProductRepo
+	addressRepo   OrderAddressRepo
 	sellerGetter  SellerGetter
 	txManager     TxManager
 }
 
-func NewOrderService(or OrderRepo, oir OrderItemRepo, pr ProductRepo, sr SellerGetter, tx TxManager) OrderService {
+func NewOrderService(or OrderRepo, oir OrderItemRepo, pr ProductRepo, ar OrderAddressRepo, sr SellerGetter, tx TxManager) OrderService {
 	return OrderService{
 		orderRepo:     or,
 		orderItemRepo: oir,
 		productRepo:   pr,
+		addressRepo:   ar,
 		sellerGetter:  sr,
 		txManager:     tx}
 }
@@ -246,6 +252,9 @@ func (os OrderService) AddItemToCart(ctx context.Context, actor Actor, productID
 			PriceAtPurchase: product.Price,
 		})
 		if err != nil {
+			if errors.Is(err, ErrProductAlreadyInCart) {
+				return ErrProductAlreadyInCart
+			}
 			return fmt.Errorf("%w: %v", ErrCreateOrderItem, err)
 		}
 		return nil
@@ -323,6 +332,17 @@ func (os OrderService) Checkout(ctx context.Context, actor Actor, addressID int6
 			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
 		}
 
+		address, err := os.addressRepo.GetAddressByID(ctx, addressID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return ErrAddressNotFound
+			}
+			return fmt.Errorf("%w: %v", ErrGetAddressByID, err)
+		}
+		if address.UserID != actor.UserID {
+			return ErrNotYourAddress
+		}
+
 		cart, err := os.GetCart(ctx, actor)
 		if err != nil {
 			if errors.Is(err, ErrCartNotFound) {
@@ -333,8 +353,8 @@ func (os OrderService) Checkout(ctx context.Context, actor Actor, addressID int6
 
 		// claim cart — atomic draft→pending prevents concurrent double-checkout;
 		// 0 rows affected means another tx already claimed it
-		if err := os.orderRepo.UpdateOrderStatus(ctx, cart.ID,
-			[]m.OrderStatus{m.StatusDraft}, m.StatusPending); err != nil {
+		checkoutFrom, checkoutTo := orderTransitionStatuses(orderTransitionCheckout)
+		if err := os.orderRepo.UpdateOrderStatus(ctx, cart.ID, checkoutFrom, checkoutTo); err != nil {
 			if errors.Is(err, ErrNotFound) {
 				return ErrCartNotFound
 			}
@@ -436,7 +456,7 @@ func (os OrderService) Checkout(ctx context.Context, actor Actor, addressID int6
 				UserID:      actor.UserID,
 				AddressID:   &addressID,
 				SellerID:    &sellerID,
-				Status:      m.StatusPending,
+				Status:      checkoutTo,
 				TotalAmount: totalAmount,
 			})
 			if err != nil {
@@ -482,11 +502,12 @@ func (os OrderService) PayOrder(ctx context.Context, actor Actor, orderID int64)
 	if actor.UserID != order.UserID {
 		return ErrNotYourOrder
 	}
-	if order.Status != m.StatusPending {
-		return fmt.Errorf("%w: status must be 'pending' to make pay", ErrOrderStatusInvalid)
+	if err := validateOrderStatusTransition(order.Status, orderTransitionPay); err != nil {
+		return err
 	}
 
-	err = os.orderRepo.UpdateOrderStatus(ctx, orderID, []m.OrderStatus{m.StatusPending}, m.StatusPaid)
+	from, to := orderTransitionStatuses(orderTransitionPay)
+	err = os.orderRepo.UpdateOrderStatus(ctx, orderID, from, to)
 	if errors.Is(err, ErrNotFound) {
 		return fmt.Errorf("%w: concurrent status change", ErrOrderStatusInvalid)
 	}
@@ -511,8 +532,8 @@ func (os OrderService) CancelOrder(ctx context.Context, actor Actor, orderID int
 	if !actor.IsAdmin() && actor.UserID != order.UserID {
 		return ErrNotYourOrder
 	}
-	if order.Status != m.StatusPending && order.Status != m.StatusPaid {
-		return fmt.Errorf("%w: can only cancel pending or paid orders", ErrOrderStatusInvalid)
+	if err := validateOrderStatusTransition(order.Status, orderTransitionCancel); err != nil {
+		return err
 	}
 
 	items, err := os.orderItemRepo.GetOrderItemsByOrderID(ctx, orderID)
@@ -520,15 +541,36 @@ func (os OrderService) CancelOrder(ctx context.Context, actor Actor, orderID int
 		return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
 	}
 
+	// collect unique product IDs for lock ordering
+	productIDSet := make(map[int64]struct{}, len(items))
+	for _, item := range items {
+		productIDSet[item.ProductID] = struct{}{}
+	}
+	cancelProductIDs := make([]int64, 0, len(productIDSet))
+	for id := range productIDSet {
+		cancelProductIDs = append(cancelProductIDs, id)
+	}
+	slices.Sort(cancelProductIDs)
+
 	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
-		err = os.orderRepo.UpdateOrderStatus(ctx, orderID,
-			[]m.OrderStatus{m.StatusPending, m.StatusPaid}, m.StatusCancelled)
+		from, to := orderTransitionStatuses(orderTransitionCancel)
+		err = os.orderRepo.UpdateOrderStatus(ctx, orderID, from, to)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				// concurrent cancel/expire beat us — order already transitioned
 				return fmt.Errorf("%w: concurrent status change", ErrOrderStatusInvalid)
 			}
 			return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
+		}
+		// acquire row locks in ascending-ID order before mutating stock; prevents
+		// deadlocks when cancel/checkout/ship run concurrently on the same products
+		for _, productID := range cancelProductIDs {
+			if _, err := os.productRepo.GetProductByIDForUpdate(ctx, productID); err != nil {
+				if errors.Is(err, ErrNotFound) {
+					return fmt.Errorf("%w: product %d", ErrProductNotFound, productID)
+				}
+				return fmt.Errorf("%w: product %d: %v", ErrGetProductByID, productID, err)
+			}
 		}
 		for _, item := range items {
 			err = os.productRepo.ChangeStockAndReserved(ctx, item.ProductID, 0, -item.Quantity)
@@ -555,34 +597,88 @@ func (os OrderService) ExpireOrders(ctx context.Context, deadline time.Time) err
 	for _, order := range orders {
 		items, err := os.orderItemRepo.GetOrderItemsByOrderID(ctx, order.ID)
 		if err != nil {
-			expireErrors = append(expireErrors, fmt.Errorf("order %d: %w: %v", order.ID, ErrGetOrderItemsByOrderID, err))
+			expireErrors = append(expireErrors, &ExpireOrderError{
+				OrderID: order.ID,
+				Stage:   ExpireStageGetItems,
+				Cause:   fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err),
+			})
 			continue
 		}
+		// collect unique product IDs in ascending order for deterministic lock ordering
+		expireProductIDSet := make(map[int64]struct{}, len(items))
+		for _, item := range items {
+			expireProductIDSet[item.ProductID] = struct{}{}
+		}
+		expireProductIDs := make([]int64, 0, len(expireProductIDSet))
+		for id := range expireProductIDSet {
+			expireProductIDs = append(expireProductIDs, id)
+		}
+		slices.Sort(expireProductIDs)
+
+		lockedByID := make(map[int64]m.Product, len(expireProductIDs))
 		if err = os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
-			err = os.orderRepo.UpdateOrderStatus(ctx, order.ID,
-				[]m.OrderStatus{m.StatusPending}, m.StatusCancelled)
+			from, to := orderTransitionStatuses(orderTransitionExpire)
+			err = os.orderRepo.UpdateOrderStatus(ctx, order.ID, from, to)
 			if err != nil {
 				if errors.Is(err, ErrNotFound) {
 					// order was paid or already cancelled between snapshot and tx — skip
 					return nil
 				}
-				return fmt.Errorf("%w: %v", ErrUpdateOrder, err)
+				return &ExpireOrderError{
+					OrderID: order.ID,
+					Stage:   ExpireStageUpdateStatus,
+					Cause:   fmt.Errorf("%w: %v", ErrUpdateOrder, err),
+				}
+			}
+			// acquire row locks in ascending-ID order before releasing reserved stock
+			for _, productID := range expireProductIDs {
+				product, err := os.productRepo.GetProductByIDForUpdate(ctx, productID)
+				if err != nil {
+					cause := fmt.Errorf("%w: %v", ErrGetProductByID, err)
+					if errors.Is(err, ErrNotFound) {
+						cause = fmt.Errorf("%w", ErrProductNotFound)
+					}
+					return &ExpireOrderError{
+						OrderID:   order.ID,
+						ProductID: productID,
+						Stage:     ExpireStageLockProduct,
+						Cause:     cause,
+					}
+				}
+				lockedByID[productID] = product
 			}
 			for _, item := range items {
 				err = os.productRepo.ChangeStockAndReserved(ctx, item.ProductID, 0, -item.Quantity)
-				if errors.Is(err, ErrNotFound) {
-					return fmt.Errorf("%w: %v", ErrProductNotFound, err)
-				}
-				if errors.Is(err, ErrStockInvariantViolated) {
-					return fmt.Errorf("%w: %v", ErrInsufficientStock, err)
-				}
 				if err != nil {
-					return fmt.Errorf("%w: %v", ErrChangeStockAndReserved, err)
+					cause := fmt.Errorf("%w: %v", ErrChangeStockAndReserved, err)
+					switch {
+					case errors.Is(err, ErrNotFound):
+						cause = fmt.Errorf("%w: %v", ErrProductNotFound, err)
+					case errors.Is(err, ErrStockInvariantViolated):
+						cause = fmt.Errorf("%w: %v", ErrInsufficientStock, err)
+					}
+					return &ExpireOrderError{
+						OrderID:          order.ID,
+						ProductID:        item.ProductID,
+						Quantity:         item.Quantity,
+						ReservedQuantity: lockedByID[item.ProductID].ReservedQuantity,
+						Stage:            ExpireStageReleaseStock,
+						Cause:            cause,
+					}
 				}
 			}
 			return nil
 		}); err != nil {
-			expireErrors = append(expireErrors, fmt.Errorf("order %d: %w", order.ID, err))
+			var ee *ExpireOrderError
+			if errors.As(err, &ee) {
+				expireErrors = append(expireErrors, err)
+			} else {
+				expireErrors = append(expireErrors, &ExpireOrderError{
+					OrderID: order.ID,
+					Stage:   "tx",
+					Cause:   err,
+				})
+			}
 			continue
 		}
 	}
@@ -611,13 +707,13 @@ func (os OrderService) ShipOrder(ctx context.Context, actor Actor, orderID int64
 	if order.SellerID == nil || *order.SellerID != seller.ID {
 		return ErrNotYourOrder
 	}
-	if order.Status != m.StatusPaid {
-		return fmt.Errorf("%w: order must be paid before shipping", ErrOrderStatusInvalid)
+	if err := validateOrderStatusTransition(order.Status, orderTransitionShip); err != nil {
+		return err
 	}
 
 	return os.txManager.WithTransaction(ctx, func(ctx context.Context) error {
-		err = os.orderRepo.UpdateOrderStatus(ctx, orderID,
-			[]m.OrderStatus{m.StatusPaid}, m.StatusShipped)
+		from, to := orderTransitionStatuses(orderTransitionShip)
+		err = os.orderRepo.UpdateOrderStatus(ctx, orderID, from, to)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				return fmt.Errorf("%w: concurrent status change", ErrOrderStatusInvalid)
@@ -628,6 +724,25 @@ func (os OrderService) ShipOrder(ctx context.Context, actor Actor, orderID int64
 		items, err := os.orderItemRepo.GetOrderItemsByOrderID(ctx, orderID)
 		if err != nil {
 			return fmt.Errorf("%w: %v", ErrGetOrderItemsByOrderID, err)
+		}
+		// collect unique product IDs in ascending order for deterministic lock ordering
+		shipProductIDSet := make(map[int64]struct{}, len(items))
+		for _, item := range items {
+			shipProductIDSet[item.ProductID] = struct{}{}
+		}
+		shipProductIDs := make([]int64, 0, len(shipProductIDSet))
+		for id := range shipProductIDSet {
+			shipProductIDs = append(shipProductIDs, id)
+		}
+		slices.Sort(shipProductIDs)
+		// acquire row locks in ascending-ID order before reducing stock
+		for _, productID := range shipProductIDs {
+			if _, err := os.productRepo.GetProductByIDForUpdate(ctx, productID); err != nil {
+				if errors.Is(err, ErrNotFound) {
+					return fmt.Errorf("%w: product %d", ErrProductNotFound, productID)
+				}
+				return fmt.Errorf("%w: product %d: %v", ErrGetProductByID, productID, err)
+			}
 		}
 		for _, item := range items {
 			err = os.productRepo.ChangeStockAndReserved(ctx, item.ProductID, -item.Quantity, -item.Quantity)
@@ -667,11 +782,12 @@ func (os OrderService) DeliverOrder(ctx context.Context, actor Actor, orderID in
 	if order.SellerID == nil || *order.SellerID != seller.ID {
 		return ErrNotYourOrder
 	}
-	if order.Status != m.StatusShipped {
-		return fmt.Errorf("%w: order must be shipped before delivering", ErrOrderStatusInvalid)
+	if err := validateOrderStatusTransition(order.Status, orderTransitionDeliver); err != nil {
+		return err
 	}
 
-	err = os.orderRepo.UpdateOrderStatus(ctx, orderID, []m.OrderStatus{m.StatusShipped}, m.StatusDelivered)
+	from, to := orderTransitionStatuses(orderTransitionDeliver)
+	err = os.orderRepo.UpdateOrderStatus(ctx, orderID, from, to)
 	if errors.Is(err, ErrNotFound) {
 		return fmt.Errorf("%w: concurrent status change", ErrOrderStatusInvalid)
 	}

@@ -185,6 +185,87 @@ func TestReviewRepo_Create_Duplicate(t *testing.T) {
 	}
 }
 
+func TestReviewRepo_UserPurchasedProduct(t *testing.T) {
+	sellerID := createTestSeller(t)
+	productID := createTestProduct(t, sellerID)
+	buyerID := createTestUser(t)
+	otherBuyerID := createTestUser(t)
+	ctx := context.Background()
+	reviews := repo.NewReviewRepo(testPool)
+	orders := repo.NewOrderRepo(testPool)
+	items := repo.NewOrderItemRepo(testPool)
+
+	paidOrderID, err := orders.CreateOrder(ctx, m.OrderCreate{
+		UserID:      buyerID,
+		SellerID:    &sellerID,
+		Status:      m.StatusPaid,
+		TotalAmount: decimal.NewFromFloat(100),
+	})
+	if err != nil {
+		t.Fatalf("CreateOrder paid: %v", err)
+	}
+	itemID, err := items.CreateOrderItem(ctx, m.OrderItemCreate{
+		OrderID:         paidOrderID,
+		ProductID:       productID,
+		Quantity:        1,
+		PriceAtPurchase: decimal.NewFromFloat(100),
+	})
+	if err != nil {
+		t.Fatalf("CreateOrderItem paid: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM order_items WHERE id = $1", itemID)
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM orders WHERE id = $1", paidOrderID)
+	})
+
+	purchased, err := reviews.UserPurchasedProduct(ctx, buyerID, productID)
+	if err != nil {
+		t.Fatalf("UserPurchasedProduct paid: %v", err)
+	}
+	if !purchased {
+		t.Fatal("expected paid order to allow review")
+	}
+
+	purchased, err = reviews.UserPurchasedProduct(ctx, otherBuyerID, productID)
+	if err != nil {
+		t.Fatalf("UserPurchasedProduct other buyer: %v", err)
+	}
+	if purchased {
+		t.Fatal("other buyer must not be treated as purchaser")
+	}
+
+	draftOrderID, err := orders.CreateOrder(ctx, m.OrderCreate{
+		UserID:      otherBuyerID,
+		SellerID:    &sellerID,
+		Status:      m.StatusDraft,
+		TotalAmount: decimal.Zero,
+	})
+	if err != nil {
+		t.Fatalf("CreateOrder draft: %v", err)
+	}
+	draftItemID, err := items.CreateOrderItem(ctx, m.OrderItemCreate{
+		OrderID:         draftOrderID,
+		ProductID:       productID,
+		Quantity:        1,
+		PriceAtPurchase: decimal.NewFromFloat(100),
+	})
+	if err != nil {
+		t.Fatalf("CreateOrderItem draft: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM order_items WHERE id = $1", draftItemID)
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM orders WHERE id = $1", draftOrderID)
+	})
+
+	purchased, err = reviews.UserPurchasedProduct(ctx, otherBuyerID, productID)
+	if err != nil {
+		t.Fatalf("UserPurchasedProduct draft: %v", err)
+	}
+	if purchased {
+		t.Fatal("draft order must not allow review")
+	}
+}
+
 func TestReviewRepo_Update_NotFound(t *testing.T) {
 	var r service.ReviewRepo = repo.NewReviewRepo(testPool)
 	ctx := context.Background()

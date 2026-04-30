@@ -3,7 +3,6 @@ package generators
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/rand"
 
 	"github.com/Masterminds/squirrel"
@@ -25,16 +24,24 @@ func weightedChoice(items []string, weights []int) string {
 	return items[len(items)-1]
 }
 
-// OrderSellers maps orderID → sellerID for non-draft orders.
-// Draft orders are not in the map (seller_id is NULL).
-type OrderSellers map[int64]int64
+type SeedOrder struct {
+	SellerID int64
+	Status   string
+}
 
-func CreateOrders(tx pgx.Tx, ctx context.Context, buyerIDs, addressesIDs []int64, sellersWithProducts []int64, count int) (ordersIDs []int64, orderSellers OrderSellers, err error) {
+func (so SeedOrder) IsDraft() bool {
+	return so.Status == "draft"
+}
+
+type SeedOrders map[int64]SeedOrder
+
+func CreateOrders(tx pgx.Tx, ctx context.Context, buyerIDs, addressesIDs []int64, sellersWithProducts []int64, count int) (ordersIDs []int64, seedOrders SeedOrders, err error) {
 	createdInLoop := 0
 	psql := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
 	insertBuilder := psql.Insert("orders").Columns("user_id", "address_id", "seller_id", "status", "total_amount")
 	ordersIDs = make([]int64, count)
 	sellerPerIndex := make([]int64, count) // 0 means draft (no seller)
+	statusPerIndex := make([]string, count)
 
 	statuses := []string{"draft", "pending", "paid", "shipped", "delivered", "cancelled"}
 	// draft 10%, pending 15%, paid 20%, shipped 20%, delivered 25%, cancelled 10%
@@ -43,6 +50,7 @@ func CreateOrders(tx pgx.Tx, ctx context.Context, buyerIDs, addressesIDs []int64
 	for i := range count {
 		buyerID := buyerIDs[rand.Intn(len(buyerIDs))]
 		status := weightedChoice(statuses, weights)
+		statusPerIndex[i] = status
 
 		var addressID interface{}
 		var sellerID interface{}
@@ -57,7 +65,7 @@ func CreateOrders(tx pgx.Tx, ctx context.Context, buyerIDs, addressesIDs []int64
 			sid := sellersWithProducts[rand.Intn(len(sellersWithProducts))]
 			sellerID = sid
 			sellerPerIndex[i] = sid
-			totalAmount = math.Round((rand.Float64()*9999+1)*100) / 100
+			totalAmount = 0
 		}
 
 		insertBuilder = insertBuilder.Values(buyerID, addressID, sellerID, status, totalAmount)
@@ -89,12 +97,13 @@ func CreateOrders(tx pgx.Tx, ctx context.Context, buyerIDs, addressesIDs []int64
 		}
 	}
 
-	orderSellers = make(OrderSellers, count)
+	seedOrders = make(SeedOrders, count)
 	for i, oid := range ordersIDs {
-		if sellerPerIndex[i] != 0 {
-			orderSellers[oid] = sellerPerIndex[i]
+		seedOrders[oid] = SeedOrder{
+			SellerID: sellerPerIndex[i],
+			Status:   statusPerIndex[i],
 		}
 	}
 
-	return ordersIDs, orderSellers, nil
+	return ordersIDs, seedOrders, nil
 }

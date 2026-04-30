@@ -25,13 +25,16 @@ type ProductService struct {
 	productRepo ProductRepo
 	reviewRepo  ReviewRepo
 	sellerRepo  SellerRepo
+	txManager   TxManager
 }
 
-func NewProductService(productRepo ProductRepo, reviewRepo ReviewRepo, sellerRepo SellerRepo) ProductService {
+func NewProductService(productRepo ProductRepo, reviewRepo ReviewRepo, sellerRepo SellerRepo, txManager TxManager) ProductService {
 	return ProductService{
 		productRepo: productRepo,
 		reviewRepo:  reviewRepo,
-		sellerRepo:  sellerRepo}
+		sellerRepo:  sellerRepo,
+		txManager:   txManager,
+	}
 }
 
 func (psvc ProductService) GetProducts(ctx context.Context, options m.CatalogOptions) (ps []m.Product, err error) {
@@ -117,41 +120,44 @@ func (ps ProductService) UpdateProduct(ctx context.Context, actor Actor, id int6
 		return m.Product{}, ErrPermissionDenied
 	}
 
-	p, err = ps.productRepo.GetProductByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return m.Product{}, ErrProductNotFound
+	// Lock first, then authorize and validate against fresh product data.
+	var updated m.Product
+	if err = ps.txManager.WithTransaction(ctx, func(ctx context.Context) error {
+		locked, err := ps.productRepo.GetProductByIDForUpdate(ctx, id)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return ErrProductNotFound
+			}
+			return fmt.Errorf("%w: %v", ErrGetProductByID, err)
 		}
-		return m.Product{}, fmt.Errorf("%w: %v", ErrGetProductByID, err)
-	}
-	if p.DeletedAt != nil {
-		return m.Product{}, ErrProductDeleted
-	}
-	if pu.StockQuantity != nil && *pu.StockQuantity < p.ReservedQuantity {
-		return m.Product{}, ErrStockBelowReserved
-	}
-
-	s, err := ps.sellerRepo.GetSellerByID(ctx, p.SellerID)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return m.Product{}, ErrSellerNotFound
+		if locked.DeletedAt != nil {
+			return ErrProductDeleted
 		}
-		return m.Product{}, fmt.Errorf("%w: %v", ErrGetSellerByID, err)
-	}
-	if !actor.IsAdmin() {
-		if s.UserID != actor.UserID {
-			return m.Product{}, ErrNotYourSeller
+		s, err := ps.sellerRepo.GetSellerByID(ctx, locked.SellerID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return ErrSellerNotFound
+			}
+			return fmt.Errorf("%w: %v", ErrGetSellerByID, err)
 		}
-	}
-
-	p, err = ps.productRepo.UpdateProduct(ctx, id, pu)
-	if err != nil {
-		if errors.Is(err, ErrStockBelowReserved) {
-			return m.Product{}, ErrStockBelowReserved
+		if !actor.IsAdmin() && s.UserID != actor.UserID {
+			return ErrNotYourSeller
 		}
-		return m.Product{}, fmt.Errorf("%w: %v", ErrUpdateProduct, err)
+		if pu.StockQuantity != nil && *pu.StockQuantity < locked.ReservedQuantity {
+			return ErrStockBelowReserved
+		}
+		updated, err = ps.productRepo.UpdateProduct(ctx, id, pu)
+		if err != nil {
+			if errors.Is(err, ErrStockBelowReserved) {
+				return ErrStockBelowReserved
+			}
+			return fmt.Errorf("%w: %v", ErrUpdateProduct, err)
+		}
+		return nil
+	}); err != nil {
+		return m.Product{}, err
 	}
-	return p, nil
+	return updated, nil
 }
 
 func (ps ProductService) DeleteProductByID(ctx context.Context, actor Actor, id int64) (err error) {

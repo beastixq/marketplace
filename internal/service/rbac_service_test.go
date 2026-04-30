@@ -19,7 +19,7 @@ func TestRBACBuyerOnlyUseCases(t *testing.T) {
 	_, err := addressSvc.GetAddressesByUserID(ctx, testActor(someID, m.RoleSeller))
 	assertError(t, err, service.ErrPermissionDenied)
 
-	reviewSvc := service.NewReviewService(mock_service.NewMockReviewRepo(ctrl))
+	reviewSvc := service.NewReviewService(mock_service.NewMockReviewRepo(ctrl), fakeReviewPurchaseChecker{}, mock_service.NewMockProductRepo(ctrl))
 	_, err = reviewSvc.CreateReview(ctx, testActor(someID, m.RoleSeller), m.ReviewCreate{ProductID: someProductID, Rating: 5})
 	assertError(t, err, service.ErrPermissionDenied)
 
@@ -81,7 +81,7 @@ func TestRBACAdminCannotUpdateReviews(t *testing.T) {
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 
-	reviewSvc := service.NewReviewService(mock_service.NewMockReviewRepo(ctrl))
+	reviewSvc := service.NewReviewService(mock_service.NewMockReviewRepo(ctrl), fakeReviewPurchaseChecker{}, mock_service.NewMockProductRepo(ctrl))
 	_, err := reviewSvc.UpdateReview(ctx, testActor(someID, m.RoleAdmin), someID, m.ReviewUpdate{})
 	assertError(t, err, service.ErrPermissionDenied)
 }

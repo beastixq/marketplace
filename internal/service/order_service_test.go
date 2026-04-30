@@ -79,14 +79,15 @@ func newOrderService(ctrl *gomock.Controller) (
 	*mock_service.MockOrderItemRepo,
 	*mock_service.MockProductRepo,
 	*mock_service.MockSellerGetter,
-	*mock_service.MockProductRepo,
+	*mock_service.MockAddressRepo,
 ) {
 	orderMock := mock_service.NewMockOrderRepo(ctrl)
 	itemMock := mock_service.NewMockOrderItemRepo(ctrl)
 	productMock := mock_service.NewMockProductRepo(ctrl)
+	addressMock := mock_service.NewMockAddressRepo(ctrl)
 	sellerMock := mock_service.NewMockSellerGetter(ctrl)
-	svc := service.NewOrderService(orderMock, itemMock, productMock, sellerMock, passThroughTxManager{})
-	return svc, orderMock, itemMock, productMock, sellerMock, productMock
+	svc := service.NewOrderService(orderMock, itemMock, productMock, addressMock, sellerMock, passThroughTxManager{})
+	return svc, orderMock, itemMock, productMock, sellerMock, addressMock
 }
 
 func assertOrder(t *testing.T, got, want m.Order) {
@@ -728,6 +729,7 @@ func TestCheckout(t *testing.T) {
 
 	type testCase struct {
 		Description         string
+		MockAddress         *MockAddressReturn
 		MockGetOrders       MockOrderListReturn
 		MockClaimErr        *error // UpdateOrderStatus draft→pending inside tx
 		MockGetItems        *MockOrderItemListReturn
@@ -774,6 +776,20 @@ func TestCheckout(t *testing.T) {
 			Description:   "No cart",
 			MockGetOrders: MockOrderListReturn{Orders: []m.Order{}},
 			ExpectedErr:   service.ErrCartNotFound,
+		},
+		{
+			Description: "Address not found",
+			MockAddress: &MockAddressReturn{
+				Error: service.ErrNotFound,
+			},
+			ExpectedErr: service.ErrAddressNotFound,
+		},
+		{
+			Description: "Address belongs to another user",
+			MockAddress: &MockAddressReturn{
+				Address: m.Address{ID: someAddressID, UserID: otherUserID},
+			},
+			ExpectedErr: service.ErrNotYourAddress,
 		},
 		{
 			Description:   "GetOrders repo error",
@@ -866,9 +882,24 @@ func TestCheckout(t *testing.T) {
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			svc, orderMock, itemMock, productMock, _, _ := newOrderService(ctrl)
+			svc, orderMock, itemMock, productMock, _, addressMock := newOrderService(ctrl)
 
 			orderMock.EXPECT().LockUserCart(ctx, someID).Return(nil)
+			addressReturn := MockAddressReturn{Address: m.Address{ID: someAddressID, UserID: someID}}
+			if tCase.MockAddress != nil {
+				addressReturn = *tCase.MockAddress
+			}
+			addressMock.EXPECT().GetAddressByID(ctx, someAddressID).Return(addressReturn.Address, addressReturn.Error)
+			addressFailed := addressReturn.Error != nil || addressReturn.Address.UserID != someID
+			if addressFailed {
+				orderIDs, err := svc.Checkout(ctx, testActor(someID, m.RoleBuyer), someAddressID)
+				assertError(t, err, tCase.ExpectedErr)
+				if len(orderIDs) != 0 {
+					t.Fatalf("expected no order IDs, got %d", len(orderIDs))
+				}
+				return
+			}
+
 			orderMock.EXPECT().GetOrdersByUserID(ctx, someID, m.PaginationOpts{}).Return(tCase.MockGetOrders.Orders, tCase.MockGetOrders.Error)
 
 			// GetCart internally calls GetOrderItemsByOrderID for total computation
@@ -1029,6 +1060,7 @@ func TestCancelOrder(t *testing.T) {
 		MockGet          MockOrderReturn
 		MockGetItems     bool
 		MockUpdateStatus *error // UpdateOrderStatus result
+		MockLock         bool   // GetProductByIDForUpdate called after status CAS
 		MockRelease      bool
 		ExpectedErr      error
 	}
@@ -1039,6 +1071,7 @@ func TestCancelOrder(t *testing.T) {
 			MockGet:          MockOrderReturn{Order: pendingOrder},
 			MockGetItems:     true,
 			MockUpdateStatus: ptrErr(nil),
+			MockLock:         true,
 			MockRelease:      true,
 		},
 		{
@@ -1046,6 +1079,7 @@ func TestCancelOrder(t *testing.T) {
 			MockGet:          MockOrderReturn{Order: paidOrder},
 			MockGetItems:     true,
 			MockUpdateStatus: ptrErr(nil),
+			MockLock:         true,
 			MockRelease:      true,
 		},
 		{
@@ -1104,6 +1138,9 @@ func TestCancelOrder(t *testing.T) {
 			if tCase.MockUpdateStatus != nil {
 				orderMock.EXPECT().UpdateOrderStatus(ctx, someOrderID, gomock.Any(), m.StatusCancelled).Return(*tCase.MockUpdateStatus)
 			}
+			if tCase.MockLock {
+				productMock.EXPECT().GetProductByIDForUpdate(ctx, someProductID).Return(m.Product{}, nil)
+			}
 			if tCase.MockRelease {
 				productMock.EXPECT().ChangeStockAndReserved(ctx, someProductID, 0, -cancelItems[0].Quantity).Return(nil)
 			}
@@ -1111,6 +1148,29 @@ func TestCancelOrder(t *testing.T) {
 			err := svc.CancelOrder(ctx, testActor(someID, m.RoleBuyer), someOrderID)
 			assertError(t, err, tCase.ExpectedErr)
 		})
+	}
+}
+
+func TestCancelOrderLockFires(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	svc, orderMock, itemMock, productMock, _, _ := newOrderService(ctrl)
+	ctx := context.Background()
+
+	pendingOrder := someOrder
+	cancelItems := []m.OrderItem{
+		{ID: 1, OrderID: someOrderID, ProductID: someProductID, Quantity: 3},
+	}
+
+	orderMock.EXPECT().GetOrderByID(ctx, someOrderID).Return(pendingOrder, nil)
+	itemMock.EXPECT().GetOrderItemsByOrderID(ctx, someOrderID).Return(cancelItems, nil)
+	orderMock.EXPECT().UpdateOrderStatus(ctx, someOrderID, gomock.Any(), m.StatusCancelled).Return(nil)
+	// lock must fire for the product ID before the stock is released
+	productMock.EXPECT().GetProductByIDForUpdate(ctx, someProductID).Return(m.Product{}, nil)
+	productMock.EXPECT().ChangeStockAndReserved(ctx, someProductID, 0, -cancelItems[0].Quantity).Return(nil)
+
+	err := svc.CancelOrder(ctx, testActor(someID, m.RoleBuyer), someOrderID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -1139,6 +1199,7 @@ func TestShipOrder(t *testing.T) {
 		MockGet          *MockOrderReturn
 		MockUpdateStatus *error
 		MockItems        bool
+		MockLock         bool // GetProductByIDForUpdate fires before ChangeStockAndReserved
 		MockChangeStock  bool
 		ExpectedErr      error
 	}
@@ -1150,6 +1211,7 @@ func TestShipOrder(t *testing.T) {
 			MockGet:          &MockOrderReturn{Order: paidOrderWithSeller},
 			MockUpdateStatus: ptrErr(nil),
 			MockItems:        true,
+			MockLock:         true,
 			MockChangeStock:  true,
 		},
 		{
@@ -1233,6 +1295,9 @@ func TestShipOrder(t *testing.T) {
 			}
 			if tCase.MockItems {
 				itemMock.EXPECT().GetOrderItemsByOrderID(ctx, someOrderID).Return(someOrderItems, nil)
+			}
+			if tCase.MockLock {
+				productMock.EXPECT().GetProductByIDForUpdate(ctx, someProductID).Return(m.Product{}, nil)
 			}
 			if tCase.MockChangeStock {
 				productMock.EXPECT().ChangeStockAndReserved(ctx, someProductID, -someOrderItems[0].Quantity, -someOrderItems[0].Quantity).Return(nil)

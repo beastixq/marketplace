@@ -2,7 +2,34 @@ package service
 
 import (
 	"errors"
+	"fmt"
 )
+
+// Stages for ExpireOrderError.
+const (
+	ExpireStageGetItems     = "get_items"
+	ExpireStageUpdateStatus = "update_status"
+	ExpireStageLockProduct  = "lock_product"
+	ExpireStageReleaseStock = "release_stock"
+)
+
+// ExpireOrderError carries structured context for a single failure inside
+// OrderService.ExpireOrders so the worker can emit slog records with
+// per-failure fields (order_id, product_id, quantity, reserved_quantity).
+type ExpireOrderError struct {
+	OrderID          int64
+	ProductID        int64
+	Quantity         int
+	ReservedQuantity int
+	Stage            string
+	Cause            error
+}
+
+func (e *ExpireOrderError) Error() string {
+	return fmt.Sprintf("expire order %d at %s: %v", e.OrderID, e.Stage, e.Cause)
+}
+
+func (e *ExpireOrderError) Unwrap() error { return e.Cause }
 
 // service layer errors
 var (
@@ -18,6 +45,7 @@ var (
 	ErrRegistration       = errors.New("Failed to register user")
 	ErrLogout             = errors.New("Failed to logout")
 	ErrTokenBlocked       = errors.New("Token has been revoked")
+	ErrAccountDeactivated = errors.New("Account is deactivated")
 
 	// users
 	ErrAccountWithEmailAlreadyExists = errors.New("Account with this email already exists")
@@ -106,14 +134,16 @@ var (
 	ErrStockBelowReserved     = errors.New("Stock quantity cannot be less than reserved quantity")
 
 	// review
-	ErrCreateReview          = errors.New("Failed to create review")
-	ErrGetReviewByID         = errors.New("Failed to get review by id")
-	ErrUpdateReview          = errors.New("Failed to update review")
-	ErrDeleteReviewByID      = errors.New("Failed to delete review")
-	ErrGetReviewsByProductID = errors.New("Failed to get reviews by product id")
-	ErrNotYourReview         = errors.New("It's not your review")
-	ErrReviewNotFound        = errors.New("Review not found")
-	ErrReviewAlreadyExists   = errors.New("You have already reviewed this product")
+	ErrCreateReview           = errors.New("Failed to create review")
+	ErrGetReviewByID          = errors.New("Failed to get review by id")
+	ErrUpdateReview           = errors.New("Failed to update review")
+	ErrDeleteReviewByID       = errors.New("Failed to delete review")
+	ErrGetReviewsByProductID  = errors.New("Failed to get reviews by product id")
+	ErrCheckReviewPurchase    = errors.New("Failed to check review purchase")
+	ErrNotYourReview          = errors.New("It's not your review")
+	ErrReviewNotFound         = errors.New("Review not found")
+	ErrReviewAlreadyExists    = errors.New("You have already reviewed this product")
+	ErrReviewPurchaseRequired = errors.New("You can review only products you have purchased")
 
 	// backoffice
 	ErrGetPlatformStats     = errors.New("Failed to get platform stats")

@@ -70,6 +70,10 @@ type ProductDTO struct {
 	Description *string         `json:"description"`
 	Price       decimal.Decimal `json:"price"`
 	CreatedAt   time.Time       `json:"created_at"`
+	// DeletedAt is omitted for active products and present for soft-deleted
+	// ones so clients (e.g. order history) can distinguish them. Public
+	// catalog still hides deleted products at the repository layer.
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
 func productDTO(p model.Product) ProductDTO {
@@ -80,6 +84,7 @@ func productDTO(p model.Product) ProductDTO {
 		Description: p.Description,
 		Price:       p.Price,
 		CreatedAt:   p.CreatedAt,
+		DeletedAt:   p.DeletedAt,
 	}
 }
 

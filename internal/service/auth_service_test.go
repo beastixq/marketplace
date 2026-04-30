@@ -139,6 +139,16 @@ func TestAuthLogin(t *testing.T) {
 			ExpectedErr: service.ErrWrongPassword,
 		},
 		{
+			Description: "Deleted account",
+			Email:       someEmail,
+			Password:    someStrongPassword,
+			MockReturn: MockUserReturn{User: func() m.User {
+				t := time.Now().Add(-time.Hour)
+				return m.User{ID: someID, Email: someEmail, Role: someRole, DeletedAt: &t}
+			}()},
+			ExpectedErr: service.ErrAccountDeactivated,
+		},
+		{
 			Description: "GetUserByEmail error",
 			Email:       someEmail,
 			Password:    someStrongPassword,
@@ -221,7 +231,7 @@ func TestLogout(t *testing.T) {
 
 func TestValidateToken(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	svc, _, blMock := newAuthService(ctrl)
+	svc, userMock, blMock := newAuthService(ctrl)
 	ctx := context.Background()
 
 	makeToken := func(claims jwt.MapClaims, secret string, method jwt.SigningMethod) string {
@@ -257,23 +267,47 @@ func TestValidateToken(t *testing.T) {
 		"jti":    errorJTI,
 	}
 
+	type userLookup struct {
+		User m.User
+		Err  error
+	}
 	type testCase struct {
 		Description     string
 		Token           string
 		ExpectedJTI     string
 		MockContains    *bool
 		MockContainsErr error
+		MockUserLookup  *userLookup
 		ExpectedErr     error
 		CheckClaims     bool
 	}
 
+	deletedAt := time.Now().Add(-time.Hour)
+
 	tCases := []testCase{
 		{
-			Description:  "Success",
-			Token:        makeToken(validClaims, testSecret, jwt.SigningMethodHS256),
-			ExpectedJTI:  validJTI,
-			MockContains: ptrBool(false),
-			CheckClaims:  true,
+			Description:    "Success",
+			Token:          makeToken(validClaims, testSecret, jwt.SigningMethodHS256),
+			ExpectedJTI:    validJTI,
+			MockContains:   ptrBool(false),
+			MockUserLookup: &userLookup{User: m.User{ID: someID, Role: someRole}},
+			CheckClaims:    true,
+		},
+		{
+			Description:    "Deleted account",
+			Token:          makeToken(validClaims, testSecret, jwt.SigningMethodHS256),
+			ExpectedJTI:    validJTI,
+			MockContains:   ptrBool(false),
+			MockUserLookup: &userLookup{User: m.User{ID: someID, Role: someRole, DeletedAt: &deletedAt}},
+			ExpectedErr:    service.ErrAccountDeactivated,
+		},
+		{
+			Description:    "User not found",
+			Token:          makeToken(validClaims, testSecret, jwt.SigningMethodHS256),
+			ExpectedJTI:    validJTI,
+			MockContains:   ptrBool(false),
+			MockUserLookup: &userLookup{Err: service.ErrUserNotFound},
+			ExpectedErr:    service.ErrAccountDeactivated,
 		},
 		{
 			Description: "Expired token",
@@ -317,6 +351,9 @@ func TestValidateToken(t *testing.T) {
 				blMock.EXPECT().Contains(ctx, tCase.ExpectedJTI).Return(*tCase.MockContains, nil)
 			} else if tCase.MockContainsErr != nil {
 				blMock.EXPECT().Contains(ctx, tCase.ExpectedJTI).Return(false, tCase.MockContainsErr)
+			}
+			if tCase.MockUserLookup != nil {
+				userMock.EXPECT().GetAuthUserByID(ctx, someID).Return(tCase.MockUserLookup.User, tCase.MockUserLookup.Err)
 			}
 
 			claims, err := svc.ValidateToken(ctx, tCase.Token)

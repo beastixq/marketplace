@@ -51,8 +51,8 @@ func (ps PaymentService) GetOrderPaymentURL(ctx context.Context, actor Actor, or
 		return "", time.Time{}, ErrNotYourOrder
 	}
 
-	if order.Status != m.StatusPending {
-		return "", time.Time{}, ErrOrderStatusInvalid
+	if err := validateOrderStatusTransition(order.Status, orderTransitionPay); err != nil {
+		return "", time.Time{}, err
 	}
 
 	expiresAt := order.CreatedAt.Add(ps.paymentTTL)
@@ -89,8 +89,8 @@ func (ps PaymentService) ProcessOrderPayment(ctx context.Context, token string) 
 		return nil
 	}
 
-	if order.Status != m.StatusPending {
-		return ErrOrderStatusInvalid
+	if err := validateOrderStatusTransition(order.Status, orderTransitionPay); err != nil {
+		return err
 	}
 
 	expiresAt := order.CreatedAt.Add(ps.paymentTTL)
@@ -106,7 +106,8 @@ func (ps PaymentService) ProcessOrderPayment(ctx context.Context, token string) 
 		return ErrInvalidPaymentAmount
 	}
 
-	if err = ps.orderRepo.UpdateOrderStatus(ctx, order.ID, []m.OrderStatus{m.StatusPending}, m.StatusPaid); err != nil {
+	from, to := orderTransitionStatuses(orderTransitionPay)
+	if err = ps.orderRepo.UpdateOrderStatus(ctx, order.ID, from, to); err != nil {
 		if errors.Is(err, ErrNotFound) {
 			current, getErr := ps.orderRepo.GetOrderByID(ctx, order.ID)
 			if getErr != nil {

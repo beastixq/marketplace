@@ -72,6 +72,9 @@
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() |
 | updated_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() |
 
+Ограничения:
+- одна draft-корзина на пользователя через partial unique index `ux_orders_one_draft_per_user`;
+
 ### Жизненный цикл заказа
 ```
 draft → pending → paid → shipped → delivered
@@ -95,6 +98,7 @@ draft → pending → paid → shipped → delivered
 | product_id | BIGINT | NOT NULL, FK → products(id) ON DELETE RESTRICT |
 | quantity | INTEGER | NOT NULL, CHECK (> 0) |
 | price_at_purchase | NUMERIC(12,2) | NOT NULL, CHECK (> 0) |
+| | | UNIQUE (order_id, product_id) |
 
 ## `reviews` — Отзывы покупателей
 | Поле | Тип | Ограничения |
@@ -122,6 +126,7 @@ draft → pending → paid → shipped → delivered
 CREATE INDEX ON products (seller_id);
 CREATE INDEX ON products (price);
 CREATE INDEX ON orders (user_id);
+CREATE UNIQUE INDEX ux_orders_one_draft_per_user ON orders (user_id) WHERE status = 'draft';
 CREATE INDEX ON orders (status, created_at);
 CREATE INDEX ON reviews (product_id);
 CREATE INDEX ON product_categories (category_id);

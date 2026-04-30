@@ -32,6 +32,7 @@ var serviceErrorResponses = []serviceErrorResponse{
 	{service.ErrNotFound, http.StatusNotFound},
 
 	{service.ErrWrongPassword, http.StatusUnauthorized},
+	{service.ErrAccountDeactivated, http.StatusUnauthorized},
 
 	{service.ErrAccountWithEmailAlreadyExists, http.StatusConflict},
 	{service.ErrEmailAlreadyInUse, http.StatusConflict},
@@ -43,6 +44,7 @@ var serviceErrorResponses = []serviceErrorResponse{
 	{service.ErrProductDeleted, http.StatusConflict},
 	{service.ErrStockBelowReserved, http.StatusConflict},
 	{service.ErrReviewAlreadyExists, http.StatusConflict},
+	{service.ErrReviewPurchaseRequired, http.StatusConflict},
 
 	{service.ErrEmptyCart, http.StatusBadRequest},
 	{service.ErrQuantityTooBig, http.StatusBadRequest},
