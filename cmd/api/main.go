@@ -67,7 +67,7 @@ func main() {
 	userService := svc.NewUserService(userRepo, cfg.Auth.BcryptCost)
 	sellerService := svc.NewSellerService(sellerRepo)
 	addressService := svc.NewAddressService(addressRepo)
-	reviewService := svc.NewReviewService(reviewRepo, reviewRepo)
+	reviewService := svc.NewReviewService(reviewRepo, reviewRepo, productRepo)
 	productService := svc.NewProductService(productRepo, reviewRepo, sellerRepo)
 	orderService := svc.NewOrderService(orderRepo, orderItemRepo, productRepo, addressRepo, sellerRepo, txManager)
 	categoryService := svc.NewCategoryService(categoryRepo)

@@ -21,13 +21,20 @@ type ReviewPurchaseChecker interface {
 	UserPurchasedProduct(ctx context.Context, userID int64, productID int64) (bool, error)
 }
 
+// ReviewProductGetter is the narrow product lookup ReviewService needs to
+// reject reviews for soft-deleted products.
+type ReviewProductGetter interface {
+	GetProductByID(ctx context.Context, id int64) (m.Product, error)
+}
+
 type ReviewService struct {
 	reviewRepo      ReviewRepo
 	purchaseChecker ReviewPurchaseChecker
+	productGetter   ReviewProductGetter
 }
 
-func NewReviewService(reviewRepo ReviewRepo, purchaseChecker ReviewPurchaseChecker) ReviewService {
-	return ReviewService{reviewRepo: reviewRepo, purchaseChecker: purchaseChecker}
+func NewReviewService(reviewRepo ReviewRepo, purchaseChecker ReviewPurchaseChecker, productGetter ReviewProductGetter) ReviewService {
+	return ReviewService{reviewRepo: reviewRepo, purchaseChecker: purchaseChecker, productGetter: productGetter}
 }
 
 func (rs ReviewService) GetReviewByID(ctx context.Context, id int64) (r m.Review, err error) {
@@ -47,6 +54,21 @@ func (rs ReviewService) CreateReview(ctx context.Context, actor Actor, rc m.Revi
 	}
 
 	rc.UserID = actor.UserID
+
+	// Block reviews on soft-deleted products even when the buyer purchased
+	// them earlier. Existing reviews remain readable; we just refuse to
+	// accept new content tied to a product that is no longer offered.
+	product, err := rs.productGetter.GetProductByID(ctx, rc.ProductID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return 0, ErrProductNotFound
+		}
+		return 0, fmt.Errorf("%w: %v", ErrGetProductByID, err)
+	}
+	if product.DeletedAt != nil {
+		return 0, ErrProductDeleted
+	}
+
 	purchased, err := rs.purchaseChecker.UserPurchasedProduct(ctx, actor.UserID, rc.ProductID)
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrCheckReviewPurchase, err)

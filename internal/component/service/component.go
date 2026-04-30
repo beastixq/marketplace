@@ -36,7 +36,7 @@ func New(repos *repocomponent.Component, cfg Config) *Component {
 	user := svc.NewUserService(repos.User, cfg.BcryptCost)
 	seller := svc.NewSellerService(repos.Seller)
 	address := svc.NewAddressService(repos.Address)
-	review := svc.NewReviewService(repos.Review, repos.ReviewPurchase)
+	review := svc.NewReviewService(repos.Review, repos.ReviewPurchase, repos.Product)
 	product := svc.NewProductService(repos.Product, repos.Review, repos.Seller)
 	order := svc.NewOrderService(repos.Order, repos.OrderItem, repos.Product, repos.Address, repos.Seller, repos.TxManager)
 	category := svc.NewCategoryService(repos.Category)
