@@ -6,19 +6,67 @@
 
 Use the project docs as the first stop for task-specific context:
 
-| Task | Read first |
-| --- | --- |
-| Architecture, dependencies, layer ownership | [docs/architecture.md](docs/architecture.md) |
-| Local startup, config, migrations, app commands | [docs/setup.md](docs/setup.md) |
-| Unit/integration/web test workflow | [docs/testing.md](docs/testing.md) |
-| JSON API routes, status codes, DTO/error conventions | [docs/api-contracts.md](docs/api-contracts.md) |
-| Schema, migrations, triggers, DB roles | [docs/database.md](docs/database.md), then [docs/db-schema.md](docs/db-schema.md) |
-| Go style, web UI style, SQL style, documentation style | [docs/style-guide.md](docs/style-guide.md) |
-| Common local failures | [docs/troubleshooting.md](docs/troubleshooting.md) |
-| Pre-release or submission checklist | [docs/release-process.md](docs/release-process.md) |
-| Coursework requirements and report context | [docs/tz.md](docs/tz.md), [docs/RPZ.md](docs/RPZ.md) |
+| Task                                                   | Read first                                                                        |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Architecture, dependencies, layer ownership            | [docs/architecture.md](docs/architecture.md)                                      |
+| Local startup, config, migrations, app commands        | [docs/setup.md](docs/setup.md)                                                    |
+| Unit/integration/web test workflow                     | [docs/testing.md](docs/testing.md)                                                |
+| JSON API routes, status codes, DTO/error conventions   | [docs/api-contracts.md](docs/api-contracts.md)                                    |
+| Schema, migrations, triggers, DB roles                 | [docs/database.md](docs/database.md), then [docs/db-schema.md](docs/db-schema.md) |
+| Go style, web UI style, SQL style, documentation style | [docs/style-guide.md](docs/style-guide.md)                                        |
+| Common local failures                                  | [docs/troubleshooting.md](docs/troubleshooting.md)                                |
+| Pre-release or submission checklist                    | [docs/release-process.md](docs/release-process.md)                                |
+| Coursework requirements and report context             | [docs/tz.md](docs/tz.md), [docs/RPZ.md](docs/RPZ.md)                              |
 
 If docs and current code conflict, trust the current code after verifying it directly, then update the relevant doc as part of the change. Keep docs concise and maintenance-oriented.
+
+## Learning Mode
+
+Use Learning Mode when the user asks for `Learning mode`, `learn mode`, `teach me`, `I want to do it myself`, or otherwise explicitly says they want to learn instead of having the agent generate the feature. If the user asks to make Learning Mode the default for the current conversation, keep using it until they ask to leave it.
+
+Learning Mode is collaborative implementation guidance. The student writes all new logic, while the agent may handle familiar boilerplate, orientation, searches, explanations, and verification.
+
+Core principle:
+
+```text
+The student writes everything they have not done before.
+The agent writes everything they already can do.
+```
+
+Before writing any logic, self-check:
+
+1. Has the student implemented something analogous before?
+2. Does this require a new way of thinking about the problem?
+3. Is this where the actual learning happens?
+
+If the answer to question 2 or 3 is yes, do not implement that logic. Leave exactly one `TODO(human)` comment at the right location, present a Learn By Doing request, and stop completely until the student responds.
+
+Do not write the creative or architectural logic and leave only mechanical template code as `TODO(human)`. The learning value is in design decisions and problem-solving, not in filling in obvious API calls.
+
+Learn By Doing request format:
+
+```text
+**Learn By Doing**
+**Context:** <what infrastructure is ready and why this part matters>
+**Your Task:** <what to implement and where to find TODO(human)>
+**Guidance:** <constraints, trade-offs, and hints to consider without giving the answer>
+```
+
+After the student's contribution, give one concise insight connecting their code to broader project patterns or system behavior. Do not praise, do not repeat their code.
+
+Use brief insights before and after code-oriented work when useful:
+
+```text
+Insight:
+- <2-3 specific points about this codebase or decision>
+```
+
+Communication style in Learning Mode:
+
+* Answer the question first, then explain only what is needed.
+* Use correct technical terminology.
+* Keep explanations concise and specific to this project.
+* If uncertain, state the uncertainty directly.
 
 ## Custom Codex Agents
 
@@ -26,11 +74,11 @@ Project-scoped Codex agents live in `.codex/agents/`.
 
 Use the matching custom agent when the user explicitly asks to use agents, delegate work, or split work by specialty:
 
-| Agent | Use for |
-| --- | --- |
+| Agent            | Use for                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------- |
 | `go-backend-dev` | Go backend implementation: services, repositories, API handlers, migrations, payment, caching, backend tests. |
-| `frontend-dev` | Server-rendered web UI: `html/template`, `internal/web`, forms, CSS, role dashboards, web routes. |
-| `architecture` | Clean Architecture review/design, dependency-boundary analysis, cross-layer refactors, ownership decisions. |
+| `frontend-dev`   | Server-rendered web UI: `html/template`, `internal/web`, forms, CSS, role dashboards, web routes.             |
+| `architecture`   | Clean Architecture review/design, dependency-boundary analysis, cross-layer refactors, ownership decisions.   |
 
 Do not delegate work only because a matching agent exists. When using agents, keep tasks scoped and make each agent follow this `AGENTS.md` plus the relevant docs above.
 
