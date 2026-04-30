@@ -134,7 +134,7 @@ func main() {
 	for sid := range productsBySeller {
 		sellersWithProducts = append(sellersWithProducts, sid)
 	}
-	ordersIDs, orderSellers, err := generators.CreateOrders(tx, ctx, usersIDs[2], addressesIDs, sellersWithProducts, ordersCount)
+	ordersIDs, seedOrders, err := generators.CreateOrders(tx, ctx, usersIDs[2], addressesIDs, sellersWithProducts, ordersCount)
 	if err != nil {
 		log.Printf("Failed on CreateOrders: %v\n", err)
 		return
@@ -142,7 +142,7 @@ func main() {
 	log.Println("Orders created: ", len(ordersIDs))
 	// OrderItems
 	log.Printf("Start creating %d order items...\n", orderItemsCount)
-	err = generators.CreateOrderItems(tx, ctx, ordersIDs, productsIDs, orderSellers, productsBySeller, orderItemsCount)
+	err = generators.CreateOrderItems(tx, ctx, ordersIDs, productsIDs, seedOrders, productsBySeller, orderItemsCount)
 	if err != nil {
 		log.Printf("Failed on CreateOrderItems: %v\n", err)
 		return

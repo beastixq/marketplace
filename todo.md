@@ -11,34 +11,25 @@
    Админ должен модерировать привязки товара к категориям.
    Сейчас схема `product_categories` есть, фильтр каталога есть, seed связи создаёт, но web UI создания товара категории не задаёт.
 
-3. **Seed-инварианты заказов и резервов** — исправить демо-данные.
-   Сейчас seeder напрямую создаёт `pending` orders и `order_items`, но не увеличивает `products.reserved_quantity`.
-   Потом `OrderExpirationWorker` отменяет просроченный `pending` заказ и пытается снять резерв, из-за чего возможен `Stock invariant violated`.
-   Также seed может создать пустые non-draft orders и повторяющиеся items с одинаковым `(order_id, product_id)`.
-   Варианты:
-   - не генерировать `pending` заказы через raw seed;
-   - после генерации `order_items` пересчитывать `reserved_quantity` для всех `pending`/`paid`;
-   - генерировать такие заказы через service checkout path.
-
-4. **DB-инварианты корзины/order_items** — добавить constraints.
+3. **DB-инварианты корзины/order_items** — добавить constraints.
    Нужно:
    - partial unique index на одну draft-корзину на пользователя;
    - unique constraint/index на `order_items(order_id, product_id)`.
    Это важно: сейчас часть защиты есть в service, но БД должна держать инвариант.
 
-5. **Ownership `address_id` при checkout** — запретить checkout на чужой адрес.
+4. **Ownership `address_id` при checkout** — запретить checkout на чужой адрес.
    Перед созданием заказов проверять, что address принадлежит `actor.UserID`.
    Чужой address должен давать доменную ошибку.
 
-6. **Review только после покупки** — запретить отзывы без покупки.
+5. **Review только после покупки** — запретить отзывы без покупки.
    В `CreateReview` нужна проверка, что buyer покупал этот product в `paid`/`shipped`/`delivered` order.
    Сейчас duplicate review обработан, но purchase check ещё нет.
 
-7. **Redis TokenBlocklist для logout** — подключить настоящий blocklist.
+6. **Redis TokenBlocklist для logout** — подключить настоящий blocklist.
    Интерфейс `TokenBlocklist` уже есть, но `cmd/api/main.go` передаёт `nil`.
    Нужно добавить Redis в config/docker-compose, реализацию blocklist и wiring в API/techui components.
 
-8. **Удалённые товары — остаточные edge cases**.
+7. **Удалённые товары — остаточные edge cases**.
    Уже сделано: web показывает deleted product, add-to-cart/checkout запрещены, cart блокирует checkout с deleted item.
    Нужно ещё проверить/доделать:
    - API DTO/ответы для deleted product;
@@ -97,6 +88,7 @@
 
 2. **Frontend checklist manual pass**.
    Проверить руками: admin panel, analyst dashboard, catalog filters, price history, seller flows, buyer flows.
+   Проверить Price Change Graph: после изменения цены товара график должен показывать переход старой цены к новой без seed-записи "начальной цены".
    Важно для сдачи, но не требует heavy e2e framework.
 
 3. **Общие app errors без цикла repo -> service**.
@@ -164,5 +156,3 @@
    Сейчас BL/repo report считает выручку в каждой привязанной категории.
 
 ---
-
-не добавляется запись по первой цене продукта
