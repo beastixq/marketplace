@@ -69,9 +69,13 @@
 
 ### P2 — useful, but not blocking lab work
 
-1. **Transaction boundary in business logic**.
-   Service currently opens transactions through `TxManager`.
-   Decide whether to keep this or move transaction boundary to separate use case/transaction layer.
+1. ~~**Transaction boundary in business logic**~~ — done (kept).
+   Decision: keep `TxManager` called from service layer. Interface now
+   lives in `internal/service/transactions.go` with no pgx import; pgx
+   helpers (`GetTxFromCtx`, `SetTxCtx`, ctx key) moved to
+   `internal/repository/transactions.go` where they belong.
+   No separate use-case/transaction layer introduced — for this project
+   service-as-tx-boundary is fine.
 
 ### P3 — architectural improvements for later
 

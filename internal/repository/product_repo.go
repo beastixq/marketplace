@@ -86,7 +86,7 @@ func (pr ProductRepoImpl) GetProducts(ctx context.Context, options m.CatalogOpti
 }
 
 func (pr ProductRepoImpl) GetProductByIDForUpdate(ctx context.Context, id int64) (p m.Product, err error) {
-	tx, ok := service.GetTxFromCtx(ctx)
+	tx, ok := GetTxFromCtx(ctx)
 	if !ok {
 		return m.Product{}, service.ErrMustBeInTransaction
 	}
@@ -226,7 +226,7 @@ func (pr ProductRepoImpl) UpdateProduct(ctx context.Context, id int64, pu m.Prod
 		return scanProduct(conn.QueryRow(ctx, updateSQL, args...))
 	}
 
-	if tx, ok := service.GetTxFromCtx(ctx); ok {
+	if tx, ok := GetTxFromCtx(ctx); ok {
 		return updateWithConn(tx)
 	}
 

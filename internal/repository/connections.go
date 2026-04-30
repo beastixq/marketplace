@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 
-	"github.com/beastixq/marketplace/internal/service"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,7 +15,7 @@ type DBTX interface {
 }
 
 func getConn(ctx context.Context, pool *pgxpool.Pool) DBTX {
-	if tx, ok := service.GetTxFromCtx(ctx); ok {
+	if tx, ok := GetTxFromCtx(ctx); ok {
 		return tx
 	}
 	return pool

@@ -203,7 +203,7 @@ func cartLockKey(userID int64) int64 {
 // lock held for the duration of the current transaction. Caller MUST be inside
 // a transaction.
 func (or OrderRepoImpl) LockUserCart(ctx context.Context, userID int64) error {
-	tx, ok := service.GetTxFromCtx(ctx)
+	tx, ok := GetTxFromCtx(ctx)
 	if !ok {
 		return service.ErrMustBeInTransaction
 	}
