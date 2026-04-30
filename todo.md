@@ -1,172 +1,201 @@
-## P0 — важно для ЛР/use cases/demo
+## GUI
 
-1. **Аналитические отчёты GUI** — закрыть use cases аналитика.
-   Уже есть platform stats, orders by status, top products by revenue.
-   BL/repo methods для динамики заказов и продаж по категориям добавлены.
-   Остаток: вывести эти отчёты в Web GUI.
-   Это важно: эти use cases прямо есть в `diagrams/src/UseCases.puml`.
+### P0 — important for lab work / use cases / demo
 
-2. **Категории товара в seller/admin GUI** — закрыть сценарий категоризации товара.
-   Продавец должен выбирать категории при создании/редактировании товара.
-   Админ должен модерировать привязки товара к категориям.
-   Сейчас схема `product_categories` есть, фильтр каталога есть, seed связи создаёт, но web UI создания товара категории не задаёт.
+1. **Analyst reports in GUI** — close analyst use cases.
+   Platform stats, orders by status, and top products by revenue already exist.
+   BL/repository methods for order dynamics and sales by category are already added.
+   Remaining work: show these reports in the Web GUI.
+   This matters because these use cases are explicitly present in `diagrams/src/UseCases.puml`.
 
-3. **Redis TokenBlocklist для logout** — подключить настоящий blocklist.
-   Интерфейс `TokenBlocklist` уже есть, но `cmd/api/main.go` передаёт `nil`.
-   Нужно добавить Redis в config/docker-compose, реализацию blocklist и wiring в API/techui components.
+2. **Product categories in seller/admin GUI** — close product categorization flow.
+   Seller must choose categories while creating/editing a product.
+   Admin must moderate product-category links.
+   Current state: `product_categories` schema exists, catalog filter exists, seed creates links, but product create/edit Web UI does not set categories.
 
-4. ~~**Удалённые товары — остаточные edge cases**~~ — done.
-   Web показывает deleted product, add-to-cart/checkout запрещены,
-   cart блокирует checkout с deleted item, `ProductDTO.deleted_at`
-   exposed для order-detail/admin клиентов, review на deleted product
-   запрещён через `ErrProductDeleted` (409). Старые pending/paid orders
-   и lifecycle проверены — repo joins не фильтруют `deleted_at`,
-   ничего не сломалось. Seller own-product list остаётся скрывать
-   deleted (current behavior); admin видит всё. Re-delete идемпотентен.
-
-## P1 — важные бизнес-инварианты и конкурентность
-
-1. ~~**Конкурентность stock update / checkout / cancel / ship / expire**~~ — done.
-   `UpdateProduct` теперь оборачивается в tx, берёт `FOR UPDATE` через
-   `GetProductByIDForUpdate` и валидирует stock-vs-reserved уже после
-   локирования (свежие данные). Stock semantics остаются абсолютными;
-   delta-операции не вводились.
-
-2. ~~**Конкурентность cancel/ship/expire**~~ — done.
-   `CancelOrder`, `ExpireOrders`, `ShipOrder` берут row locks на
-   все затронутые products в порядке возрастания id внутри tx
-   до `ChangeStockAndReserved`. Deadlock-free между всеми путями
-   мутации products (включая checkout).
-
-3. ~~**Более информативные ошибки worker/order lifecycle**~~ — done.
-   `ExpireOrders` теперь возвращает `*ExpireOrderError` со структурным
-   контекстом (`OrderID`, `ProductID`, `Quantity`, `ReservedQuantity`,
-   `Stage`, `Cause`). `OrderExpirationWorker` распаковывает joined errors
-   и эмитит per-failure `slog.Error` с именованными полями. Service
-   остаётся log-free; logging происходит на границе worker.
-
-4. ~~**Order state machine**~~ — done.
-   Допустимые переходы статусов заказа централизованы в service-layer таблице,
-   `OrderService`/`PaymentService` используют её для validation и CAS update.
-
-5. **Цена в draft-корзине — модель БД/API/techui**.
-   Web UI уже показывает актуальную цену из `products`, checkout записывает актуальный `price_at_purchase`.
-   Остаток:
-   - `GetCart` в service/API/techui всё ещё считает total по `price_at_purchase`;
-   - долгосрочно сделать `order_items.price_at_purchase nullable` для draft items;
-   - на checkout записывать snapshot price и считать `total_amount`.
-
-6. **Удалённый/забаненный пользователь**.
-   Проверять `deleted_at` при login и при token-based auth.
-   Сейчас удалённый пользователь может быть проблемным edge case.
-
-7. **Address schema drift**.
-   `house` уже протянут в model/DTO/repo/web.
-   `apartment` есть в migration `010_add_address_house.sql`, но не протянут в model/DTO/repo/forms/seed.
-   Решить: либо поддержать apartment везде, либо убрать из схемы отдельной миграцией.
-
-8. **Repository error boundary**.
-   Репозитории должны переводить `pgx.ErrNoRows` и `pgconn.PgError` unique/check/FK по constraint name в доменные sentinel-ошибки.
-   Сейчас часть ошибок уже переведена, но не везде.
-
-## P2 — полезно, но не блокирует ЛР
+### P2 — useful, but not blocking lab work
 
 1. **Category pagination/list refresh**.
-   Сейчас admin categories временно грузит большой limit, чтобы новые категории были видны.
-   Нужно нормальное page/search/filter для public/admin category list.
+   Admin categories currently load a large temporary limit so new categories are visible.
+   Need normal page/search/filter for public/admin category lists.
 
 2. **Frontend checklist manual pass**.
-   Проверить руками: admin panel, analyst dashboard, catalog filters, price history, seller flows, buyer flows.
-   Проверить Price Change Graph: после изменения цены товара график должен показывать переход старой цены к новой без seed-записи "начальной цены".
-   Важно для сдачи, но не требует heavy e2e framework.
+   Manually check: admin panel, analyst dashboard, catalog filters, price history, seller flows, buyer flows.
+   Check Price Change Graph: after product price change, graph should show old-to-new price transition without seed "initial price" record.
+   Important for submission, but does not need heavy e2e framework.
 
-3. **Общие app errors без цикла repo -> service**.
-   Вынести `ErrNotFound` и общие sentinel-ошибки в `internal/apperr` или похожий пакет.
-   Сейчас repositories импортируют `internal/service`, это архитектурно некрасиво, но для ЛР терпимо.
+3. **Web cleanup after `ProductService.UpdateProduct` lock**.
+   As part of P1 #1 BL fix, `NewProductService` received `TxManager` dependency.
+   `internal/web/web_handler_test.go` now has local `passThroughTxManager` mock.
+   This works as a stub, but is not good long-term design. Decide:
+   - move this mock to shared test helper;
+   - or revisit DI so web tests do not depend on tx infrastructure
+     (for example, a separate use case for seller stock update).
+   Web handlers themselves were not changed; only test factory changed. BL fix is clean.
 
-4. **Транзакционная граница в business logic**.
-   Сейчас service открывает транзакции через `TxManager`.
-   Подумать, стоит ли оставить так или выделить use case/transaction boundary отдельным уровнем.
+### P4 — low priority for educational project
 
-5. **Денормализация rating/total_amount**.
-   Проверить, где `rating` и `total_amount` могут drift из-за ручных SQL/seed/bugs.
-   Для performance это нормально, но инварианты должны быть понятны.
+1. **CSRF for web forms**.
+   Important for production, not blocking current lab work.
 
-6. **Web cleanup после `ProductService.UpdateProduct` lock**.
-   В рамках P1 #1 BL-фикса `NewProductService` получил `TxManager` зависимость.
-   `internal/web/web_handler_test.go` поэтому теперь несёт локальный
-   `passThroughTxManager` mock — это рабочая заглушка, не подходит для
-   долгосрочного дизайна. Решить:
-   - либо вынести этот mock в общий test helper;
-   - либо пересмотреть DI так, чтобы web tests не зависели от tx-инфры
-     (например, отдельный use case для seller stock update).
-   Web handlers сами не меняли — только тестовая фабрика. BL правка чистая.
+2. **E2E GUI tests**.
+   Useful for project health, but gives little value for current submission.
+   Manual checklist plus unit/template tests is enough.
 
-7. **Load / concurrency testing**.
-   Промерить, сколько concurrent requests держит сервер до деградации
-   latency/error rate. Не "hardware tests" — правильные термины:
-   - **load testing** — ожидаемая нагрузка, мерим latency/throughput;
-   - **stress testing** — давим выше предела, ищем breaking point;
-   - **capacity / concurrency testing** — наш вопрос "сколько RPS";
-   - **soak testing** — долго гоняем, ищем утечки/деградацию.
-   Инструменты: `k6` (JS scripts, удобный для Go-сервисов),
-   `vegeta` (Go-нативный, простой CLI), `hey`, `wrk`, JMeter, Locust.
-   Что мерить: p50/p95/p99 latency, RPS, error rate, DB pool exhaustion,
-   FOR UPDATE contention на checkout/cancel. Сценарии:
-   catalog GET (read-heavy), concurrent checkout одного товара
-   (write contention), смешанный buyer/seller flow.
-   Для ЛР не блокирует, но красиво для отчёта/защиты.
+3. **UI polish**.
+   Small copy, spacing, empty states, disabled states.
+   Do after P0/P1 are closed.
 
-## P3 — архитектурные улучшения на потом
+## BL - business logic (service)
 
-1. **Port interfaces**.
-   Решить, оставлять интерфейсы, диктуемые сервисом, в `internal/service` или вынести в `internal/port`.
+### P1 — important business invariants and concurrency
 
-2. **Use Cases вместо god-сервисов**.
-   Подумать о дроблении на узкие interfaces:
+1. ~~**More informative worker/order lifecycle errors**~~ — done.
+   `ExpireOrders` now returns `*ExpireOrderError` with structured context
+   (`OrderID`, `ProductID`, `Quantity`, `ReservedQuantity`, `Stage`, `Cause`).
+   `OrderExpirationWorker` unwraps joined errors and emits one `slog.Error`
+   per failure with named fields. Service stays log-free; logging happens at worker boundary.
+
+2. ~~**Order state machine**~~ — done.
+   Allowed order status transitions are centralized in a service-layer table.
+   `OrderService`/`PaymentService` use it for validation and CAS update.
+
+3. ~~**Deleted/banned user**~~ — done.
+   `Login` rejects soft-deleted users with `ErrAccountDeactivated` (401).
+   `ValidateToken` loads the user via `GetAuthUserByID` after JWT/blocklist
+   checks and rejects with the same error if `DeletedAt != nil` or the
+   user no longer exists. Cost: one DB lookup per authenticated request;
+   acceptable for this project. New sentinel mapped to 401 in handler.
+
+### P2 — useful, but not blocking lab work
+
+1. **Transaction boundary in business logic**.
+   Service currently opens transactions through `TxManager`.
+   Decide whether to keep this or move transaction boundary to separate use case/transaction layer.
+
+### P3 — architectural improvements for later
+
+1. **Use cases instead of god services**.
+   Consider splitting services into narrow interfaces:
    ```go
    type CheckoutUseCase interface {
        Execute(ctx context.Context, userID int64, addressID int64) ([]int64, error)
    }
    ```
-   Для текущей ЛР это не критично.
+   Not critical for current lab work.
 
-3. **ACID review текущих транзакций**.
-   Проверить изоляцию и инварианты для checkout/cancel/ship/expire/update stock.
+## DA - data access (repository)
 
-4. **SQL улучшения**.
-   Подумать, где уместны CTE/window queries.
-   Не делать ради красоты.
+### P1 — important business invariants and concurrency
 
-5. **`SET LOCAL ROLE` внутри транзакции**.
-   Исследовать, нужно ли реально использовать PostgreSQL roles на уровне БД.
+1. **Repository error boundary**.
+   Repositories should translate `pgx.ErrNoRows` and `pgconn.PgError` unique/check/FK errors by constraint name into domain sentinel errors.
+   Some errors are already translated, but not everywhere.
 
-## P4 — низкий приоритет для учебного проекта
+### P2 — useful, but not blocking lab work
 
-1. **CSRF для web forms**.
-   Для prod важно, для текущей ЛР не блокирует.
+1. **SQL improvements**.
+   Consider where CTE/window queries are appropriate.
+   Do not add them for style only.
 
-2. **E2E GUI tests**.
-   Для проекта полезно, но для сдачи сейчас почти не даёт выгоды.
-   Достаточно manual checklist + unit/template tests.
+### P3 — architectural improvements for later
 
-3. **UI polish**.
-   Мелкие тексты, spacing, empty states, disabled states.
-   Делать после закрытия P0/P1.
+1. **`SET LOCAL ROLE` inside transaction**.
+   Investigate whether PostgreSQL roles should really be used at database level.
 
-## Нужно решение
+## Combined BL+DA
+
+### P0 — important for lab work / use cases / demo
+
+1. **Redis TokenBlocklist for logout** — connect real blocklist.
+   `TokenBlocklist` interface already exists, but `cmd/api/main.go` passes `nil`.
+   Need to add Redis to config/docker-compose, implement blocklist, and wire it into API/techui components.
+
+### P1 — important business invariants and concurrency
+
+1. ~~**Stock update / checkout / cancel / ship / expire concurrency**~~ — done.
+   `UpdateProduct` now runs in tx, locks product with `FOR UPDATE` through
+   `GetProductByIDForUpdate`, and validates stock-vs-reserved after lock using fresh data.
+   Stock semantics stay absolute; delta operations were not introduced.
+
+2. ~~**Cancel/ship/expire concurrency**~~ — done.
+   `CancelOrder`, `ExpireOrders`, and `ShipOrder` lock all affected products
+   by ascending id inside tx before `ChangeStockAndReserved`.
+   This is deadlock-free across all product mutation paths, including checkout.
+
+3. **Draft cart price — DB/API/techui model**.
+   Web UI already shows current price from `products`; checkout writes current `price_at_purchase`.
+   Remaining work:
+   - `GetCart` in service/API/techui still calculates total from `price_at_purchase`;
+   - long-term, make `order_items.price_at_purchase` nullable for draft items;
+   - at checkout, write snapshot price and calculate `total_amount`.
+
+4. **Address schema drift**.
+   `house` is already wired through model/DTO/repository/web.
+   `apartment` exists in migration `010_add_address_house.sql`, but is not wired through model/DTO/repository/forms/seed.
+   Decide: support `apartment` everywhere, or remove it from schema with separate migration.
+
+### P2 — useful, but not blocking lab work
+
+1. **Shared app errors without repo -> service cycle**.
+   Move `ErrNotFound` and common sentinel errors to `internal/apperr` or similar package.
+   Repositories currently import `internal/service`; architecturally ugly, acceptable for lab work.
+
+2. **Denormalized rating/total_amount**.
+   Check where `rating` and `total_amount` can drift because of manual SQL/seed/bugs.
+   This is fine for performance, but invariants should be clear.
+
+### P3 — architectural improvements for later
+
+1. **Port interfaces**.
+   Decide whether interfaces dictated by services should stay in `internal/service` or move to `internal/port`.
+
+2. **ACID review of current transactions**.
+   Check isolation and invariants for checkout/cancel/ship/expire/update stock.
+
+## Other
+
+### P0 — important for lab work / use cases / demo
+
+1. ~~**Deleted products — remaining edge cases**~~ — done.
+   Web shows deleted products where needed, add-to-cart/checkout are forbidden,
+   cart blocks checkout with deleted item, `ProductDTO.deleted_at` is exposed
+   for order-detail/admin clients, review on deleted product is rejected through
+   `ErrProductDeleted` (409). Old pending/paid orders and lifecycle were checked:
+   repository joins do not filter `deleted_at`, nothing broke. Seller own-product
+   list keeps hiding deleted products (current behavior); admin sees everything.
+   Re-delete is idempotent.
+
+### P2 — useful, but not blocking lab work
+
+1. **Load / concurrency testing**.
+   Measure how many concurrent requests server handles before latency/error rate degrade.
+   Do not call this "hardware testing"; correct terms:
+   - **load testing** — expected load, measure latency/throughput;
+   - **stress testing** — push above limit, find breaking point;
+   - **capacity / concurrency testing** — our "how many RPS" question;
+   - **soak testing** — long run, find leaks/degradation.
+   Tools: `k6` (JS scripts, convenient for Go services),
+   `vegeta` (Go-native, simple CLI), `hey`, `wrk`, JMeter, Locust.
+   Metrics: p50/p95/p99 latency, RPS, error rate, DB pool exhaustion,
+   `FOR UPDATE` contention on checkout/cancel. Scenarios:
+   catalog GET (read-heavy), concurrent checkout of one product
+   (write contention), mixed buyer/seller flow.
+   Not blocking lab work, but useful for report/defense.
+
+## Needs Decision
 
 1. **Stock UI semantics**.
-   Оставляем absolute `stock_quantity` или переходим на операции "increase/decrease by N"?
+   Keep absolute `stock_quantity`, or switch to "increase/decrease by N" operations?
 
 2. **Address apartment**.
-   Поддерживаем `apartment` везде или удаляем из схемы?
+   Support `apartment` everywhere, or remove it from schema?
 
 3. **Deleted product policy**.
-   Разрешать ли review на deleted product, если покупатель реально покупал его раньше?
+   Allow review on deleted product if buyer actually bought it before?
 
 4. **Sales by category attribution**.
-   Если товар привязан к нескольким категориям, считать его выручку в каждой категории или нужна одна primary category?
-   Сейчас BL/repo report считает выручку в каждой привязанной категории.
+   If product is linked to multiple categories, count its revenue in each category or require one primary category?
+   Current BL/repository report counts revenue in every linked category.
 
 ---

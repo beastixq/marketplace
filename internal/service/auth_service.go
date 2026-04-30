@@ -103,6 +103,9 @@ func (as AuthService) Login(ctx context.Context, email, password string) (token 
 		}
 		return "", fmt.Errorf("%w: %v", ErrLogin, err)
 	}
+	if user.DeletedAt != nil {
+		return "", ErrAccountDeactivated
+	}
 
 	if err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		return "", ErrWrongPassword
@@ -161,6 +164,18 @@ func (as AuthService) ValidateToken(ctx context.Context, token string) (claims m
 		if blocked {
 			return m.TokenClaims{}, ErrTokenBlocked
 		}
+	}
+
+	// Reject tokens whose owner was soft-deleted after the token was issued.
+	user, err := as.userProvider.GetAuthUserByID(ctx, claims.UserID)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			return m.TokenClaims{}, ErrAccountDeactivated
+		}
+		return m.TokenClaims{}, fmt.Errorf("%w: %v", ErrParseToken, err)
+	}
+	if user.DeletedAt != nil {
+		return m.TokenClaims{}, ErrAccountDeactivated
 	}
 
 	return claims, nil

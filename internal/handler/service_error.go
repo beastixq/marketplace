@@ -32,6 +32,7 @@ var serviceErrorResponses = []serviceErrorResponse{
 	{service.ErrNotFound, http.StatusNotFound},
 
 	{service.ErrWrongPassword, http.StatusUnauthorized},
+	{service.ErrAccountDeactivated, http.StatusUnauthorized},
 
 	{service.ErrAccountWithEmailAlreadyExists, http.StatusConflict},
 	{service.ErrEmailAlreadyInUse, http.StatusConflict},

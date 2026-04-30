@@ -45,6 +45,7 @@ var (
 	ErrRegistration       = errors.New("Failed to register user")
 	ErrLogout             = errors.New("Failed to logout")
 	ErrTokenBlocked       = errors.New("Token has been revoked")
+	ErrAccountDeactivated = errors.New("Account is deactivated")
 
 	// users
 	ErrAccountWithEmailAlreadyExists = errors.New("Account with this email already exists")
