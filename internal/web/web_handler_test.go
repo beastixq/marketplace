@@ -106,6 +106,32 @@ func TestProductTemplateRendersAdminCategoryPicker(t *testing.T) {
 	}
 }
 
+func TestProfileTemplateRendersPasswordForm(t *testing.T) {
+	handler := NewWebHandler(
+		service.ProductService{},
+		service.CategoryService{},
+		service.AuthService{},
+		service.UserService{},
+		service.OrderService{},
+		service.AddressService{},
+		service.SellerService{},
+		service.ReviewService{},
+		service.BackofficeService{},
+		nil,
+	)
+
+	var out bytes.Buffer
+	if err := handler.templates["profile"].ExecuteTemplate(&out, "layout", map[string]any{
+		"User":    &userInfo{UserID: 7, Role: "buyer", FullName: "Buyer"},
+		"Profile": model.User{ID: 7, Email: "buyer@example.com", FullName: "Buyer User", Role: model.RoleBuyer, CreatedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("render profile template: %v", err)
+	}
+	if !bytes.Contains(out.Bytes(), []byte(`action="/profile/password"`)) {
+		t.Fatal("password change form was not rendered")
+	}
+}
+
 func TestBuildCartDisplayUsesCurrentProductPrice(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	productRepo := mock_service.NewMockProductRepo(ctrl)

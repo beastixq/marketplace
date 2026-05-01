@@ -114,3 +114,55 @@ func (wh *WebHandler) ProfileUpdate(w http.ResponseWriter, r *http.Request) {
 		"Success": "Profile updated successfully",
 	})
 }
+
+func (wh *WebHandler) ProfilePasswordUpdate(w http.ResponseWriter, r *http.Request) {
+	user := wh.userFromCookie(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	actor := user.actor()
+	u, err := wh.userService.GetUserByID(r.Context(), actor, user.UserID)
+	if err != nil {
+		http.Error(w, "Failed to load profile", http.StatusInternalServerError)
+		return
+	}
+
+	renderProfile := func(errorMsg string, successMsg string) {
+		wh.render(w, "profile", map[string]any{
+			"User":    user,
+			"Profile": u,
+			"Error":   errorMsg,
+			"Success": successMsg,
+		})
+	}
+
+	oldPassword := r.FormValue("old_password")
+	newPassword := r.FormValue("new_password")
+	confirmPassword := r.FormValue("confirm_password")
+
+	if oldPassword == "" {
+		renderProfile("Current password is required", "")
+		return
+	}
+	if newPassword != confirmPassword {
+		renderProfile("New password confirmation does not match", "")
+		return
+	}
+	if err := validators.ValidatePassword(newPassword); err != nil {
+		renderProfile(err.Error(), "")
+		return
+	}
+
+	if err := wh.userService.ChangePasswordUser(r.Context(), actor, oldPassword, newPassword); err != nil {
+		errMsg := "Failed to change password"
+		if errors.Is(err, service.ErrWrongPassword) {
+			errMsg = service.ErrWrongPassword.Error()
+		}
+		renderProfile(errMsg, "")
+		return
+	}
+
+	renderProfile("", "Password changed successfully")
+}

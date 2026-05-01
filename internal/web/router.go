@@ -30,6 +30,7 @@ func NewWebRouter(wh *WebHandler) http.Handler {
 	// Authenticated pages
 	r.Get("/profile", wh.Profile)
 	r.Post("/profile", wh.ProfileUpdate)
+	r.Post("/profile/password", wh.ProfilePasswordUpdate)
 	r.Get("/orders", wh.Orders)
 	r.Get("/orders/{id}", wh.OrderDetail)
 	r.Post("/orders/{id}/pay", wh.OrderPay)
