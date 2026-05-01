@@ -15,13 +15,20 @@
     </div>
     {{end}}
     <div class="product-detail__meta">
-        In stock: {{.Product.StockQuantity}} &bull;
+        Available: {{.Product.AvailableQuantity}} &bull;
         <a href="/sellers/{{.Seller.ID}}">{{.Seller.CompanyName}}</a> &bull;
         Added: {{.Product.CreatedAt.Format "02.01.2006"}}
         {{if .Product.DeletedAt}} &bull; Deleted: {{.Product.DeletedAt.Format "02.01.2006 15:04"}}{{end}}
     </div>
     {{if .Product.Description}}
     <div class="product-detail__desc">{{.Product.Description}}</div>
+    {{end}}
+    {{if .ProductCategories}}
+    <div class="tag-list" style="margin-bottom: 1rem;">
+        {{range .ProductCategories}}
+        <a href="/?category={{.Name}}" class="tag">{{.Name}}</a>
+        {{end}}
+    </div>
     {{end}}
     {{if and .User (eq .User.Role "buyer")}}
     {{if eq .Notice "already-in-cart"}}
@@ -33,19 +40,74 @@
     {{if eq .Notice "product-deleted"}}
     <div class="alert alert--error" style="margin-bottom: 1rem;">This product is deleted and cannot be added to cart.</div>
     {{end}}
-    {{if not .Product.DeletedAt}}
+    {{if and (not .Product.DeletedAt) (gt .Product.AvailableQuantity 0)}}
     <form method="POST" action="/cart/add" class="product-detail__cart-form">
         <input type="hidden" name="product_id" value="{{.Product.ID}}">
         <label for="quantity">Quantity:</label>
-        <input type="number" id="quantity" name="quantity" value="1" min="1" max="{{.Product.StockQuantity}}" style="width:60px">
+        <input type="number" id="quantity" name="quantity" value="1" min="1" max="{{.Product.AvailableQuantity}}" style="width:60px">
         <button type="submit" class="btn btn--primary">Add to Cart</button>
     </form>
+    {{else if not .Product.DeletedAt}}
+    <div class="empty-state" style="padding: 1rem; text-align: left;">No available quantity.</div>
     {{end}}
     {{end}}
 </div>
 
 {{if and .User (eq .User.Role "admin") (not .Product.DeletedAt)}}
-<div style="margin-top: 1rem;">
+<div class="form-card" style="margin-top: 1rem;">
+    <h2 style="font-size: 1.1rem; margin-bottom: 1rem;">Product Categories</h2>
+    {{if .CategoryError}}
+    <div class="alert alert--error">{{.CategoryError}}</div>
+    {{end}}
+    {{if eq .Notice "categories-updated"}}
+    <div class="alert alert--success">Categories updated</div>
+    {{end}}
+    <form method="GET" action="{{.CategoryPicker.SearchAction}}" class="category-search-form">
+        <input type="hidden" name="range" value="{{.PriceRange}}">
+        <label for="category_search">Category search</label>
+        <div class="category-search-form__row">
+            <input type="search" id="category_search" name="category_search" value="{{.CategoryPicker.Search}}" placeholder="Search categories, e.g. Books">
+            <button type="submit" class="btn btn--primary btn--sm">Search</button>
+            {{if .CategoryPicker.Search}}<a href="/products/{{.Product.ID}}?range={{.PriceRange}}" class="btn btn--sm" style="background: var(--bg); border: 1px solid var(--border);">Clear</a>{{end}}
+        </div>
+    </form>
+    <form method="POST" action="/admin/products/{{.Product.ID}}/categories" style="margin-bottom: 1rem;">
+        <details class="category-picker" open>
+            <summary>Change Categories</summary>
+            <div class="category-picker__body">
+                {{if .CategoryPicker.Selected}}
+                <div class="category-picker__section-title">Selected</div>
+                <div class="category-picker__results">
+                    {{range .CategoryPicker.Selected}}
+                    <label class="category-picker__option">
+                        <input type="checkbox" name="category_ids" value="{{.ID}}" checked>
+                        <span>{{.Name}}</span>
+                    </label>
+                    {{end}}
+                </div>
+                {{end}}
+                <div class="category-picker__section-title">Available</div>
+                {{if .CategoryPicker.Options}}
+                <div class="category-picker__results">
+                    {{range .CategoryPicker.Options}}
+                    <label class="category-picker__option">
+                        <input type="checkbox" name="category_ids" value="{{.ID}}">
+                        <span>{{.Name}}</span>
+                    </label>
+                    {{end}}
+                </div>
+                {{else}}
+                <div class="category-picker__empty">No categories found</div>
+                {{end}}
+                <div class="category-picker__pager">
+                    {{if gt .CategoryPicker.Page 1}}<a href="{{.CategoryPicker.PrevURL}}" class="btn btn--sm">&laquo; Prev</a>{{else}}<span></span>{{end}}
+                    <span>Page {{.CategoryPicker.Page}}</span>
+                    {{if .CategoryPicker.HasMore}}<a href="{{.CategoryPicker.NextURL}}" class="btn btn--sm">Next &raquo;</a>{{else}}<span></span>{{end}}
+                </div>
+            </div>
+        </details>
+        <button type="submit" class="btn btn--primary btn--sm" style="margin-top: 0.75rem;">Save Categories</button>
+    </form>
     <form method="POST" action="/admin/products/{{.Product.ID}}/delete" style="display: inline;">
         <button type="submit" class="btn btn--danger btn--sm" onclick="return confirm('Delete this product?')">Delete Product (Admin)</button>
     </form>
@@ -73,10 +135,10 @@
         new Chart(ctx, {
             type: 'line',
             data: {
-                labels: [{{range .PriceHistory}}"{{.ChangedAt.Format "02.01.2006"}}",{{end}}],
+                labels: [{{range $i, $p := .PriceHistory}}{{if eq $i 0}}"{{$p.ChangedAt.Format "02.01.2006 15:04"}} before",{{end}}"{{$p.ChangedAt.Format "02.01.2006 15:04"}}",{{end}}],
                 datasets: [{
                     label: 'Price (RUB)',
-                    data: [{{range .PriceHistory}}{{.NewPrice}},{{end}}],
+                    data: [{{range $i, $p := .PriceHistory}}{{if eq $i 0}}{{$p.OldPrice}},{{end}}{{$p.NewPrice}},{{end}}],
                     borderColor: '#2563eb',
                     backgroundColor: 'rgba(37,99,235,0.1)',
                     fill: true,

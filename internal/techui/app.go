@@ -69,7 +69,7 @@ type ProductManagement interface {
 }
 
 type CategoryBrowser interface {
-	GetCategories(ctx context.Context, opts m.PaginationOpts) ([]m.Category, error)
+	GetCategories(ctx context.Context, opts m.CategoryListOptions) ([]m.Category, error)
 	GetCategoryByID(ctx context.Context, id int64) (m.Category, error)
 }
 
@@ -690,7 +690,9 @@ func (a *App) categoriesMenu(ctx context.Context) error {
 }
 
 func (a *App) listCategories(ctx context.Context) error {
-	categories, err := a.servicePorts.CategoryBrowser.GetCategories(ctx, m.PaginationOpts{Page: 1, Limit: 100})
+	categories, err := a.servicePorts.CategoryBrowser.GetCategories(ctx, m.CategoryListOptions{
+		Pagination: m.PaginationOpts{Page: 1, Limit: 100},
+	})
 	if err != nil {
 		return err
 	}

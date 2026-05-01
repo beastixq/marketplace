@@ -7,7 +7,7 @@
 | email | VARCHAR(255) | NOT NULL, UNIQUE |
 | password_hash | VARCHAR(255) | NOT NULL |
 | full_name | VARCHAR(255) | NOT NULL |
-| phone | VARCHAR(20) | UNIQUE |
+| phone | VARCHAR(20) | |
 | role | VARCHAR(20) | NOT NULL, CHECK IN ('buyer','seller','admin','analyst') |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() |
 | deleted_at | TIMESTAMPTZ | мягкое удаление |

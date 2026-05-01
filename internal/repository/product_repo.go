@@ -137,6 +137,7 @@ func (pr ProductRepoImpl) GetProductPriceHistory(ctx context.Context, pid int64,
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sb := psql.Select("id", "product_id", "old_price", "new_price", "changed_at", "changed_by").From("product_price_history").Where(sq.Eq{"product_id": pid})
 	sb = sb.Where(sq.And{sq.GtOrEq{"product_price_history.changed_at": dateFrom}, sq.LtOrEq{"product_price_history.changed_at": dateTo}})
+	sb = sb.OrderBy("changed_at ASC", "id ASC")
 	sql, args, err := sb.ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
@@ -161,6 +162,38 @@ func (pr ProductRepoImpl) GetProductPriceHistory(ctx context.Context, pid int64,
 	return ph, nil
 }
 
+func (pr ProductRepoImpl) GetProductCategories(ctx context.Context, productID int64) ([]m.Category, error) {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.
+		Select("c.id", "c.parent_id", "c.name", "c.description").
+		From("categories c").
+		Join("product_categories pc ON pc.category_id = c.id").
+		Where(sq.Eq{"pc.product_id": productID}).
+		OrderBy("c.name ASC", "c.id ASC").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	rows, err := getConn(ctx, pr.pool).Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
+	}
+	defer rows.Close()
+
+	categories := make([]m.Category, 0)
+	var row categoryRow
+	for rows.Next() {
+		if err = rows.Scan(&row.ID, &row.ParentID, &row.Name, &row.Description); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrToScan, err)
+		}
+		categories = append(categories, row.toModel())
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrRowsIteration, err)
+	}
+	return categories, nil
+}
+
 func (pr ProductRepoImpl) CreateProduct(ctx context.Context, pc m.ProductCreate) (id int64, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Insert("products").Columns("seller_id", "name", "description", "price", "stock_quantity").Values(pc.SellerID, pc.Name, pc.Description, pc.Price, pc.StockQuantity).Suffix("RETURNING id").ToSql()
@@ -172,6 +205,48 @@ func (pr ProductRepoImpl) CreateProduct(ctx context.Context, pc m.ProductCreate)
 		return 0, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
 	return id, nil
+}
+
+func (pr ProductRepoImpl) ReplaceProductCategories(ctx context.Context, productID int64, categoryIDs []int64) error {
+	replace := func(conn DBTX) error {
+		if _, err := conn.Exec(ctx, "DELETE FROM product_categories WHERE product_id = $1", productID); err != nil {
+			return fmt.Errorf("%w: %v", ErrExec, err)
+		}
+		categoryIDs = uniqueInt64s(categoryIDs)
+		if len(categoryIDs) == 0 {
+			return nil
+		}
+
+		psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+		ib := psql.Insert("product_categories").Columns("product_id", "category_id")
+		for _, categoryID := range categoryIDs {
+			ib = ib.Values(productID, categoryID)
+		}
+		sql, args, err := ib.ToSql()
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrToSql, err)
+		}
+		if _, err = conn.Exec(ctx, sql, args...); err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.ForeignKeyViolation {
+				switch pgErr.ConstraintName {
+				case "fk_product_categories_product_id":
+					return service.ErrProductNotFound
+				case "fk_product_categories_category_id":
+					return service.ErrCategoryNotFound
+				}
+			}
+			return fmt.Errorf("%w: %v", ErrExec, err)
+		}
+		return nil
+	}
+
+	if tx, ok := GetTxFromCtx(ctx); ok {
+		return replace(tx)
+	}
+	return pgx.BeginFunc(ctx, pr.pool, func(tx pgx.Tx) error {
+		return replace(tx)
+	})
 }
 
 func (pr ProductRepoImpl) UpdateProduct(ctx context.Context, id int64, pu m.ProductUpdate) (p m.Product, err error) {
@@ -241,6 +316,19 @@ func (pr ProductRepoImpl) UpdateProduct(ctx context.Context, id int64, pu m.Prod
 	}
 
 	return updateWithConn(pr.pool)
+}
+
+func uniqueInt64s(values []int64) []int64 {
+	seen := make(map[int64]struct{}, len(values))
+	unique := make([]int64, 0, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		unique = append(unique, value)
+	}
+	return unique
 }
 
 func (pr ProductRepoImpl) ChangeStockAndReserved(ctx context.Context, productID int64, stockDelta int, reservedDelta int) error {

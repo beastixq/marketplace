@@ -60,7 +60,7 @@ func TestCategoryRepo_GetCategories_Pagination(t *testing.T) {
 		}
 	})
 
-	got, err := r.GetCategories(ctx, m.PaginationOpts{Page: 1, Limit: 100})
+	got, err := r.GetCategories(ctx, m.CategoryListOptions{Pagination: m.PaginationOpts{Page: 1, Limit: 100}})
 	if err != nil {
 		t.Fatalf("GetCategories: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestCategoryRepo_GetCategories_Limit(t *testing.T) {
 		}
 	})
 
-	got, err := r.GetCategories(ctx, m.PaginationOpts{Page: 1, Limit: 2})
+	got, err := r.GetCategories(ctx, m.CategoryListOptions{Pagination: m.PaginationOpts{Page: 1, Limit: 2}})
 	if err != nil {
 		t.Fatalf("GetCategories: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestCategoryRepo_GetCategories_Page2(t *testing.T) {
 		}
 	})
 
-	page1, err := r.GetCategories(ctx, m.PaginationOpts{Page: 1, Limit: 2})
+	page1, err := r.GetCategories(ctx, m.CategoryListOptions{Pagination: m.PaginationOpts{Page: 1, Limit: 2}})
 	if err != nil {
 		t.Fatalf("GetCategories page1: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestCategoryRepo_GetCategories_Page2(t *testing.T) {
 		t.Fatalf("page1: ожидается 2, получено %d", len(page1))
 	}
 
-	page2, err := r.GetCategories(ctx, m.PaginationOpts{Page: 2, Limit: 2})
+	page2, err := r.GetCategories(ctx, m.CategoryListOptions{Pagination: m.PaginationOpts{Page: 2, Limit: 2}})
 	if err != nil {
 		t.Fatalf("GetCategories page2: %v", err)
 	}

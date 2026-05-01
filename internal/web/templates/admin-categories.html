@@ -16,6 +16,27 @@
 <div class="alert alert--error">{{.Error}}</div>
 {{end}}
 
+<div class="filters">
+    <form method="GET" action="/admin/categories" class="filters__form">
+        <div class="filters__group">
+            <label for="search">Search</label>
+            <input type="text" id="search" name="search" value="{{.Filter.Search}}" placeholder="Category name">
+        </div>
+        <div class="filters__group">
+            <label for="parent">Parent</label>
+            <select id="parent" name="parent">
+                <option value="">All</option>
+                <option value="root" {{if eq .Filter.Parent "root"}}selected{{end}}>Root categories</option>
+                {{range .ParentCategories}}
+                <option value="{{.ID}}" {{if eq $.Filter.Parent (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>
+                {{end}}
+            </select>
+        </div>
+        <button type="submit" class="btn btn--primary">Filter</button>
+        <a href="/admin/categories" class="btn btn--sm" style="background: var(--bg); border: 1px solid var(--border);">Clear</a>
+    </form>
+</div>
+
 <div class="form-card" style="margin-bottom: 2rem;">
     <h2>Add Category</h2>
     <form method="POST" action="/admin/categories">
@@ -72,5 +93,15 @@
     {{end}}
     </tbody>
 </table>
+</div>
+
+<div class="pagination">
+    {{if gt .Filter.Page 1}}
+    <a href="{{.PageURL (sub .Filter.Page 1)}}">&laquo; Prev</a>
+    {{end}}
+    <span class="active">Page {{.Filter.Page}}</span>
+    {{if .HasMore}}
+    <a href="{{.PageURL (add .Filter.Page 1)}}">Next &raquo;</a>
+    {{end}}
 </div>
 {{end}}

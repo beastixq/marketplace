@@ -134,20 +134,51 @@ func (wh *WebHandler) AdminUserDelete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/users?success=User+deleted", http.StatusSeeOther)
 }
 
+type adminCategoriesPageData struct {
+	User             *userInfo
+	Categories       []model.Category
+	ParentCategories []model.Category
+	Filter           categoryFilter
+	HasMore          bool
+	Success          string
+	Error            string
+}
+
+func (d adminCategoriesPageData) PageURL(page int) string {
+	return d.Filter.paginationURL("/admin/categories", page)
+}
+
 func (wh *WebHandler) AdminCategories(w http.ResponseWriter, r *http.Request) {
 	user := wh.requireRole(w, r, "admin")
 	if user == nil {
 		return
 	}
 
-	categories, _ := wh.categoryService.GetCategories(r.Context(), model.PaginationOpts{Page: 1, Limit: 5000})
+	filter := parseCategoryFilter(r)
+	opts, errorMsg := filter.listOptions(adminCategoryPageSize)
+	var categories []model.Category
+	if errorMsg == "" {
+		var err error
+		categories, err = wh.categoryService.GetCategories(r.Context(), opts)
+		if err != nil {
+			errorMsg = err.Error()
+		}
+	}
+	if queryError := r.URL.Query().Get("error"); queryError != "" {
+		errorMsg = queryError
+	}
+	parentCategories, _ := wh.categoryService.GetCategories(r.Context(), model.CategoryListOptions{
+		Pagination: model.PaginationOpts{Page: 1, Limit: categorySelectPageSize},
+	})
 
-	wh.render(w, "admin-categories", map[string]any{
-		"User":             user,
-		"Categories":       categories,
-		"ParentCategories": categories,
-		"Success":          r.URL.Query().Get("success"),
-		"Error":            r.URL.Query().Get("error"),
+	wh.render(w, "admin-categories", adminCategoriesPageData{
+		User:             user,
+		Categories:       categories,
+		ParentCategories: parentCategories,
+		Filter:           filter,
+		HasMore:          len(categories) == adminCategoryPageSize,
+		Success:          r.URL.Query().Get("success"),
+		Error:            errorMsg,
 	})
 }
 
@@ -246,11 +277,24 @@ func (wh *WebHandler) AdminOrders(w http.ResponseWriter, r *http.Request) {
 	const perPage = 50
 	statusFilter := r.URL.Query().Get("status")
 	status, ok := parseAdminOrderStatus(statusFilter)
+	orderIDRaw := r.URL.Query().Get("order_id")
 
 	var orders []model.Order
 	var errorMsg string
 	if !ok {
 		errorMsg = service.ErrOrderStatusInvalid.Error()
+	} else if orderIDRaw != "" {
+		orderID, err := strconv.ParseInt(orderIDRaw, 10, 64)
+		if err != nil || orderID <= 0 {
+			errorMsg = "Invalid order id"
+		} else {
+			order, err := wh.orderService.GetOrderByID(r.Context(), user.actor(), orderID)
+			if err != nil {
+				errorMsg = err.Error()
+			} else if status == nil || order.Status == *status {
+				orders = []model.Order{order}
+			}
+		}
 	} else {
 		var err error
 		orders, err = wh.backofficeService.GetAdminOrders(r.Context(), user.actor(), model.AdminOrderListOptions{
@@ -269,8 +313,9 @@ func (wh *WebHandler) AdminOrders(w http.ResponseWriter, r *http.Request) {
 		"User":    user,
 		"Orders":  orders,
 		"Page":    page,
-		"HasMore": len(orders) == perPage,
+		"HasMore": orderIDRaw == "" && len(orders) == perPage,
 		"Status":  statusFilter,
+		"OrderID": orderIDRaw,
 		"Success": r.URL.Query().Get("success"),
 		"Error":   errorMsg,
 	})
@@ -306,6 +351,30 @@ func (wh *WebHandler) AdminProductDelete(w http.ResponseWriter, r *http.Request)
 		log.Printf("AdminProductDelete error: %v", err)
 	}
 	http.Redirect(w, r, fmt.Sprintf("/products/%d", id), http.StatusSeeOther)
+}
+
+func (wh *WebHandler) AdminProductCategoriesUpdate(w http.ResponseWriter, r *http.Request) {
+	user := wh.requireRole(w, r, "admin")
+	if user == nil {
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Redirect(w, r, "/?error="+url.QueryEscape("Invalid product id"), http.StatusSeeOther)
+		return
+	}
+	categoryIDs, categoryErr := parseRequiredCategoryIDs(r)
+	if categoryErr != "" {
+		http.Redirect(w, r, fmt.Sprintf("/products/%d?category_error=%s", id, url.QueryEscape(categoryErr)), http.StatusSeeOther)
+		return
+	}
+
+	if err = wh.productService.ReplaceProductCategories(r.Context(), user.actor(), id, categoryIDs); err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/products/%d?category_error=%s", id, url.QueryEscape(err.Error())), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/products/%d?notice=categories-updated", id), http.StatusSeeOther)
 }
 
 // Admin moderation: delete seller

@@ -14,6 +14,7 @@ import (
 )
 
 var _ service.ProductRepo = repo.ProductRepoImpl{}
+var _ service.ProductCategoryRepo = repo.ProductRepoImpl{}
 
 func createTestSeller(t *testing.T) int64 {
 	t.Helper()

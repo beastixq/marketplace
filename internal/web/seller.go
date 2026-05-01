@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -134,10 +135,11 @@ func (wh *WebHandler) SellerProducts(w http.ResponseWriter, r *http.Request) {
 			products = append(products, p)
 		}
 	}
-
 	wh.render(w, "seller-products", map[string]any{
-		"User":     user,
-		"Products": products,
+		"User":           user,
+		"Products":       products,
+		"CategoryPicker": wh.categoryPickerData(r, "/seller/products", nil),
+		"Error":          r.URL.Query().Get("error"),
 	})
 }
 
@@ -190,6 +192,11 @@ func (wh *WebHandler) SellerProductCreate(w http.ResponseWriter, r *http.Request
 	description := r.FormValue("description")
 	priceStr := r.FormValue("price")
 	stockStr := r.FormValue("stock_quantity")
+	categoryIDs, categoryErr := parseRequiredCategoryIDs(r)
+	if categoryErr != "" {
+		http.Redirect(w, r, "/seller/products?error="+url.QueryEscape(categoryErr), http.StatusSeeOther)
+		return
+	}
 
 	price, err := decimal.NewFromString(priceStr)
 	if err != nil {
@@ -206,6 +213,7 @@ func (wh *WebHandler) SellerProductCreate(w http.ResponseWriter, r *http.Request
 		Name:          name,
 		Price:         price,
 		StockQuantity: stock,
+		CategoryIDs:   categoryIDs,
 	}
 	if description != "" {
 		pc.Description = &description
@@ -238,11 +246,13 @@ func (wh *WebHandler) SellerProductEditPage(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Product not found", http.StatusNotFound)
 		return
 	}
+	productCategories, _ := wh.productService.GetProductCategories(r.Context(), id)
 
 	wh.render(w, "product-edit", map[string]any{
-		"User":    user,
-		"Product": product,
-		"Error":   "",
+		"User":           user,
+		"Product":        product,
+		"CategoryPicker": wh.categoryPickerData(r, fmt.Sprintf("/seller/products/%d/edit", id), productCategories),
+		"Error":          "",
 	})
 }
 
@@ -271,6 +281,17 @@ func (wh *WebHandler) SellerProductEditSubmit(w http.ResponseWriter, r *http.Req
 	description := r.FormValue("description")
 	priceStr := r.FormValue("price")
 	stockStr := r.FormValue("stock_quantity")
+	categoryIDs, categoryErr := parseRequiredCategoryIDs(r)
+	if categoryErr != "" {
+		productCategories, _ := wh.productService.GetProductCategories(r.Context(), id)
+		wh.render(w, "product-edit", map[string]any{
+			"User":           user,
+			"Product":        product,
+			"CategoryPicker": wh.categoryPickerData(r, fmt.Sprintf("/seller/products/%d/edit", id), productCategories),
+			"Error":          categoryErr,
+		})
+		return
+	}
 
 	pu := model.ProductUpdate{}
 	if name != "" {
@@ -283,15 +304,18 @@ func (wh *WebHandler) SellerProductEditSubmit(w http.ResponseWriter, r *http.Req
 	if s, err := strconv.Atoi(stockStr); err == nil {
 		pu.StockQuantity = &s
 	}
+	pu.CategoryIDs = &categoryIDs
 
 	changedBy := fmt.Sprintf("%s:%d", user.Role, user.UserID)
 	pu.ChangedBy = &changedBy
 	_, err = wh.productService.UpdateProduct(r.Context(), user.actor(), id, pu)
 	if err != nil {
+		productCategories, _ := wh.productService.GetProductCategories(r.Context(), id)
 		wh.render(w, "product-edit", map[string]any{
-			"User":    user,
-			"Product": product,
-			"Error":   "Failed to update: " + err.Error(),
+			"User":           user,
+			"Product":        product,
+			"CategoryPicker": wh.categoryPickerData(r, fmt.Sprintf("/seller/products/%d/edit", id), productCategories),
+			"Error":          "Failed to update: " + err.Error(),
 		})
 		return
 	}

@@ -26,7 +26,7 @@ func (ch CategoryHandler) GetCategories(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	categories, err := ch.categoryService.GetCategories(r.Context(), pg)
+	categories, err := ch.categoryService.GetCategories(r.Context(), model.CategoryListOptions{Pagination: pg})
 	if err != nil {
 		writeServiceError(w, err)
 		return

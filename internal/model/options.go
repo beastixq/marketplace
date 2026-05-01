@@ -14,6 +14,13 @@ type PaginationOpts struct {
 	Limit int
 }
 
+type CategoryListOptions struct {
+	Pagination PaginationOpts
+	Search     *string
+	ParentID   *int64
+	OnlyRoot   bool
+}
+
 type UserListOptions struct {
 	Search     *string
 	Role       *string

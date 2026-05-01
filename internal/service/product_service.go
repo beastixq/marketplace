@@ -21,19 +21,27 @@ type ProductRepo interface {
 	DeleteProductByID(ctx context.Context, id int64) (err error)
 }
 
+type ProductCategoryRepo interface {
+	GetProductCategories(ctx context.Context, productID int64) ([]m.Category, error)
+	ReplaceProductCategories(ctx context.Context, productID int64, categoryIDs []int64) error
+}
+
 type ProductService struct {
-	productRepo ProductRepo
-	reviewRepo  ReviewRepo
-	sellerRepo  SellerRepo
-	txManager   TxManager
+	productRepo         ProductRepo
+	productCategoryRepo ProductCategoryRepo
+	reviewRepo          ReviewRepo
+	sellerRepo          SellerRepo
+	txManager           TxManager
 }
 
 func NewProductService(productRepo ProductRepo, reviewRepo ReviewRepo, sellerRepo SellerRepo, txManager TxManager) ProductService {
+	productCategoryRepo, _ := productRepo.(ProductCategoryRepo)
 	return ProductService{
-		productRepo: productRepo,
-		reviewRepo:  reviewRepo,
-		sellerRepo:  sellerRepo,
-		txManager:   txManager,
+		productRepo:         productRepo,
+		productCategoryRepo: productCategoryRepo,
+		reviewRepo:          reviewRepo,
+		sellerRepo:          sellerRepo,
+		txManager:           txManager,
 	}
 }
 
@@ -74,6 +82,17 @@ func (ps ProductService) GetProductPriceHistory(ctx context.Context, pid int64, 
 	return ph, nil
 }
 
+func (ps ProductService) GetProductCategories(ctx context.Context, productID int64) ([]m.Category, error) {
+	if ps.productCategoryRepo == nil {
+		return nil, ErrGetProductCategories
+	}
+	categories, err := ps.productCategoryRepo.GetProductCategories(ctx, productID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrGetProductCategories, err)
+	}
+	return categories, nil
+}
+
 func (ps ProductService) GetReviewsByProductID(ctx context.Context, pid int64, opts m.PaginationOpts) (rs []m.Review, err error) {
 	_, err = ps.productRepo.GetProductByID(ctx, pid)
 	if err != nil {
@@ -108,9 +127,27 @@ func (ps ProductService) CreateProduct(ctx context.Context, actor Actor, pc m.Pr
 		}
 	}
 
-	id, err = ps.productRepo.CreateProduct(ctx, pc)
-	if err != nil {
-		return 0, fmt.Errorf("%w: %v", ErrCreateProduct, err)
+	create := func(ctx context.Context) error {
+		id, err = ps.productRepo.CreateProduct(ctx, pc)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrCreateProduct, err)
+		}
+		if len(pc.CategoryIDs) > 0 {
+			if ps.productCategoryRepo == nil {
+				return ErrUpdateProductCategories
+			}
+			if err = ps.productCategoryRepo.ReplaceProductCategories(ctx, id, pc.CategoryIDs); err != nil {
+				return fmt.Errorf("%w: %v", ErrUpdateProductCategories, err)
+			}
+		}
+		return nil
+	}
+	if len(pc.CategoryIDs) > 0 {
+		if err = ps.txManager.WithTransaction(ctx, create); err != nil {
+			return 0, err
+		}
+	} else if err = create(ctx); err != nil {
+		return 0, err
 	}
 	return id, nil
 }
@@ -146,18 +183,68 @@ func (ps ProductService) UpdateProduct(ctx context.Context, actor Actor, id int6
 		if pu.StockQuantity != nil && *pu.StockQuantity < locked.ReservedQuantity {
 			return ErrStockBelowReserved
 		}
-		updated, err = ps.productRepo.UpdateProduct(ctx, id, pu)
-		if err != nil {
-			if errors.Is(err, ErrStockBelowReserved) {
-				return ErrStockBelowReserved
+		if !productUpdateHasProductFields(pu) && pu.CategoryIDs == nil {
+			return ErrNoChangesInUpdate
+		}
+		updated = locked
+		if productUpdateHasProductFields(pu) {
+			updated, err = ps.productRepo.UpdateProduct(ctx, id, pu)
+			if err != nil {
+				if errors.Is(err, ErrStockBelowReserved) {
+					return ErrStockBelowReserved
+				}
+				return fmt.Errorf("%w: %v", ErrUpdateProduct, err)
 			}
-			return fmt.Errorf("%w: %v", ErrUpdateProduct, err)
+		}
+		if pu.CategoryIDs != nil {
+			if ps.productCategoryRepo == nil {
+				return ErrUpdateProductCategories
+			}
+			if err = ps.productCategoryRepo.ReplaceProductCategories(ctx, id, *pu.CategoryIDs); err != nil {
+				return fmt.Errorf("%w: %v", ErrUpdateProductCategories, err)
+			}
 		}
 		return nil
 	}); err != nil {
 		return m.Product{}, err
 	}
 	return updated, nil
+}
+
+func (ps ProductService) ReplaceProductCategories(ctx context.Context, actor Actor, productID int64, categoryIDs []int64) error {
+	if !actor.IsAdmin() && !actor.HasRole(m.RoleSeller) {
+		return ErrPermissionDenied
+	}
+	if ps.productCategoryRepo == nil {
+		return ErrUpdateProductCategories
+	}
+
+	return ps.txManager.WithTransaction(ctx, func(ctx context.Context) error {
+		product, err := ps.productRepo.GetProductByIDForUpdate(ctx, productID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return ErrProductNotFound
+			}
+			return fmt.Errorf("%w: %v", ErrGetProductByID, err)
+		}
+		if product.DeletedAt != nil {
+			return ErrProductDeleted
+		}
+		seller, err := ps.sellerRepo.GetSellerByID(ctx, product.SellerID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return ErrSellerNotFound
+			}
+			return fmt.Errorf("%w: %v", ErrGetSellerByID, err)
+		}
+		if !actor.IsAdmin() && seller.UserID != actor.UserID {
+			return ErrNotYourSeller
+		}
+		if err = ps.productCategoryRepo.ReplaceProductCategories(ctx, productID, categoryIDs); err != nil {
+			return fmt.Errorf("%w: %v", ErrUpdateProductCategories, err)
+		}
+		return nil
+	})
 }
 
 func (ps ProductService) DeleteProductByID(ctx context.Context, actor Actor, id int64) (err error) {
@@ -191,4 +278,12 @@ func (ps ProductService) DeleteProductByID(ctx context.Context, actor Actor, id 
 		return fmt.Errorf("%w: %v", ErrDeleteProduct, err)
 	}
 	return nil
+}
+
+func productUpdateHasProductFields(pu m.ProductUpdate) bool {
+	return pu.SellerID != nil ||
+		pu.Name != nil ||
+		pu.Description != nil ||
+		pu.Price != nil ||
+		pu.StockQuantity != nil
 }

@@ -9,8 +9,13 @@
     <a href="/seller/products" style="padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 600; border-bottom: 2px solid var(--primary); margin-bottom: -2px; color: var(--primary);">Products</a>
 </div>
 
+{{if .Error}}
+<div class="alert alert--error">{{.Error}}</div>
+{{end}}
+
 <div class="form-card" style="margin-bottom: 2rem;">
     <h2>Add New Product</h2>
+    <form id="product-category-search" method="GET" action="{{.CategoryPicker.SearchAction}}"></form>
     <form method="POST" action="/seller/products">
         <div class="form-group">
             <label for="name">Product Name</label>
@@ -28,6 +33,39 @@
         <div class="form-group">
             <label for="stock_quantity">Stock Quantity</label>
             <input type="number" id="stock_quantity" name="stock_quantity" required min="0" placeholder="100">
+        </div>
+        <div class="form-group">
+            <label>Categories</label>
+            <div class="category-search-form">
+                <label for="category_search">Category search</label>
+                <div class="category-search-form__row">
+                    <input form="product-category-search" type="search" id="category_search" name="category_search" value="{{.CategoryPicker.Search}}" placeholder="Search categories, e.g. Books">
+                    <button form="product-category-search" type="submit" class="btn btn--primary btn--sm">Search</button>
+                    {{if .CategoryPicker.Search}}<a href="/seller/products" class="btn btn--sm" style="background: var(--bg); border: 1px solid var(--border);">Clear</a>{{end}}
+                </div>
+            </div>
+            <details class="category-picker" open>
+                <summary>Change Categories</summary>
+                <div class="category-picker__body">
+                    {{if .CategoryPicker.Options}}
+                    <div class="category-picker__results">
+                        {{range .CategoryPicker.Options}}
+                        <label class="category-picker__option">
+                            <input type="checkbox" name="category_ids" value="{{.ID}}">
+                            <span>{{.Name}}</span>
+                        </label>
+                        {{end}}
+                    </div>
+                    {{else}}
+                    <div class="category-picker__empty">No categories found</div>
+                    {{end}}
+                    <div class="category-picker__pager">
+                        {{if gt .CategoryPicker.Page 1}}<a href="{{.CategoryPicker.PrevURL}}" class="btn btn--sm">&laquo; Prev</a>{{else}}<span></span>{{end}}
+                        <span>Page {{.CategoryPicker.Page}}</span>
+                        {{if .CategoryPicker.HasMore}}<a href="{{.CategoryPicker.NextURL}}" class="btn btn--sm">Next &raquo;</a>{{else}}<span></span>{{end}}
+                    </div>
+                </div>
+            </details>
         </div>
         <button type="submit" class="btn btn--primary">Add Product</button>
     </form>

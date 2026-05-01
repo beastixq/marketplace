@@ -46,7 +46,7 @@
     <div class="product-card">
         <div class="product-card__name"><a href="/products/{{.ID}}">{{.Name}}</a></div>
         <div class="product-card__price">{{.Price}} &#8381;</div>
-        <div class="product-card__stock">In stock: {{.StockQuantity}}</div>
+        <div class="product-card__stock">Available: {{.AvailableQuantity}}</div>
         {{if .Description}}
         <div class="product-card__desc">{{.Description}}</div>
         {{end}}

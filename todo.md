@@ -2,36 +2,40 @@
 
 ### P0 — important for lab work / use cases / demo
 
-1. **Analyst reports in GUI** — close analyst use cases.
-   Platform stats, orders by status, and top products by revenue already exist.
-   BL/repository methods for order dynamics and sales by category are already added.
-   Remaining work: show these reports in the Web GUI.
-   This matters because these use cases are explicitly present in `diagrams/src/UseCases.puml`.
+1. ~~**Analyst reports in GUI**~~ — done.
+   Analyst dashboard shows order dynamics and sales by category with
+   date/period/limit filters. Seed orders are distributed from 2025 to the
+   current date with holiday-weighted demand so reports have useful demo data.
 
-2. **Product categories in seller/admin GUI** — close product categorization flow.
-   Seller must choose categories while creating/editing a product.
-   Admin must moderate product-category links.
-   Current state: `product_categories` schema exists, catalog filter exists, seed creates links, but product create/edit Web UI does not set categories.
+2. ~~**Product categories in seller/admin GUI**~~ — done.
+   Sellers choose categories while creating/editing products. Product detail
+   shows category tags, and admins can moderate product-category links from
+   the product page. Category choosing is server-rendered with search and
+   pagination; no static JS picker is needed.
 
 ### P2 — useful, but not blocking lab work
 
-1. **Category pagination/list refresh**.
-   Admin categories currently load a large temporary limit so new categories are visible.
-   Need normal page/search/filter for public/admin category lists.
+1. ~~**Category pagination/list refresh**~~ — done.
+   Public and admin category pages have normal pagination plus search and
+   parent-category filters. Catalog/product forms load their category chooser
+   separately from paginated list pages.
 
-2. **Frontend checklist manual pass**.
-   Manually check: admin panel, analyst dashboard, catalog filters, price history, seller flows, buyer flows.
-   Check Price Change Graph: after product price change, graph should show old-to-new price transition without seed "initial price" record.
-   Important for submission, but does not need heavy e2e framework.
+2. ~~**Admin order lookup by ID**~~ — done.
+   Admin orders page supports searching for an exact order id, optionally
+   combined with a status filter.
 
-3. **Web cleanup after `ProductService.UpdateProduct` lock**.
-   As part of P1 #1 BL fix, `NewProductService` received `TxManager` dependency.
-   `internal/web/web_handler_test.go` now has local `passThroughTxManager` mock.
-   This works as a stub, but is not good long-term design. Decide:
-   - move this mock to shared test helper;
-   - or revisit DI so web tests do not depend on tx infrastructure
-     (for example, a separate use case for seller stock update).
-   Web handlers themselves were not changed; only test factory changed. BL fix is clean.
+3. ~~**Frontend checklist manual pass**~~ — done for code/template issues.
+   Focused web/service/seed checks pass. Price Change Graph renders the first
+   `old_price -> new_price` transition from trigger history, so it works
+   without a separate seed "initial price" record.
+
+4. ~~**Web cleanup after `ProductService.UpdateProduct` lock**~~ — done.
+   The pass-through test transaction manager was moved from
+   `internal/web/web_handler_test.go` to shared `internal/testsupport`.
+
+5. ~~**Buyer-facing available quantity**~~ — done.
+   Public catalog, seller profile, and product detail show available quantity
+   (`stock_quantity - reserved_quantity`) instead of total stock.
 
 ### P4 — low priority for educational project
 

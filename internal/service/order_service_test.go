@@ -9,6 +9,7 @@ import (
 	mock_service "github.com/beastixq/marketplace/internal/mocks/service"
 	m "github.com/beastixq/marketplace/internal/model"
 	"github.com/beastixq/marketplace/internal/service"
+	"github.com/beastixq/marketplace/internal/testsupport"
 	"github.com/shopspring/decimal"
 	"go.uber.org/mock/gomock"
 )
@@ -67,12 +68,6 @@ type MockOrderItemListReturn struct {
 	Error error
 }
 
-type passThroughTxManager struct{}
-
-func (passThroughTxManager) WithTransaction(ctx context.Context, fn func(context.Context) error) error {
-	return fn(ctx)
-}
-
 func newOrderService(ctrl *gomock.Controller) (
 	service.OrderService,
 	*mock_service.MockOrderRepo,
@@ -86,7 +81,7 @@ func newOrderService(ctrl *gomock.Controller) (
 	productMock := mock_service.NewMockProductRepo(ctrl)
 	addressMock := mock_service.NewMockAddressRepo(ctrl)
 	sellerMock := mock_service.NewMockSellerGetter(ctrl)
-	svc := service.NewOrderService(orderMock, itemMock, productMock, addressMock, sellerMock, passThroughTxManager{})
+	svc := service.NewOrderService(orderMock, itemMock, productMock, addressMock, sellerMock, testsupport.PassThroughTxManager{})
 	return svc, orderMock, itemMock, productMock, sellerMock, addressMock
 }
 

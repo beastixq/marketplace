@@ -122,16 +122,18 @@ var (
 	ErrCategoryNotFound = errors.New("Category not found")
 
 	// products
-	ErrGetProducts            = errors.New("Failed to get products")
-	ErrGetProductByID         = errors.New("Failed to get product by id")
-	ErrGetProductPriceHistory = errors.New("Failed to get product price history")
-	ErrCreateProduct          = errors.New("Failed to create product")
-	ErrUpdateProduct          = errors.New("Failed to update product")
-	ErrDeleteProduct          = errors.New("Failed to delete product")
-	ErrQuantityTooBig         = errors.New("Quantity too big, stock is less than that")
-	ErrProductNotFound        = errors.New("Product not found")
-	ErrProductDeleted         = errors.New("Product is deleted")
-	ErrStockBelowReserved     = errors.New("Stock quantity cannot be less than reserved quantity")
+	ErrGetProducts             = errors.New("Failed to get products")
+	ErrGetProductByID          = errors.New("Failed to get product by id")
+	ErrGetProductPriceHistory  = errors.New("Failed to get product price history")
+	ErrGetProductCategories    = errors.New("Failed to get product categories")
+	ErrUpdateProductCategories = errors.New("Failed to update product categories")
+	ErrCreateProduct           = errors.New("Failed to create product")
+	ErrUpdateProduct           = errors.New("Failed to update product")
+	ErrDeleteProduct           = errors.New("Failed to delete product")
+	ErrQuantityTooBig          = errors.New("Quantity too big, stock is less than that")
+	ErrProductNotFound         = errors.New("Product not found")
+	ErrProductDeleted          = errors.New("Product is deleted")
+	ErrStockBelowReserved      = errors.New("Stock quantity cannot be less than reserved quantity")
 
 	// review
 	ErrCreateReview           = errors.New("Failed to create review")

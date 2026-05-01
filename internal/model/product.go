@@ -29,6 +29,7 @@ type ProductCreate struct {
 	Description   *string
 	Price         decimal.Decimal
 	StockQuantity int
+	CategoryIDs   []int64
 }
 
 type ProductUpdate struct {
@@ -37,6 +38,7 @@ type ProductUpdate struct {
 	Description   *string
 	Price         *decimal.Decimal
 	StockQuantity *int
+	CategoryIDs   *[]int64
 	ChangedBy     *string
 }
 

@@ -101,7 +101,9 @@ func (wh *WebHandler) Catalog(w http.ResponseWriter, r *http.Request) {
 
 	products, _ := wh.productService.GetProducts(r.Context(), opts)
 
-	categories, _ := wh.categoryService.GetCategories(r.Context(), model.PaginationOpts{Page: 1, Limit: 100})
+	categories, _ := wh.categoryService.GetCategories(r.Context(), model.CategoryListOptions{
+		Pagination: model.PaginationOpts{Page: 1, Limit: categorySelectPageSize},
+	})
 
 	// TODO(human): implement total count in service/repo for proper pagination
 	totalPages := 1
@@ -168,6 +170,11 @@ func (wh *WebHandler) ProductDetail(w http.ResponseWriter, r *http.Request) {
 
 	reviews, _ := wh.productService.GetReviewsByProductID(r.Context(), id, model.PaginationOpts{Page: 1, Limit: 50})
 	user := wh.userFromCookie(r)
+	productCategories, _ := wh.productService.GetProductCategories(r.Context(), id)
+	var categoryPicker categoryPickerData
+	if user != nil && user.Role == "admin" {
+		categoryPicker = wh.categoryPickerData(r, fmt.Sprintf("/products/%d", id), productCategories)
+	}
 
 	// Build user names map for reviews
 	reviewUserNames := make(map[int64]string, len(reviews))
@@ -195,22 +202,55 @@ func (wh *WebHandler) ProductDetail(w http.ResponseWriter, r *http.Request) {
 		"PriceHistory":      priceHistory,
 		"PriceRange":        rangeParam,
 		"Reviews":           reviews,
+		"ProductCategories": productCategories,
+		"CategoryPicker":    categoryPicker,
 		"ReviewUserNames":   reviewUserNames,
 		"CurrentUserReview": currentUserReview,
 		"User":              user,
 		"Notice":            r.URL.Query().Get("notice"),
 		"ReviewError":       r.URL.Query().Get("review_error"),
+		"CategoryError":     r.URL.Query().Get("category_error"),
 	})
 }
 
 // --- Categories ---
 
-func (wh *WebHandler) Categories(w http.ResponseWriter, r *http.Request) {
-	categories, _ := wh.categoryService.GetCategories(r.Context(), model.PaginationOpts{Page: 1, Limit: 100})
+type categoriesPageData struct {
+	Categories       []model.Category
+	ParentCategories []model.Category
+	User             *userInfo
+	Filter           categoryFilter
+	HasMore          bool
+	Error            string
+}
 
-	wh.render(w, "categories", map[string]any{
-		"Categories": categories,
-		"User":       wh.userFromCookie(r),
+func (d categoriesPageData) PageURL(page int) string {
+	return d.Filter.paginationURL("/categories", page)
+}
+
+func (wh *WebHandler) Categories(w http.ResponseWriter, r *http.Request) {
+	filter := parseCategoryFilter(r)
+	opts, errorMsg := filter.listOptions(publicCategoryPageSize)
+	var categories []model.Category
+	if errorMsg == "" {
+		var err error
+		categories, err = wh.categoryService.GetCategories(r.Context(), opts)
+		if err != nil {
+			errorMsg = err.Error()
+		}
+	}
+	parentCategories, _ := wh.categoryService.GetCategories(r.Context(), model.CategoryListOptions{
+		Pagination: model.PaginationOpts{Page: 1, Limit: categorySelectPageSize},
+		OnlyRoot:   true,
+	})
+
+	wh.render(w, "categories", categoriesPageData{
+		Categories:       categories,
+		ParentCategories: parentCategories,
+		User:             wh.userFromCookie(r),
+		Filter:           filter,
+		HasMore:          len(categories) == publicCategoryPageSize,
+		Error:            errorMsg,
 	})
 }
 

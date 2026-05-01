@@ -40,11 +40,11 @@ func TestGetCategories(t *testing.T) {
 	ctx := context.Background()
 
 	categories := []m.Category{someCategory}
-	opts := m.PaginationOpts{Page: 1, Limit: 10}
+	opts := m.CategoryListOptions{Pagination: m.PaginationOpts{Page: 1, Limit: 10}}
 
 	type testCase struct {
 		Description        string
-		Opts               m.PaginationOpts
+		Opts               m.CategoryListOptions
 		MockCategories     []m.Category
 		MockError          error
 		ExpectedCategories []m.Category

@@ -9,15 +9,10 @@ import (
 	mock_service "github.com/beastixq/marketplace/internal/mocks/service"
 	"github.com/beastixq/marketplace/internal/model"
 	"github.com/beastixq/marketplace/internal/service"
+	"github.com/beastixq/marketplace/internal/testsupport"
 	"github.com/shopspring/decimal"
 	"go.uber.org/mock/gomock"
 )
-
-type passThroughTxManager struct{}
-
-func (passThroughTxManager) WithTransaction(ctx context.Context, fn func(context.Context) error) error {
-	return fn(ctx)
-}
 
 func TestTemplatesParse(t *testing.T) {
 	handler := NewWebHandler(
@@ -74,6 +69,43 @@ func TestProductTemplateRendersCurrentUserReview(t *testing.T) {
 	}
 }
 
+func TestProductTemplateRendersAdminCategoryPicker(t *testing.T) {
+	handler := NewWebHandler(
+		service.ProductService{},
+		service.CategoryService{},
+		service.AuthService{},
+		service.UserService{},
+		service.OrderService{},
+		service.AddressService{},
+		service.SellerService{},
+		service.ReviewService{},
+		service.BackofficeService{},
+		nil,
+	)
+
+	selected := model.Category{ID: 1, Name: "Books"}
+	option := model.Category{ID: 2, Name: "Electronics"}
+	var out bytes.Buffer
+	if err := handler.templates["product"].ExecuteTemplate(&out, "layout", map[string]any{
+		"User":              &userInfo{UserID: 1, Role: "admin", FullName: "Admin"},
+		"Product":           model.Product{ID: 10, SellerID: 20, Name: "Product", Price: decimal.NewFromInt(100), StockQuantity: 1, CreatedAt: time.Now()},
+		"Seller":            model.Seller{ID: 20, CompanyName: "Seller"},
+		"PriceRange":        "3m",
+		"ProductCategories": []model.Category{selected},
+		"CategoryPicker": categoryPickerData{
+			SearchAction: "/products/10",
+			Page:         1,
+			Selected:     []model.Category{selected},
+			Options:      []model.Category{option},
+		},
+	}); err != nil {
+		t.Fatalf("render product template: %v", err)
+	}
+	if !bytes.Contains(out.Bytes(), []byte("Change Categories")) {
+		t.Fatal("admin category picker was not rendered")
+	}
+}
+
 func TestBuildCartDisplayUsesCurrentProductPrice(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	productRepo := mock_service.NewMockProductRepo(ctrl)
@@ -87,7 +119,7 @@ func TestBuildCartDisplayUsesCurrentProductPrice(t *testing.T) {
 		}, nil)
 
 	handler := &WebHandler{
-		productService: service.NewProductService(productRepo, nil, nil, passThroughTxManager{}),
+		productService: service.NewProductService(productRepo, nil, nil, testsupport.PassThroughTxManager{}),
 	}
 	items := []model.OrderItem{{
 		ID:              1,
@@ -127,7 +159,7 @@ func TestBuildCartDisplayMarksDeletedProducts(t *testing.T) {
 		}, nil)
 
 	handler := &WebHandler{
-		productService: service.NewProductService(productRepo, nil, nil, passThroughTxManager{}),
+		productService: service.NewProductService(productRepo, nil, nil, testsupport.PassThroughTxManager{}),
 	}
 	items := []model.OrderItem{{
 		ID:              1,
@@ -159,7 +191,7 @@ func TestBuildOrderItemsDisplayUsesSnapshotPrice(t *testing.T) {
 		}, nil)
 
 	handler := &WebHandler{
-		productService: service.NewProductService(productRepo, nil, nil, passThroughTxManager{}),
+		productService: service.NewProductService(productRepo, nil, nil, testsupport.PassThroughTxManager{}),
 	}
 	items := []model.OrderItem{{
 		ID:              1,

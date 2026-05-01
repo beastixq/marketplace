@@ -20,13 +20,29 @@ func NewCategoryRepo(pool *pgxpool.Pool) CategoryRepoImpl {
 	return CategoryRepoImpl{pool: pool}
 }
 
-func (cr CategoryRepoImpl) GetCategories(ctx context.Context, opts m.PaginationOpts) (cs []m.Category, err error) {
+func (cr CategoryRepoImpl) GetCategories(ctx context.Context, opts m.CategoryListOptions) (cs []m.Category, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sql, args, err := psql.Select("id", "parent_id", "name", "description").
+	qb := psql.Select("id", "parent_id", "name", "description").
 		From("categories").
-		Offset(uint64((opts.Page - 1) * opts.Limit)).
-		Limit(uint64(opts.Limit)).
-		ToSql()
+		OrderBy("name ASC", "id ASC")
+	if opts.Search != nil && *opts.Search != "" {
+		pattern := fmt.Sprintf("%%%s%%", *opts.Search)
+		qb = qb.Where(sq.Or{
+			sq.ILike{"name": pattern},
+			sq.ILike{"description": pattern},
+		})
+	}
+	if opts.OnlyRoot {
+		qb = qb.Where(sq.Eq{"parent_id": nil})
+	} else if opts.ParentID != nil {
+		qb = qb.Where(sq.Eq{"parent_id": *opts.ParentID})
+	}
+	if opts.Pagination.Page > 0 && opts.Pagination.Limit > 0 {
+		qb = qb.
+			Offset(uint64((opts.Pagination.Page - 1) * opts.Pagination.Limit)).
+			Limit(uint64(opts.Pagination.Limit))
+	}
+	sql, args, err := qb.ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
 	}

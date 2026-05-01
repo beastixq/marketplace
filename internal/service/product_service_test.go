@@ -10,6 +10,7 @@ import (
 	mock_service "github.com/beastixq/marketplace/internal/mocks/service"
 	m "github.com/beastixq/marketplace/internal/model"
 	"github.com/beastixq/marketplace/internal/service"
+	"github.com/beastixq/marketplace/internal/testsupport"
 	"github.com/shopspring/decimal"
 	"go.uber.org/mock/gomock"
 )
@@ -59,7 +60,7 @@ func newProductService(ctrl *gomock.Controller) (service.ProductService, *mock_s
 	productMock := mock_service.NewMockProductRepo(ctrl)
 	reviewMock := mock_service.NewMockReviewRepo(ctrl)
 	sellerMock := mock_service.NewMockSellerRepo(ctrl)
-	svc := service.NewProductService(productMock, reviewMock, sellerMock, passThroughTxManager{})
+	svc := service.NewProductService(productMock, reviewMock, sellerMock, testsupport.PassThroughTxManager{})
 	return svc, productMock, reviewMock, sellerMock
 }
 

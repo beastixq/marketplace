@@ -77,6 +77,7 @@ func NewWebRouter(wh *WebHandler) http.Handler {
 	r.Post("/admin/categories/{id}/delete", wh.AdminCategoryDelete)
 	r.Get("/admin/orders", wh.AdminOrders)
 	r.Post("/admin/products/{id}/delete", wh.AdminProductDelete)
+	r.Post("/admin/products/{id}/categories", wh.AdminProductCategoriesUpdate)
 	r.Post("/admin/sellers/{id}/delete", wh.AdminSellerDelete)
 	r.Post("/admin/reviews/{id}/delete", wh.AdminReviewDelete)
 

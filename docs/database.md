@@ -31,6 +31,7 @@ export DATABASE_URL='postgres://postgres:postgres@localhost:5432/marketplace?ssl
 | `009_add_reserved_quantity.sql` | Product reservation accounting. |
 | `010_add_address_house.sql` | Address house/apartment fields. |
 | `011_order_cart_item_invariants.sql` | One draft cart per buyer and one product row per order. |
+| `012_drop_users_phone_unique.sql` | Allow multiple users to share a phone number. |
 
 Run:
 

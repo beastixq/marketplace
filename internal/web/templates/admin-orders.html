@@ -12,8 +12,12 @@
 <div class="filters" style="margin-bottom: 1.5rem;">
     <form method="GET" action="/admin/orders" class="filters__form">
         <div class="filters__group">
-            <label>Status</label>
-            <select name="status">
+            <label for="order_id">Order ID</label>
+            <input type="number" id="order_id" name="order_id" value="{{.OrderID}}" min="1" placeholder="123">
+        </div>
+        <div class="filters__group">
+            <label for="status">Status</label>
+            <select id="status" name="status">
                 <option value="">All</option>
                 <option value="pending" {{if eq .Status "pending"}}selected{{end}}>Pending</option>
                 <option value="paid" {{if eq .Status "paid"}}selected{{end}}>Paid</option>
@@ -23,7 +27,7 @@
             </select>
         </div>
         <button type="submit" class="btn btn--primary">Filter</button>
-        {{if .Status}}<a href="/admin/orders" class="btn btn--sm" style="background: var(--bg); border: 1px solid var(--border);">Clear</a>{{end}}
+        {{if or .Status .OrderID}}<a href="/admin/orders" class="btn btn--sm" style="background: var(--bg); border: 1px solid var(--border);">Clear</a>{{end}}
     </form>
 </div>
 
