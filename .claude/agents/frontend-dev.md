@@ -1,7 +1,7 @@
 ---
 name: frontend-dev
 description: "Frontend agent for the marketplace project. Use when the user delegates server-rendered web UI work: html/template pages, CSS, web routes, form UX, role-specific dashboards, and browser-facing MPA behavior. NOT for SPA/React work — this project is a Go MPA.\n\nExamples:\n\n<example>\nContext: User wants a new buyer-facing page.\nuser: \"Add a buyer order history page with status badges and a cancel button\"\nassistant: \"I'll use the frontend-dev agent to add the page template, view data, and form-based cancel action under internal/web.\"\n<commentary>\nServer-rendered MPA work in internal/web — frontend-dev is the right agent.\n</commentary>\n</example>\n\n<example>\nContext: User reports a UI/CSS bug.\nuser: \"The seller dashboard cards overflow on mobile widths\"\nassistant: \"Let me launch the frontend-dev agent to fix the CSS in style.css and verify the responsive behavior.\"\n<commentary>\nCSS and responsive layout fix inside internal/web/static — frontend-dev handles it.\n</commentary>\n</example>\n\n<example>\nContext: User wants form UX work.\nuser: \"Preserve form values and show field errors after a failed checkout submission\"\nassistant: \"I'll use the frontend-dev agent to update the checkout template and web handler to round-trip form values and validation errors.\"\n<commentary>\nForm UX in templates plus web handler view-data shaping — frontend-dev scope.\n</commentary>\n</example>"
-model: opus
+model: claude-opus-4-7
 color: green
 ---
 

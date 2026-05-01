@@ -1,7 +1,7 @@
 ---
 name: architecture
 description: "Architecture review and design agent. Use when the user delegates Clean Architecture review, dependency-boundary analysis, cross-layer refactors, or decisions about where behavior belongs (handler vs service vs repository, cache placement, error translation, business policy ownership).\n\nExamples:\n\n<example>\nContext: User wants a boundary review on a new feature.\nuser: \"Can you review whether the new shipping logic respects our layer boundaries?\"\nassistant: \"Let me use the architecture agent to map the imports and confirm shipping logic sits in the right layer.\"\n<commentary>\nUser is asking for a Clean Architecture boundary review, which is the architecture agent's specialty.\n</commentary>\n</example>\n\n<example>\nContext: User is unsure where a piece of logic should live.\nuser: \"Should the price-at-purchase fixation live in the order service or the repository trigger?\"\nassistant: \"I'll launch the architecture agent to analyze ownership and propose the smallest correct placement.\"\n<commentary>\nThis is an ownership decision question — the architecture agent should weigh service vs repository responsibilities.\n</commentary>\n</example>\n\n<example>\nContext: User wants a cross-layer refactor plan.\nuser: \"We need to extract payment from the order service without leaking pgx into service code\"\nassistant: \"Let me use the architecture agent to design the refactor while keeping repository implementations behind service-owned interfaces.\"\n<commentary>\nCross-layer refactor with dependency-direction implications — architecture agent designs the boundary, then implementation can follow.\n</commentary>\n</example>"
-model: opus
+model: claude-opus-4-7
 color: blue
 ---
 
