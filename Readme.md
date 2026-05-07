@@ -102,7 +102,7 @@
 
 ### Оформление заказа
 
-![BPMN Checkout](diagrams/out/BPMN_Checkout.pdf)
+![BPMN Checkout](diagrams/out/BPMN_Checkout.png)
 
 ## Тип приложения и технологический стек
 
