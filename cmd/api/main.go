@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	payment "github.com/beastixq/marketplace/internal/adapter/payment"
+	"github.com/beastixq/marketplace/internal/cache"
 	"github.com/beastixq/marketplace/internal/config"
 	"github.com/beastixq/marketplace/internal/handler"
 	"github.com/beastixq/marketplace/internal/logging"
@@ -53,11 +55,29 @@ func main() {
 	}
 	logger.Info("database connected")
 
+	// Redis (optional cache layer)
+	var rdb *redis.Client
+	if cfg.Redis.Enabled {
+		var err error
+		rdb, err = cache.NewRedisClient(context.Background(), cfg.Redis)
+		if err != nil {
+			logger.Error("connect redis", "error", err)
+			os.Exit(2)
+		}
+		defer rdb.Close()
+		logger.Info("redis connected", "addr", cfg.Redis.Addr)
+	}
+
 	userRepo := repo.NewUserRepo(pool)
 	sellerRepo := repo.NewSellerRepo(pool)
 	addressRepo := repo.NewAddressRepo(pool)
 	reviewRepo := repo.NewReviewRepo(pool)
-	productRepo := repo.NewProductRepo(pool)
+
+	var productRepo svc.ProductRepo = repo.NewProductRepo(pool)
+	// if rdb != nil && cfg.Redis.Enabled {
+	// 	productRepo = cache.NewProductRepoCache(productRepo, rdb, 5*time.Minute)
+	// }
+
 	orderRepo := repo.NewOrderRepo(pool)
 	orderItemRepo := repo.NewOrderItemRepo(pool)
 	categoryRepo := repo.NewCategoryRepo(pool)
