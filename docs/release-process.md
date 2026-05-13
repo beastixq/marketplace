@@ -14,12 +14,17 @@ This project does not currently have a formal CI/CD release pipeline documented 
 Update relevant docs when behavior changes:
 
 - `docs/architecture.md` for layer or dependency changes.
+- `docs/project-map.md` for entry point, wiring, or directory ownership changes.
+- `docs/order-lifecycle.md` for checkout, stock reservation, or order status changes.
+- `docs/payments.md` for mock bank, payment TTL, or payment error changes.
+- `docs/cache.md` for Redis keys, TTLs, or cache invalidation changes.
+- `docs/known-issues.md`, `docs/ideas.md`, and `docs/bugs-history/README.md` for issue tracking changes.
 - `docs/api-contracts.md` for route, DTO, status code, or auth changes.
 - `docs/database.md` and `docs/db-schema.md` for migrations/schema changes.
 - `docs/setup.md` for config, startup, or dependency changes.
 - `docs/testing.md` for test workflow changes.
 - `docs/troubleshooting.md` for new recurring failure modes.
-- `Readme.md` for user-facing project overview changes.
+- `README.md` for user-facing project overview changes.
 
 ## 3. Database Review
 

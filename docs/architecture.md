@@ -90,15 +90,20 @@ Both surfaces call service methods. Neither surface owns business policy, persis
 
 ## Cache Boundary
 
-Cache key mechanics belong behind cache abstractions, not handlers. Cache invalidation should be triggered from service/usecase code or service decorators as part of mutations.
+Cache key mechanics belong behind cache abstractions, not handlers. Cache invalidation should be triggered from service/usecase code or service decorators as part of mutations. Current behavior and gaps are tracked in `docs/cache.md`.
 
-Documented key conventions:
+Currently implemented runtime keys:
 
 | Key | TTL | Invalidation |
 | --- | --- | --- |
+| `products:{id}` | `5m` | Product update/delete only |
+
+Target key conventions that are not implemented unless `docs/cache.md` says otherwise:
+
+| Key | TTL | Intended Invalidation |
+| --- | --- | --- |
 | `products:catalog:page:{n}` | `5m` | Any product change |
-| `products:{id}` | `5m` | Product PATCH/DELETE; review create/update |
 | `categories:tree` | `1h` | Category CRUD |
-| `sessions:{token}` | Session lifetime | Logout |
+| `sessions:{token}` | Session lifetime | Logout/token revocation |
 
 Cache failures should not break core business behavior unless the operation explicitly requires cache consistency.

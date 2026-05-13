@@ -39,6 +39,8 @@
 | description | TEXT | |
 | price | NUMERIC(12,2) | NOT NULL, CHECK (price > 0) |
 | stock_quantity | INTEGER | NOT NULL DEFAULT 0, CHECK (>= 0) |
+| reserved_quantity | INTEGER | NOT NULL DEFAULT 0, CHECK (>= 0), CHECK (<= stock_quantity) |
+| rating | NUMERIC(3,2) | пересчитывается триггером отзывов |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() |
 | deleted_at | TIMESTAMPTZ | мягкое удаление |
 
@@ -56,6 +58,8 @@
 | user_id | BIGINT | NOT NULL, FK → users(id) ON DELETE CASCADE |
 | city | VARCHAR(100) | NOT NULL |
 | street | VARCHAR(255) | NOT NULL |
+| house | VARCHAR(20) | NOT NULL |
+| apartment | VARCHAR(20) | есть в БД, сейчас не используется доменной моделью |
 | zip_code | VARCHAR(20) | NOT NULL |
 | is_default | BOOLEAN | NOT NULL DEFAULT FALSE |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() |
@@ -87,14 +91,14 @@ draft → pending → paid → shipped → delivered
 | pending → paid | Покупатель | Оплачивает |
 | paid → shipped | Продавец | Отмечает отправку |
 | shipped → delivered | Продавец | Отмечает доставку |
-| pending/paid → cancelled | Покупатель | Отменяет (до отправки) |
-| paid → cancelled | Продавец | Отклоняет |
+| pending/paid → cancelled | Покупатель/администратор | Отменяет до отправки |
+| pending → cancelled | Фоновый worker | Истечение окна оплаты |
 
 ## `order_items` — Позиции заказа
 | Поле | Тип | Ограничения |
 |---|---|---|
 | id | BIGSERIAL | PRIMARY KEY |
-| order_id | BIGINT | NOT NULL, FK → orders(id) ON DELETE RESTRICT |
+| order_id | BIGINT | NOT NULL, FK → orders(id) ON DELETE CASCADE |
 | product_id | BIGINT | NOT NULL, FK → products(id) ON DELETE RESTRICT |
 | quantity | INTEGER | NOT NULL, CHECK (> 0) |
 | price_at_purchase | NUMERIC(12,2) | NOT NULL, CHECK (> 0) |
