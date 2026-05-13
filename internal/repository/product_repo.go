@@ -356,6 +356,63 @@ func (pr ProductRepoImpl) ChangeStockAndReserved(ctx context.Context, productID 
 	return nil
 }
 
+func (pr ProductRepoImpl) GetFavorites(ctx context.Context, userID int64) (ps []int64, err error) {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.
+		Select("product_id").
+		From("users_favorites").
+		Where(sq.Eq{"user_id": userID}).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	rows, err := getConn(ctx, pr.pool).Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
+	}
+	ps = make([]int64, 0)
+	var id int64
+	for rows.Next() {
+		if err = rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrToScan, err)
+		}
+		ps = append(ps, id)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrRowsIteration, err)
+	}
+	return ps, nil
+}
+
+func (pr ProductRepoImpl) AddToFavorites(ctx context.Context, productID, userID int64) (err error) {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.
+		Insert("users_favorites").
+		Columns("user_id", "product_id").
+		Values(userID, productID).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	_, err = getConn(ctx, pr.pool).Exec(ctx, sql, args...)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrExec, err)
+	}
+	return nil
+}
+
+func (pr ProductRepoImpl) RemoveFromFavorites(ctx context.Context, productID, userID int64) (err error) {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.Delete("users_favorites").Where(sq.And{sq.Eq{"user_id": userID}, sq.Eq{"product_id": productID}}).ToSql()
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	if _, err = getConn(ctx, pr.pool).Exec(ctx, sql, args...); err != nil {
+		return fmt.Errorf("%w: %v", ErrExec, err)
+	}
+	return nil
+}
+
 func (pr ProductRepoImpl) DeleteProductByID(ctx context.Context, id int64) (err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Update("products").Where(sq.Eq{"id": id}).Set("deleted_at", sq.Expr("NOW()")).ToSql()

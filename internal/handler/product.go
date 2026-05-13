@@ -310,3 +310,61 @@ func (ph ProductHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// GET /api/v1/products/favorites
+func (ph ProductHandler) GetFavorites(w http.ResponseWriter, r *http.Request) {
+	actor, ok := actorFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+
+	ps, err := ph.productService.GetFavorites(r.Context(), actor)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, ps)
+}
+
+// POST /api/v1/products/:id/favorites
+func (ph ProductHandler) AddToFavorites(w http.ResponseWriter, r *http.Request) {
+	actor, ok := actorFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, ErrInvalidIDParam.Error())
+		return
+	}
+
+	if err = ph.productService.AddToFavorites(r.Context(), actor, id); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/v1/products/:id/favorites
+func (ph ProductHandler) RemoveFromFavorites(w http.ResponseWriter, r *http.Request) {
+	actor, ok := actorFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, ErrInvalidIDParam.Error())
+		return
+	}
+
+	if err = ph.productService.RemoveFromFavorites(r.Context(), actor, id); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

@@ -18,6 +18,9 @@ type ProductRepo interface {
 	CreateProduct(ctx context.Context, pc m.ProductCreate) (id int64, err error)
 	UpdateProduct(ctx context.Context, id int64, pu m.ProductUpdate) (p m.Product, err error)
 	ChangeStockAndReserved(ctx context.Context, productID int64, stockDelta int, reservedDelta int) (err error)
+	GetFavorites(ctx context.Context, userID int64) (products []int64, err error)
+	AddToFavorites(ctx context.Context, productID, userID int64) (err error)
+	RemoveFromFavorites(ctx context.Context, productID, userID int64) (err error)
 	DeleteProductByID(ctx context.Context, id int64) (err error)
 }
 
@@ -245,6 +248,53 @@ func (ps ProductService) ReplaceProductCategories(ctx context.Context, actor Act
 		}
 		return nil
 	})
+}
+
+func (ps ProductService) GetFavorites(ctx context.Context, actor Actor) (products []int64, err error) {
+	if !actor.HasRole(m.RoleBuyer) && !actor.HasRole(m.RoleSeller) {
+		return nil, ErrPermissionDenied
+	}
+
+	if products, err = ps.productRepo.GetFavorites(ctx, actor.UserID); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrGetFavorites, err)
+	}
+	return products, nil
+}
+
+func (ps ProductService) AddToFavorites(ctx context.Context, actor Actor, productID int64) (err error) {
+	if !actor.HasRole(m.RoleBuyer) && !actor.HasRole(m.RoleSeller) {
+		return ErrPermissionDenied
+	}
+
+	if _, err = ps.productRepo.GetProductByID(ctx, productID); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return ErrProductNotFound
+		}
+		return fmt.Errorf("%w: %v", ErrGetProductByID, err)
+	}
+
+	if err = ps.productRepo.AddToFavorites(ctx, productID, actor.UserID); err != nil {
+		return fmt.Errorf("%w: %v", ErrAddToFavorites, err)
+	}
+	return nil
+}
+
+func (ps ProductService) RemoveFromFavorites(ctx context.Context, actor Actor, productID int64) (err error) {
+	if !actor.HasRole(m.RoleBuyer) && !actor.HasRole(m.RoleSeller) {
+		return ErrPermissionDenied
+	}
+
+	if _, err = ps.productRepo.GetProductByID(ctx, productID); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return ErrProductNotFound
+		}
+		return fmt.Errorf("%w: %v", ErrGetProductByID, err)
+	}
+
+	if err = ps.productRepo.RemoveFromFavorites(ctx, productID, actor.UserID); err != nil {
+		return fmt.Errorf("%w: %v", ErrRemoveFromFavorites, err)
+	}
+	return nil
 }
 
 func (ps ProductService) DeleteProductByID(ctx context.Context, actor Actor, id int64) (err error) {

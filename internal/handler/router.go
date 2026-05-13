@@ -125,6 +125,15 @@ func NewRouter(
 			r.Delete("/api/v1/reviews/{id}", reviewHandler.DeleteReview)
 		})
 
+		// Buyer or Seller
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRole(model.RoleBuyer, model.RoleSeller))
+
+			r.Get("/api/v1/products/favorites", productHandler.GetFavorites)
+			r.Post("/api/v1/products/{id}/favorites", productHandler.AddToFavorites)
+			r.Delete("/api/v1/products/{id}/favorites", productHandler.RemoveFromFavorites)
+		})
+
 		// Admin only
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireRole(model.RoleAdmin))
