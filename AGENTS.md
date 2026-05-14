@@ -312,3 +312,9 @@ Do not inspect these unless explicitly requested:
 - `caveman/`
 - report artifacts
 - generated PDFs/images
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan:
+[specs/002-favorite-products/plan.md](specs/002-favorite-products/plan.md).
+<!-- SPECKIT END -->

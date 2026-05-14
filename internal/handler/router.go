@@ -23,6 +23,7 @@ func NewRouter(
 	categoryHandler CategoryHandler,
 	reviewHandler ReviewHandler,
 	adminHandler AdminHandler,
+	favoriteHandler FavoriteHandler,
 ) http.Handler {
 	r := chi.NewRouter()
 
@@ -62,6 +63,12 @@ func NewRouter(
 		r.Patch("/api/v1/users/me", userHandler.UpdateMyProfile)
 		r.Delete("/api/v1/users/me", userHandler.DeleteMyAccount)
 		r.Patch("/api/v1/users/me/password", userHandler.ChangePassword)
+
+		// Favorites — any authenticated role
+		r.Get("/api/v1/favorites", favoriteHandler.ListFavorites)
+		r.Get("/api/v1/favorites/{productId}", favoriteHandler.GetFavoriteStatus)
+		r.Put("/api/v1/favorites/{productId}", favoriteHandler.AddFavorite)
+		r.Delete("/api/v1/favorites/{productId}", favoriteHandler.RemoveFavorite)
 
 		// Buyer only
 		r.Group(func(r chi.Router) {

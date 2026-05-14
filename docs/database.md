@@ -32,6 +32,7 @@ export DATABASE_URL='postgres://postgres:postgres@localhost:5432/marketplace?ssl
 | `010_add_address_house.sql` | Address house/apartment fields. |
 | `011_order_cart_item_invariants.sql` | One draft cart per buyer and one product row per order. |
 | `012_drop_users_phone_unique.sql` | Allow multiple users to share a phone number. |
+| `013_create_favorites.sql` | `favorites` join table with double cascade and role grants. |
 
 Run:
 
@@ -53,6 +54,7 @@ Core tables:
 - `order_items`
 - `reviews`
 - `product_price_history`
+- `favorites`
 
 Keep `docs/db-schema.md` synchronized when schema changes.
 
@@ -72,6 +74,7 @@ Keep `docs/db-schema.md` synchronized when schema changes.
 - `order_items` has `UNIQUE(order_id, product_id)`.
 - `reviews.rating` is between 1 and 5.
 - `reviews` has `UNIQUE(user_id, product_id)`.
+- `favorites` has compound primary key `(user_id, product_id)`; both FKs are `ON DELETE CASCADE`.
 
 ## Product Reservation
 

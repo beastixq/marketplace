@@ -72,6 +72,7 @@ func main() {
 	sellerRepo := repo.NewSellerRepo(pool)
 	addressRepo := repo.NewAddressRepo(pool)
 	reviewRepo := repo.NewReviewRepo(pool)
+	favoriteRepo := repo.NewFavoriteRepo(pool)
 
 	var productRepo svc.ProductRepo = repo.NewProductRepo(pool)
 	// if rdb != nil && cfg.Redis.Enabled {
@@ -92,6 +93,7 @@ func main() {
 	orderService := svc.NewOrderService(orderRepo, orderItemRepo, productRepo, addressRepo, sellerRepo, txManager)
 	categoryService := svc.NewCategoryService(categoryRepo)
 	backofficeService := svc.NewBackofficeService(backofficeRepo)
+	favoriteService := svc.NewFavoriteService(favoriteRepo, productService)
 	// TODO: replace with Redis TokenBlocklist implementation
 	authService := svc.NewAuthService(userService, nil, cfg.Auth.JWTSecret, cfg.Auth.JWTTTL.Std())
 
@@ -117,6 +119,7 @@ func main() {
 	categoryHandler := handler.NewCategoryHandler(categoryService)
 	reviewHandler := handler.NewReviewHandler(reviewService)
 	adminHandler := handler.NewAdminHandler(userService, sellerService)
+	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 
 	apiRouter := handler.NewRouter(
 		logger.With("component", "http"),
@@ -131,6 +134,7 @@ func main() {
 		categoryHandler,
 		reviewHandler,
 		adminHandler,
+		favoriteHandler,
 	)
 
 	webHandler := web.NewWebHandler(productService, categoryService, authService, userService, orderService, addressService, sellerService, reviewService, backofficeService, paymentService)

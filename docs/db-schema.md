@@ -115,6 +115,16 @@ draft → pending → paid → shipped → delivered
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() |
 | | | UNIQUE (user_id, product_id) |
 
+## `favorites` — Избранное (M:N между users и products)
+| Поле | Тип | Ограничения |
+|---|---|---|
+| user_id | BIGINT | NOT NULL, FK → users(id) ON DELETE CASCADE |
+| product_id | BIGINT | NOT NULL, FK → products(id) ON DELETE CASCADE |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() |
+| | | PRIMARY KEY (user_id, product_id) |
+
+Гранты: `SELECT, INSERT, DELETE` для `marketplace_buyer`, `marketplace_seller`, `marketplace_admin`; `SELECT` для `marketplace_analyst`.
+
 ## `product_price_history` — Журнал изменений цен (заполняется триггером)
 | Поле | Тип | Ограничения |
 |---|---|---|
@@ -133,6 +143,7 @@ CREATE INDEX ON orders (user_id);
 CREATE UNIQUE INDEX ux_orders_one_draft_per_user ON orders (user_id) WHERE status = 'draft';
 CREATE INDEX ON orders (status, created_at);
 CREATE INDEX ON reviews (product_id);
+CREATE INDEX idx_favorites_user_created_at_desc ON favorites (user_id, created_at DESC);
 CREATE INDEX ON product_categories (category_id);
 CREATE INDEX ON products (id) WHERE deleted_at IS NULL;
 CREATE INDEX ON users (id) WHERE deleted_at IS NULL;
