@@ -22,6 +22,7 @@ type Component struct {
 	Seller     svc.SellerService
 	Address    svc.AddressService
 	Review     svc.ReviewService
+	Favorite   svc.FavoriteService
 	Product    svc.ProductService
 	Order      svc.OrderService
 	Category   svc.CategoryService
@@ -37,6 +38,7 @@ func New(repos *repocomponent.Component, cfg Config) *Component {
 	seller := svc.NewSellerService(repos.Seller)
 	address := svc.NewAddressService(repos.Address)
 	review := svc.NewReviewService(repos.Review, repos.ReviewPurchase, repos.Product)
+	favorite := svc.NewFavoriteService(repos.Favorite, repos.Product)
 	product := svc.NewProductService(repos.Product, repos.Review, repos.Seller, repos.TxManager)
 	order := svc.NewOrderService(repos.Order, repos.OrderItem, repos.Product, repos.Address, repos.Seller, repos.TxManager)
 	category := svc.NewCategoryService(repos.Category)
@@ -50,6 +52,7 @@ func New(repos *repocomponent.Component, cfg Config) *Component {
 		Seller:     seller,
 		Address:    address,
 		Review:     review,
+		Favorite:   favorite,
 		Product:    product,
 		Order:      order,
 		Category:   category,

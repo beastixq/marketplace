@@ -29,6 +29,7 @@ var serviceErrorResponses = []serviceErrorResponse{
 	{service.ErrCategoryNotFound, http.StatusNotFound},
 	{service.ErrProductNotFound, http.StatusNotFound},
 	{service.ErrReviewNotFound, http.StatusNotFound},
+	{service.ErrFavoriteNotFound, http.StatusNotFound},
 	{service.ErrNotFound, http.StatusNotFound},
 
 	{service.ErrWrongPassword, http.StatusUnauthorized},
@@ -45,6 +46,7 @@ var serviceErrorResponses = []serviceErrorResponse{
 	{service.ErrStockBelowReserved, http.StatusConflict},
 	{service.ErrReviewAlreadyExists, http.StatusConflict},
 	{service.ErrReviewPurchaseRequired, http.StatusConflict},
+	{service.ErrFavoriteAlreadyExists, http.StatusConflict},
 
 	{service.ErrEmptyCart, http.StatusBadRequest},
 	{service.ErrQuantityTooBig, http.StatusBadRequest},

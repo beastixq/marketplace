@@ -147,6 +147,13 @@ var (
 	ErrReviewAlreadyExists    = errors.New("You have already reviewed this product")
 	ErrReviewPurchaseRequired = errors.New("You can review only products you have purchased")
 
+	// favorites
+	ErrAddFavorite             = errors.New("Failed to add favorite")
+	ErrRemoveFavorite          = errors.New("Failed to remove favorite")
+	ErrGetFavoritesByUserID    = errors.New("Failed to get favorites by user id")
+	ErrFavoriteAlreadyExists   = errors.New("Product is already in favorites")
+	ErrFavoriteNotFound        = errors.New("Favorite not found")
+
 	// backoffice
 	ErrGetPlatformStats     = errors.New("Failed to get platform stats")
 	ErrGetOrderDynamics     = errors.New("Failed to get order dynamics")

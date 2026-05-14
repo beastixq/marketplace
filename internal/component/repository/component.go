@@ -20,6 +20,7 @@ type Component struct {
 	Address        svc.AddressRepo
 	Review         svc.ReviewRepo
 	ReviewPurchase svc.ReviewPurchaseChecker
+	Favorite       svc.FavoriteRepo
 	Product        svc.ProductRepo
 	Order          svc.OrderRepo
 	OrderItem      svc.OrderItemRepo
@@ -67,6 +68,7 @@ func NewFromPoolWithCache(pool *pgxpool.Pool, cfg *CacheConfig) *Component {
 		Address:        store.NewAddressRepo(pool),
 		Review:         reviewRepo,
 		ReviewPurchase: reviewRepo,
+		Favorite:       store.NewFavoriteRepo(pool),
 		Product:        productRepo,
 		Order:          store.NewOrderRepo(pool),
 		OrderItem:      store.NewOrderItemRepo(pool),

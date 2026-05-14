@@ -72,6 +72,7 @@ func main() {
 	sellerRepo := repo.NewSellerRepo(pool)
 	addressRepo := repo.NewAddressRepo(pool)
 	reviewRepo := repo.NewReviewRepo(pool)
+	favoriteRepo := repo.NewFavoriteRepo(pool)
 
 	var productRepo svc.ProductRepo = repo.NewProductRepo(pool)
 	// if rdb != nil && cfg.Redis.Enabled {
@@ -88,6 +89,7 @@ func main() {
 	sellerService := svc.NewSellerService(sellerRepo)
 	addressService := svc.NewAddressService(addressRepo)
 	reviewService := svc.NewReviewService(reviewRepo, reviewRepo, productRepo)
+	favoriteService := svc.NewFavoriteService(favoriteRepo, productRepo)
 	productService := svc.NewProductService(productRepo, reviewRepo, sellerRepo, txManager)
 	orderService := svc.NewOrderService(orderRepo, orderItemRepo, productRepo, addressRepo, sellerRepo, txManager)
 	categoryService := svc.NewCategoryService(categoryRepo)
@@ -116,6 +118,7 @@ func main() {
 	paymentHandler := handler.NewPaymentHandler(paymentService)
 	categoryHandler := handler.NewCategoryHandler(categoryService)
 	reviewHandler := handler.NewReviewHandler(reviewService)
+	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	adminHandler := handler.NewAdminHandler(userService, sellerService)
 
 	apiRouter := handler.NewRouter(
@@ -130,6 +133,7 @@ func main() {
 		paymentHandler,
 		categoryHandler,
 		reviewHandler,
+		favoriteHandler,
 		adminHandler,
 	)
 

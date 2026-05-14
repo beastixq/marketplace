@@ -203,6 +203,20 @@ type ReviewDTO struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type FavoriteDTO struct {
+	UserID    int64     `json:"user_id"`
+	ProductID int64     `json:"product_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func favoriteDTO(f model.Favorite) FavoriteDTO {
+	return FavoriteDTO{
+		UserID:    f.UserID,
+		ProductID: f.ProductID,
+		CreatedAt: f.CreatedAt,
+	}
+}
+
 func reviewDTO(r model.Review) ReviewDTO {
 	return ReviewDTO{
 		ID:        r.ID,

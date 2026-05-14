@@ -175,6 +175,20 @@ func (rr reviewRow) toModel() m.Review {
 	}
 }
 
+type favoriteRow struct {
+	UserID    int64
+	ProductID int64
+	CreatedAt time.Time
+}
+
+func (fr favoriteRow) toModel() m.Favorite {
+	return m.Favorite{
+		UserID:    fr.UserID,
+		ProductID: fr.ProductID,
+		CreatedAt: fr.CreatedAt,
+	}
+}
+
 type orderItemRow struct {
 	ID              int64
 	OrderID         int64

@@ -22,6 +22,7 @@ func NewRouter(
 	paymentHandler PaymentHandler,
 	categoryHandler CategoryHandler,
 	reviewHandler ReviewHandler,
+	favoriteHandler FavoriteHandler,
 	adminHandler AdminHandler,
 ) http.Handler {
 	r := chi.NewRouter()
@@ -90,6 +91,11 @@ func NewRouter(
 			// Reviews
 			r.Post("/api/v1/reviews", reviewHandler.CreateReview)
 			r.Patch("/api/v1/reviews/{id}", reviewHandler.UpdateReview)
+
+			// Favorites
+			r.Get("/api/v1/favorites", favoriteHandler.GetMyFavorites)
+			r.Post("/api/v1/favorites/{productID}", favoriteHandler.AddFavorite)
+			r.Delete("/api/v1/favorites/{productID}", favoriteHandler.RemoveFavorite)
 		})
 
 		// Seller only
