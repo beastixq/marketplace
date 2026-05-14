@@ -96,3 +96,184 @@ Options:
 
 Decision:
 TBD.
+
+## BUG-004 Product Cache Wrap Is Disabled While Docs Claim It Is Live
+
+Status: open
+Severity: medium
+Area: cache/products/docs
+Found: 2026-05-14
+Source: ultrareview merged_bug_002
+
+Problem:
+В `cmd/api/main.go:77-80` вызов `cache.NewProductRepoCache(...)` закомментирован,
+поэтому даже при `redis.enabled=true` API-бинарь подключается к Redis, делает
+`Ping`, но никогда не оборачивает `ProductRepo`. При этом `docs/cache.md`,
+`docs/architecture.md` и `docs/project-map.md` описывают `products:{id}` 5m кэш
+как реально работающий, а таблица Cache/Redis в `AGENTS.md` все еще перечисляет
+четыре ключа (`products:catalog:page:{n}`, `categories:tree`, `sessions:{token}`
+и инвалидацию `products:{id}` при создании/обновлении ревью), которых в коде
+нет.
+
+Дополнительно: compile-time проверки интерфейсов в
+`internal/cache/product_repo_cache.go:24-30` (`_ svc.ProductRepo` и
+`_ svc.ProductCategoryRepo`) тоже закомментированы — теряется страховка,
+о которой говорит AGENTS.md.
+
+Expected:
+Документация должна совпадать с runtime. Либо включить обертку (и
+ассерты), либо вырезать упоминания неимплементированных ключей.
+
+Options:
+- Раскомментировать обертку в `cmd/api/main.go` и ассерты в
+  `product_repo_cache.go`, привести таблицу AGENTS.md к реальности
+  (только `products:{id}` с инвалидацией PATCH/DELETE).
+- Оставить обертку выключенной, но убрать `redis.enabled` ветку из main и
+  откатить документацию (cache.md / architecture.md / project-map.md) до
+  «cache is planned, not implemented».
+
+Decision:
+TBD.
+
+## BUG-005 ChangeStockAndReserved Skips Cache Invalidation
+
+Status: open
+Severity: medium
+Area: cache/products
+Found: 2026-05-14
+Source: ultrareview bug_001
+
+Problem:
+`ProductRepoCache.ChangeStockAndReserved` (internal/cache/product_repo_cache.go)
+это чистый pass-through: он не вызывает `invalidateProduct` после успешного
+изменения. Кэшированный `m.Product` содержит `stock_quantity`,
+`reserved_quantity` и производное `AvailableQuantity()`. Когда обертка
+будет включена (см. BUG-004), каждое оформление заказа, отмена, отгрузка и
+expire будут оставлять кэш с устаревшим доступным остатком до TTL (5 минут).
+
+Цепочка проявления: `OrderService.AddItemToCart` читает товар через
+`productRepo.GetProductByID` (через кэш) и пропускает проверку
+`AvailableQuantity() < quantity`, а потом checkout с `FOR UPDATE` отдает
+`ErrInsufficientStock` — пользователь видит товар как доступный, а на
+checkout получает отказ.
+
+Expected:
+После успешного `ChangeStockAndReserved` инвалидировать `products:{id}`,
+как это уже делают `UpdateProduct` и `DeleteProductByID`.
+
+Decision:
+Fix: одна строка — добавить `c.invalidateProduct(ctx, productID)` после
+успешного inner-вызова. Перед фиксом дождаться решения по BUG-006 (порядок
+инвалидации относительно транзакции).
+
+## BUG-006 Cache Invalidation Runs Before Outer Transaction Commits
+
+Status: open
+Severity: medium
+Area: cache/transactions
+Found: 2026-05-14
+Source: ultrareview bug_007
+
+Problem:
+`ProductRepoCache.UpdateProduct` и `DeleteProductByID` вызывают
+`invalidateProduct` сразу после возврата внутреннего репо-метода. Но
+`ProductService.UpdateProduct` оборачивает этот вызов в
+`txManager.WithTransaction`, и репозиторий повторно использует внешнюю
+транзакцию (см. 2026-05-01 nested-tx fix). В результате `DEL products:{id}`
+уходит в Redis в тот момент, когда `UPDATE products ...` еще не закоммичен.
+
+Гонка:
+1. T1 (writer) начинает tx, выполняет `UPDATE`, выполняет `DEL products:42`.
+2. T2 (reader) делает `GetProductByID(42)`: cache MISS → loader делает
+   `SELECT` в своей tx и читает старую строку (T1 не закоммитил).
+3. T2 пишет старое значение обратно в `products:42` с TTL 5m.
+4. T1 коммитит. DB=новое, cache=старое до истечения TTL.
+
+Expected:
+Инвалидация должна происходить **после** коммита внешней транзакции.
+
+Options:
+- Добавить `AfterCommit(func())` хук в `PgxTxManager`, регистрировать
+  `c.invalidateProduct` через него; если ambient tx нет — выполнять сразу.
+- Поднять инвалидацию на сервисный уровень: сделать кэш-декоратор над
+  `ProductService` вместо `ProductRepo`, и вызывать `DEL` уже после
+  `txManager.WithTransaction`.
+- Double-delete (до и после с задержкой) — частичная мера.
+
+Decision:
+TBD. Архитектурное изменение (хук в TxManager) — не однострочник.
+
+## BUG-007 Cache Invalidation Uses Cancellable Request Context
+
+Status: open
+Severity: low
+Area: cache/products
+Found: 2026-05-14
+Source: ultrareview bug_005
+
+Problem:
+`ProductRepoCache.invalidateProduct(ctx, id)` использует ctx запроса.
+Если клиент отвалится или сработает deadline между коммитом БД и
+завершением Redis `DEL`, go-redis вернет `context.Canceled`/`DeadlineExceeded`,
+`DEL` пропадет, кэш останется с устаревшим значением до TTL. В логах
+останется только `slog.Warn("cache invalidation failed", ...)`.
+
+Expected:
+Инвалидация должна быть устойчивой к отмене запроса: использовать
+`context.WithoutCancel(ctx)` (Go 1.21+) или короткий `context.WithTimeout`
+на чистом фоне.
+
+Decision:
+Fix: однострочник — `delCtx := context.WithoutCancel(ctx)` и передать его
+в `c.rdb.Del`. Можно делать одновременно с BUG-006.
+
+## BUG-008 Corrupted Cache Entry Persists Until TTL
+
+Status: open
+Severity: low
+Area: cache
+Found: 2026-05-14
+Source: ultrareview bug_006
+
+Problem:
+В `internal/cache/cacheaside.go:62-68` при ошибке `json.Unmarshal` кэшированного
+блоба `GetOrLoad` логирует warning и идет в loader, но не удаляет битый ключ и
+не перезаписывает его свежим значением. Каждый следующий запрос на тот же
+ключ снова попадает в hit → unmarshal fail → warning → loader, и так до
+истечения TTL (5 минут).
+
+Реалистичные триггеры: изменение формы структуры `m.Product` между релизами
+без сброса Redis, частичная запись, конфликт ключей с другим приложением,
+делящим Redis DB.
+
+Expected:
+При ошибке unmarshal удалить ключ (fire-and-forget) или перезапустить
+miss-ветку (loader → marshal → Set), чтобы один битый блоб давал максимум
+один деградированный запрос.
+
+Decision:
+Fix: добавить `rdb.Del(ctx, key)` в обработчике unmarshal error.
+
+## BUG-009 Makefile .PHONY Regression
+
+Status: open
+Severity: low
+Area: build/makefile
+Found: 2026-05-14
+Source: ultrareview bug_035
+
+Problem:
+В `Makefile:9` объявление `.PHONY` было перезаписано новым списком вместо
+дополнения. Цели `all`, `png`, `svg`, `clean` больше не помечены phony:
+если на корне репозитория случайно появится файл с одним из этих имен,
+`make` пропустит рецепт. Отдельно: `run` присутствует в `.PHONY`, но
+самого правила `run:` нет — `make run` падает с `No rule to make target 'run'`.
+
+Expected:
+Один общий `.PHONY` со всеми phony-целями.
+
+Decision:
+Fix: объединить списки —
+`.PHONY: fmt vet test test-race lint security check test-repository test-service test-web all png svg clean`,
+и либо удалить `run` из `.PHONY`, либо добавить рецепт `run:` (например,
+`go run ./cmd/api -config config/config.yaml`).
