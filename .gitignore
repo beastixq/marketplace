@@ -14,3 +14,4 @@ reviews/
 caveman/
 dist/
 logs/
+.claude/skills/speckit-*

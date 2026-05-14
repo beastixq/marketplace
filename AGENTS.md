@@ -33,9 +33,11 @@ Do not run heavy verification, broad inspection, or token-heavy commands without
 
 Ask first before running:
 
-- Full test suites, broad build/syntax checks, linters, formatters, code generation, or dependency downloads.
+- Full test suites, broad build/syntax checks, linters, formatters, or dependency downloads.
 - Broad diffs or history inspection such as `git diff`, `git show`, `git log -p`, or large patch views.
 - Commands expected to produce large output or scan most of the repository when a narrower check is enough.
+
+Code generation (e.g. `go generate`, `mockgen`) is a normal, permitted action — run it directly when a task needs it. Do not gate generation behind a permission prompt.
 
 Prefer lightweight, targeted checks by default: `rg`, short `sed`/`nl` ranges, focused file reads, and narrow status commands such as `git status --short`.
 
@@ -282,6 +284,7 @@ Cache failures should not break core business behavior unless the operation expl
 - Comments should explain why, not restate what the code already says.
 - Avoid unrelated refactors and formatting-only churn.
 - Do not manually edit generated files.
+- Do not read generated files (e.g. mocks under `internal/mocks/`) — their contents are derived from interfaces and add no useful signal. Regenerate them instead when interfaces change.
 - Use parameterized SQL exclusively. Never concatenate SQL with user input.
 - Use goose for migrations. Migration files live in `./migrations/`.
 
