@@ -57,6 +57,10 @@ Passed through without caching:
 - product creation;
 - stock/reservation changes.
 
+Product favorites are not cached. Favorite add/remove/list/check operations go
+directly to PostgreSQL through `FavoriteRepo`; no Redis keys or invalidation
+paths are introduced for this feature.
+
 Current staleness caveats:
 
 - `ChangeStockAndReserved` does not invalidate `products:{id}`. Product stock,

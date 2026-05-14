@@ -119,6 +119,20 @@ func (pr productRow) toModel() m.Product {
 	}
 }
 
+type productFavoriteRow struct {
+	UserID    int64
+	ProductID int64
+	CreatedAt time.Time
+}
+
+func (pfr productFavoriteRow) toModel() m.ProductFavorite {
+	return m.ProductFavorite{
+		UserID:    pfr.UserID,
+		ProductID: pfr.ProductID,
+		CreatedAt: pfr.CreatedAt,
+	}
+}
+
 type productPriceHistoryRow struct {
 	ID        int64
 	ProductID int64

@@ -18,6 +18,7 @@ func NewRouter(
 	sellerHandler SellerHandler,
 	addressHandler AddressHandler,
 	productHandler ProductHandler,
+	favoriteHandler FavoriteHandler,
 	orderHandler OrderHandler,
 	paymentHandler PaymentHandler,
 	categoryHandler CategoryHandler,
@@ -62,6 +63,12 @@ func NewRouter(
 		r.Patch("/api/v1/users/me", userHandler.UpdateMyProfile)
 		r.Delete("/api/v1/users/me", userHandler.DeleteMyAccount)
 		r.Patch("/api/v1/users/me/password", userHandler.ChangePassword)
+		r.Get("/api/v1/users/me/favorites", favoriteHandler.GetFavoriteProducts)
+
+		// Favorites
+		r.Post("/api/v1/products/{id}/favorite", favoriteHandler.AddFavorite)
+		r.Delete("/api/v1/products/{id}/favorite", favoriteHandler.RemoveFavorite)
+		r.Get("/api/v1/products/{id}/favorite", favoriteHandler.GetFavoriteState)
 
 		// Buyer only
 		r.Group(func(r chi.Router) {

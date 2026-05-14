@@ -15,3 +15,12 @@ caveman/
 dist/
 logs/
 .agents/skills/speckit*
+*.exe
+*.test
+*.out
+*.tmp
+*.swp
+vendor/
+.idea/
+.DS_Store
+Thumbs.db

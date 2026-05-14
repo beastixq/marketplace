@@ -32,6 +32,7 @@ export DATABASE_URL='postgres://postgres:postgres@localhost:5432/marketplace?ssl
 | `010_add_address_house.sql` | Address house/apartment fields. |
 | `011_order_cart_item_invariants.sql` | One draft cart per buyer and one product row per order. |
 | `012_drop_users_phone_unique.sql` | Allow multiple users to share a phone number. |
+| `013_product_favorites.sql` | Product favorites relation, indexes, and grants. |
 
 Run:
 
@@ -48,6 +49,7 @@ Core tables:
 - `categories`
 - `products`
 - `product_categories`
+- `product_favorites`
 - `addresses`
 - `orders`
 - `order_items`
@@ -72,6 +74,7 @@ Keep `docs/db-schema.md` synchronized when schema changes.
 - `order_items` has `UNIQUE(order_id, product_id)`.
 - `reviews.rating` is between 1 and 5.
 - `reviews` has `UNIQUE(user_id, product_id)`.
+- `product_favorites` has `PRIMARY KEY(user_id, product_id)` so one user can favorite a product only once.
 
 ## Product Reservation
 
@@ -111,7 +114,7 @@ The function counts paid, shipped, and delivered orders in the requested date in
 | Role | Intended rights |
 | --- | --- |
 | `marketplace_buyer` | Read catalog/categories; CRUD own buyer resources through app policy. |
-| `marketplace_seller` | Manage own products and view own relevant order data through app policy. |
+| `marketplace_seller` | Manage own products, own favorites, and view own relevant order data through app policy. |
 | `marketplace_admin` | Full administrative access. |
 | `marketplace_analyst` | Read-only reporting access. |
 
