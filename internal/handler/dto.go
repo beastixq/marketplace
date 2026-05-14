@@ -106,6 +106,11 @@ func productPriceHistoryDTO(ph model.ProductPriceHistory) ProductPriceHistoryDTO
 	}
 }
 
+type FavoriteProductStatusDTO struct {
+	ProductID int64 `json:"product_id"`
+	Favorite  bool  `json:"favorite"`
+}
+
 type CategoryDTO struct {
 	ID          int64   `json:"id"`
 	ParentID    *int64  `json:"parent_id"`

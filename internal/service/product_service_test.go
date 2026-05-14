@@ -49,6 +49,73 @@ type MockReviewListReturn struct {
 	Error   error
 }
 
+type favoriteProductRepoFake struct {
+	product          m.Product
+	getProductErr    error
+	favoriteProducts []m.Product
+	getFavoritesErr  error
+	addErr           error
+	removeErr        error
+	favorite         bool
+	isFavoriteErr    error
+	addCalls         int
+	removeCalls      int
+	isFavoriteCalls  int
+	getProductCalls  int
+}
+
+func (f *favoriteProductRepoFake) GetProducts(context.Context, m.CatalogOptions) ([]m.Product, error) {
+	panic("unexpected GetProducts call")
+}
+
+func (f *favoriteProductRepoFake) GetProductByID(context.Context, int64) (m.Product, error) {
+	f.getProductCalls++
+	return f.product, f.getProductErr
+}
+
+func (f *favoriteProductRepoFake) GetProductByIDForUpdate(context.Context, int64) (m.Product, error) {
+	panic("unexpected GetProductByIDForUpdate call")
+}
+
+func (f *favoriteProductRepoFake) GetProductPriceHistory(context.Context, int64, time.Time, time.Time) ([]m.ProductPriceHistory, error) {
+	panic("unexpected GetProductPriceHistory call")
+}
+
+func (f *favoriteProductRepoFake) CreateProduct(context.Context, m.ProductCreate) (int64, error) {
+	panic("unexpected CreateProduct call")
+}
+
+func (f *favoriteProductRepoFake) UpdateProduct(context.Context, int64, m.ProductUpdate) (m.Product, error) {
+	panic("unexpected UpdateProduct call")
+}
+
+func (f *favoriteProductRepoFake) ChangeStockAndReserved(context.Context, int64, int, int) error {
+	panic("unexpected ChangeStockAndReserved call")
+}
+
+func (f *favoriteProductRepoFake) DeleteProductByID(context.Context, int64) error {
+	panic("unexpected DeleteProductByID call")
+}
+
+func (f *favoriteProductRepoFake) GetFavoriteProducts(context.Context, int64, m.PaginationOpts) ([]m.Product, error) {
+	return f.favoriteProducts, f.getFavoritesErr
+}
+
+func (f *favoriteProductRepoFake) AddFavoriteProduct(context.Context, int64, int64) error {
+	f.addCalls++
+	return f.addErr
+}
+
+func (f *favoriteProductRepoFake) RemoveFavoriteProduct(context.Context, int64, int64) error {
+	f.removeCalls++
+	return f.removeErr
+}
+
+func (f *favoriteProductRepoFake) IsFavoriteProduct(context.Context, int64, int64) (bool, error) {
+	f.isFavoriteCalls++
+	return f.favorite, f.isFavoriteErr
+}
+
 func assertProduct(t *testing.T, got, want m.Product) {
 	t.Helper()
 	if !reflect.DeepEqual(got, want) {
@@ -268,6 +335,90 @@ func TestGetReviewsByProductID(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProductServiceFavorites(t *testing.T) {
+	ctx := context.Background()
+	actor := testActor(someID, m.RoleBuyer)
+
+	t.Run("get favorite products returns repository list", func(t *testing.T) {
+		repo := &favoriteProductRepoFake{favoriteProducts: []m.Product{someProduct}}
+		svc := service.NewProductService(repo, nil, nil, testsupport.PassThroughTxManager{})
+
+		got, err := svc.GetFavoriteProducts(ctx, actor, m.PaginationOpts{Page: 1, Limit: 10})
+		assertError(t, err, nil)
+		if !reflect.DeepEqual(got, repo.favoriteProducts) {
+			t.Fatalf("invalid favorite products. expected: %v, got: %v", repo.favoriteProducts, got)
+		}
+	})
+
+	t.Run("get favorite products wraps repository error", func(t *testing.T) {
+		repo := &favoriteProductRepoFake{getFavoritesErr: errors.New("db error")}
+		svc := service.NewProductService(repo, nil, nil, testsupport.PassThroughTxManager{})
+
+		_, err := svc.GetFavoriteProducts(ctx, actor, m.PaginationOpts{})
+		assertError(t, err, service.ErrGetFavoriteProducts)
+	})
+
+	t.Run("add favorite checks active product then writes", func(t *testing.T) {
+		repo := &favoriteProductRepoFake{product: someProduct}
+		svc := service.NewProductService(repo, nil, nil, testsupport.PassThroughTxManager{})
+
+		err := svc.AddFavoriteProduct(ctx, actor, someProduct.ID)
+		assertError(t, err, nil)
+		if repo.getProductCalls != 1 || repo.addCalls != 1 {
+			t.Fatalf("expected one product check and one add, got checks=%d adds=%d", repo.getProductCalls, repo.addCalls)
+		}
+	})
+
+	t.Run("add favorite rejects missing product", func(t *testing.T) {
+		repo := &favoriteProductRepoFake{getProductErr: service.ErrNotFound}
+		svc := service.NewProductService(repo, nil, nil, testsupport.PassThroughTxManager{})
+
+		err := svc.AddFavoriteProduct(ctx, actor, someProduct.ID)
+		assertError(t, err, service.ErrProductNotFound)
+		if repo.addCalls != 0 {
+			t.Fatalf("favorite add should not run after missing product, got %d calls", repo.addCalls)
+		}
+	})
+
+	t.Run("add favorite rejects deleted product", func(t *testing.T) {
+		deleted := someProduct
+		deleted.DeletedAt = &someTime
+		repo := &favoriteProductRepoFake{product: deleted}
+		svc := service.NewProductService(repo, nil, nil, testsupport.PassThroughTxManager{})
+
+		err := svc.AddFavoriteProduct(ctx, actor, someProduct.ID)
+		assertError(t, err, service.ErrProductDeleted)
+		if repo.addCalls != 0 {
+			t.Fatalf("favorite add should not run for deleted product, got %d calls", repo.addCalls)
+		}
+	})
+
+	t.Run("remove favorite does not require active product", func(t *testing.T) {
+		repo := &favoriteProductRepoFake{}
+		svc := service.NewProductService(repo, nil, nil, testsupport.PassThroughTxManager{})
+
+		err := svc.RemoveFavoriteProduct(ctx, actor, someProduct.ID)
+		assertError(t, err, nil)
+		if repo.getProductCalls != 0 || repo.removeCalls != 1 {
+			t.Fatalf("expected no product check and one remove, got checks=%d removes=%d", repo.getProductCalls, repo.removeCalls)
+		}
+	})
+
+	t.Run("check favorite validates product and returns status", func(t *testing.T) {
+		repo := &favoriteProductRepoFake{product: someProduct, favorite: true}
+		svc := service.NewProductService(repo, nil, nil, testsupport.PassThroughTxManager{})
+
+		favorite, err := svc.IsFavoriteProduct(ctx, actor, someProduct.ID)
+		assertError(t, err, nil)
+		if !favorite {
+			t.Fatal("expected product to be favorite")
+		}
+		if repo.getProductCalls != 1 || repo.isFavoriteCalls != 1 {
+			t.Fatalf("expected one product check and one favorite check, got checks=%d favorite_checks=%d", repo.getProductCalls, repo.isFavoriteCalls)
+		}
+	})
 }
 
 func TestCreateProduct(t *testing.T) {

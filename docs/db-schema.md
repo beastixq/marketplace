@@ -1,4 +1,4 @@
-# Схема базы данных (10 таблиц)
+# Схема базы данных (11 таблиц)
 
 ## `users` — Пользователи системы
 | Поле | Тип | Ограничения |
@@ -125,6 +125,14 @@ draft → pending → paid → shipped → delivered
 | changed_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() |
 | changed_by | TEXT | NOT NULL DEFAULT current_user |
 
+## `favorite_products` — Избранные товары пользователей
+| Поле | Тип | Ограничения |
+|---|---|---|
+| user_id | BIGINT | NOT NULL, FK → users(id) ON DELETE CASCADE |
+| product_id | BIGINT | NOT NULL, FK → products(id) ON DELETE CASCADE |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() |
+| | | PRIMARY KEY (user_id, product_id) |
+
 ## Индексы
 ```sql
 CREATE INDEX ON products (seller_id);
@@ -136,4 +144,5 @@ CREATE INDEX ON reviews (product_id);
 CREATE INDEX ON product_categories (category_id);
 CREATE INDEX ON products (id) WHERE deleted_at IS NULL;
 CREATE INDEX ON users (id) WHERE deleted_at IS NULL;
+CREATE INDEX ON favorite_products (product_id);
 ```

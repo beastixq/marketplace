@@ -177,6 +177,93 @@ func (ph ProductHandler) GetProductReviews(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, reviews)
 }
 
+// GET /api/v1/favorites
+func (ph ProductHandler) GetFavoriteProducts(w http.ResponseWriter, r *http.Request) {
+	actor, ok := actorFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+
+	pg, err := parsePagination(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	productsService, err := ph.productService.GetFavoriteProducts(r.Context(), actor, pg)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	products := make([]ProductDTO, len(productsService))
+	for i, productService := range productsService {
+		products[i] = productDTO(productService)
+	}
+	writeJSON(w, http.StatusOK, products)
+}
+
+// GET /api/v1/favorites/:product_id
+func (ph ProductHandler) IsFavoriteProduct(w http.ResponseWriter, r *http.Request) {
+	actor, ok := actorFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+	productID, err := strconv.ParseInt(chi.URLParam(r, "product_id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, ErrInvalidIDParam.Error())
+		return
+	}
+
+	favorite, err := ph.productService.IsFavoriteProduct(r.Context(), actor, productID)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, FavoriteProductStatusDTO{ProductID: productID, Favorite: favorite})
+}
+
+// POST /api/v1/favorites/:product_id
+func (ph ProductHandler) AddFavoriteProduct(w http.ResponseWriter, r *http.Request) {
+	actor, ok := actorFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+	productID, err := strconv.ParseInt(chi.URLParam(r, "product_id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, ErrInvalidIDParam.Error())
+		return
+	}
+
+	if err := ph.productService.AddFavoriteProduct(r.Context(), actor, productID); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/v1/favorites/:product_id
+func (ph ProductHandler) RemoveFavoriteProduct(w http.ResponseWriter, r *http.Request) {
+	actor, ok := actorFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, ErrTokenClaimsGetFailed.Error())
+		return
+	}
+	productID, err := strconv.ParseInt(chi.URLParam(r, "product_id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, ErrInvalidIDParam.Error())
+		return
+	}
+
+	if err := ph.productService.RemoveFavoriteProduct(r.Context(), actor, productID); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 type CreateProductRequest struct {
 	SellerID      int64           `json:"seller_id"`
 	Name          string          `json:"name"`

@@ -26,9 +26,18 @@ type ProductCategoryRepo interface {
 	ReplaceProductCategories(ctx context.Context, productID int64, categoryIDs []int64) error
 }
 
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_product_favorite_repo.go github.com/beastixq/marketplace/internal/service ProductFavoriteRepo
+type ProductFavoriteRepo interface {
+	GetFavoriteProducts(ctx context.Context, userID int64, opts m.PaginationOpts) ([]m.Product, error)
+	AddFavoriteProduct(ctx context.Context, userID int64, productID int64) error
+	RemoveFavoriteProduct(ctx context.Context, userID int64, productID int64) error
+	IsFavoriteProduct(ctx context.Context, userID int64, productID int64) (bool, error)
+}
+
 type ProductService struct {
 	productRepo         ProductRepo
 	productCategoryRepo ProductCategoryRepo
+	productFavoriteRepo ProductFavoriteRepo
 	reviewRepo          ReviewRepo
 	sellerRepo          SellerRepo
 	txManager           TxManager
@@ -36,9 +45,11 @@ type ProductService struct {
 
 func NewProductService(productRepo ProductRepo, reviewRepo ReviewRepo, sellerRepo SellerRepo, txManager TxManager) ProductService {
 	productCategoryRepo, _ := productRepo.(ProductCategoryRepo)
+	productFavoriteRepo, _ := productRepo.(ProductFavoriteRepo)
 	return ProductService{
 		productRepo:         productRepo,
 		productCategoryRepo: productCategoryRepo,
+		productFavoriteRepo: productFavoriteRepo,
 		reviewRepo:          reviewRepo,
 		sellerRepo:          sellerRepo,
 		txManager:           txManager,
@@ -107,6 +118,75 @@ func (ps ProductService) GetReviewsByProductID(ctx context.Context, pid int64, o
 		return nil, fmt.Errorf("%w: %v", ErrGetReviewsByProductID, err)
 	}
 	return rs, nil
+}
+
+func (ps ProductService) GetFavoriteProducts(ctx context.Context, actor Actor, opts m.PaginationOpts) ([]m.Product, error) {
+	if ps.productFavoriteRepo == nil {
+		return nil, ErrGetFavoriteProducts
+	}
+
+	products, err := ps.productFavoriteRepo.GetFavoriteProducts(ctx, actor.UserID, opts)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrGetFavoriteProducts, err)
+	}
+	return products, nil
+}
+
+func (ps ProductService) AddFavoriteProduct(ctx context.Context, actor Actor, productID int64) error {
+	if ps.productFavoriteRepo == nil {
+		return ErrAddFavoriteProduct
+	}
+	if err := ps.ensureProductCanBeFavorited(ctx, productID); err != nil {
+		return err
+	}
+
+	if err := ps.productFavoriteRepo.AddFavoriteProduct(ctx, actor.UserID, productID); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return ErrProductNotFound
+		}
+		return fmt.Errorf("%w: %v", ErrAddFavoriteProduct, err)
+	}
+	return nil
+}
+
+func (ps ProductService) RemoveFavoriteProduct(ctx context.Context, actor Actor, productID int64) error {
+	if ps.productFavoriteRepo == nil {
+		return ErrRemoveFavoriteProduct
+	}
+
+	if err := ps.productFavoriteRepo.RemoveFavoriteProduct(ctx, actor.UserID, productID); err != nil {
+		return fmt.Errorf("%w: %v", ErrRemoveFavoriteProduct, err)
+	}
+	return nil
+}
+
+func (ps ProductService) IsFavoriteProduct(ctx context.Context, actor Actor, productID int64) (bool, error) {
+	if ps.productFavoriteRepo == nil {
+		return false, ErrCheckFavoriteProduct
+	}
+	if err := ps.ensureProductCanBeFavorited(ctx, productID); err != nil {
+		return false, err
+	}
+
+	favorite, err := ps.productFavoriteRepo.IsFavoriteProduct(ctx, actor.UserID, productID)
+	if err != nil {
+		return false, fmt.Errorf("%w: %v", ErrCheckFavoriteProduct, err)
+	}
+	return favorite, nil
+}
+
+func (ps ProductService) ensureProductCanBeFavorited(ctx context.Context, productID int64) error {
+	product, err := ps.productRepo.GetProductByID(ctx, productID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return ErrProductNotFound
+		}
+		return fmt.Errorf("%w: %v", ErrGetProductByID, err)
+	}
+	if product.DeletedAt != nil {
+		return ErrProductDeleted
+	}
+	return nil
 }
 
 func (ps ProductService) CreateProduct(ctx context.Context, actor Actor, pc m.ProductCreate) (id int64, err error) {

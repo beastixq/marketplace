@@ -66,7 +66,7 @@ must not import repositories.
 | Area | Primary Service | Repository/Port | API/Web Surface |
 | --- | --- | --- | --- |
 | Auth and users | `AuthService`, `UserService` | `UserRepo`, optional `TokenBlocklist` | `AuthHandler`, `UserHandler`, web login/register/profile |
-| Catalog and products | `ProductService` | `ProductRepo`, `ProductCategoryRepo`, `ReviewRepo` | product/category handlers, catalog and product pages |
+| Catalog and products | `ProductService` | `ProductRepo`, `ProductCategoryRepo`, `ProductFavoriteRepo`, `ReviewRepo` | product/category/favorite handlers, catalog and product pages |
 | Cart and orders | `OrderService` | `OrderRepo`, `OrderItemRepo`, `ProductRepo`, `AddressRepo`, `SellerRepo` | cart/order handlers and web pages |
 | Payments | `PaymentService` | `OrderRepo`, `PaymentGateway` port | payment handler, mock bank web page, tech UI |
 | Reviews and ratings | `ReviewService` | `ReviewRepo`, product lookup, purchase checker | review handlers and product page forms |

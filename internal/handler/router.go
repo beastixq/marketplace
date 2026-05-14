@@ -63,6 +63,12 @@ func NewRouter(
 		r.Delete("/api/v1/users/me", userHandler.DeleteMyAccount)
 		r.Patch("/api/v1/users/me/password", userHandler.ChangePassword)
 
+		// Favorite products
+		r.Get("/api/v1/favorites", productHandler.GetFavoriteProducts)
+		r.Get("/api/v1/favorites/{product_id}", productHandler.IsFavoriteProduct)
+		r.Post("/api/v1/favorites/{product_id}", productHandler.AddFavoriteProduct)
+		r.Delete("/api/v1/favorites/{product_id}", productHandler.RemoveFavoriteProduct)
+
 		// Buyer only
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireRole(model.RoleBuyer))

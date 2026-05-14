@@ -125,3 +125,37 @@ func (c *ProductRepoCache) ReplaceProductCategories(ctx context.Context, product
 	}
 	return pcr.ReplaceProductCategories(ctx, productID, categoryIDs)
 }
+
+// ---------- ProductFavoriteRepo pass-through ----------
+
+func (c *ProductRepoCache) GetFavoriteProducts(ctx context.Context, userID int64, opts m.PaginationOpts) ([]m.Product, error) {
+	pfr, ok := c.inner.(svc.ProductFavoriteRepo)
+	if !ok {
+		return nil, svc.ErrGetFavoriteProducts
+	}
+	return pfr.GetFavoriteProducts(ctx, userID, opts)
+}
+
+func (c *ProductRepoCache) AddFavoriteProduct(ctx context.Context, userID int64, productID int64) error {
+	pfr, ok := c.inner.(svc.ProductFavoriteRepo)
+	if !ok {
+		return svc.ErrAddFavoriteProduct
+	}
+	return pfr.AddFavoriteProduct(ctx, userID, productID)
+}
+
+func (c *ProductRepoCache) RemoveFavoriteProduct(ctx context.Context, userID int64, productID int64) error {
+	pfr, ok := c.inner.(svc.ProductFavoriteRepo)
+	if !ok {
+		return svc.ErrRemoveFavoriteProduct
+	}
+	return pfr.RemoveFavoriteProduct(ctx, userID, productID)
+}
+
+func (c *ProductRepoCache) IsFavoriteProduct(ctx context.Context, userID int64, productID int64) (bool, error) {
+	pfr, ok := c.inner.(svc.ProductFavoriteRepo)
+	if !ok {
+		return false, svc.ErrCheckFavoriteProduct
+	}
+	return pfr.IsFavoriteProduct(ctx, userID, productID)
+}

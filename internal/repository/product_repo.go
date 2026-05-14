@@ -194,6 +194,94 @@ func (pr ProductRepoImpl) GetProductCategories(ctx context.Context, productID in
 	return categories, nil
 }
 
+func (pr ProductRepoImpl) GetFavoriteProducts(ctx context.Context, userID int64, opts m.PaginationOpts) ([]m.Product, error) {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	qb := psql.
+		Select("p.id", "p.seller_id", "p.name", "p.description", "p.price", "p.stock_quantity", "p.reserved_quantity", "p.rating", "p.created_at", "p.deleted_at").
+		From("favorite_products fp").
+		Join("products p ON p.id = fp.product_id").
+		Where(sq.Eq{"fp.user_id": userID}).
+		Where(sq.Eq{"p.deleted_at": nil}).
+		OrderBy("fp.created_at DESC", "p.id DESC")
+	if opts.Page > 0 && opts.Limit > 0 {
+		qb = qb.Offset(uint64(opts.Limit * (opts.Page - 1))).Limit(uint64(opts.Limit))
+	}
+
+	sql, args, err := qb.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	rows, err := getConn(ctx, pr.pool).Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrQuery, err)
+	}
+	defer rows.Close()
+
+	products := make([]m.Product, 0)
+	for rows.Next() {
+		var row productRow
+		if err = rows.Scan(&row.ID, &row.SellerID, &row.Name, &row.Description, &row.Price, &row.StockQuantity, &row.ReservedQuantity, &row.Rating, &row.CreatedAt, &row.DeletedAt); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrToScan, err)
+		}
+		products = append(products, row.toModel())
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrRowsIteration, err)
+	}
+	return products, nil
+}
+
+func (pr ProductRepoImpl) AddFavoriteProduct(ctx context.Context, userID int64, productID int64) error {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.
+		Insert("favorite_products").
+		Columns("user_id", "product_id").
+		Values(userID, productID).
+		Suffix("ON CONFLICT (user_id, product_id) DO NOTHING").
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	if _, err = getConn(ctx, pr.pool).Exec(ctx, sql, args...); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.ForeignKeyViolation {
+			return service.ErrNotFound
+		}
+		return fmt.Errorf("%w: %v", ErrExec, err)
+	}
+	return nil
+}
+
+func (pr ProductRepoImpl) RemoveFavoriteProduct(ctx context.Context, userID int64, productID int64) error {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.
+		Delete("favorite_products").
+		Where(sq.Eq{"user_id": userID, "product_id": productID}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	if _, err = getConn(ctx, pr.pool).Exec(ctx, sql, args...); err != nil {
+		return fmt.Errorf("%w: %v", ErrExec, err)
+	}
+	return nil
+}
+
+func (pr ProductRepoImpl) IsFavoriteProduct(ctx context.Context, userID int64, productID int64) (bool, error) {
+	const query = `
+SELECT EXISTS (
+    SELECT 1
+    FROM favorite_products
+    WHERE user_id = $1
+      AND product_id = $2
+)`
+	var favorite bool
+	if err := getConn(ctx, pr.pool).QueryRow(ctx, query, userID, productID).Scan(&favorite); err != nil {
+		return false, fmt.Errorf("%w: %v", ErrToScan, err)
+	}
+	return favorite, nil
+}
+
 func (pr ProductRepoImpl) CreateProduct(ctx context.Context, pc m.ProductCreate) (id int64, err error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Insert("products").Columns("seller_id", "name", "description", "price", "stock_quantity").Values(pc.SellerID, pc.Name, pc.Description, pc.Price, pc.StockQuantity).Suffix("RETURNING id").ToSql()

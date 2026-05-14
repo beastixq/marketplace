@@ -15,6 +15,7 @@ import (
 
 var _ service.ProductRepo = repo.ProductRepoImpl{}
 var _ service.ProductCategoryRepo = repo.ProductRepoImpl{}
+var _ service.ProductFavoriteRepo = repo.ProductRepoImpl{}
 
 func createTestSeller(t *testing.T) int64 {
 	t.Helper()
@@ -46,6 +47,27 @@ func createTestSeller(t *testing.T) int64 {
 		_, _ = testPool.Exec(context.Background(), "DELETE FROM users WHERE id = $1", userID)
 	})
 	return sellerID
+}
+
+func createTestBuyer(t *testing.T) int64 {
+	t.Helper()
+	ctx := context.Background()
+	userRepo := repo.NewUserRepo(testPool)
+
+	userID, err := userRepo.CreateUser(ctx, m.UserCreate{
+		Email:    fmt.Sprintf("buyer_%d@example.com", time.Now().UnixNano()),
+		Password: "hashed_password",
+		FullName: "Buyer User",
+		Role:     m.RoleBuyer,
+	})
+	if err != nil {
+		t.Fatalf("createTestBuyer: CreateUser: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM users WHERE id = $1", userID)
+	})
+	return userID
 }
 
 func TestProductRepo_CreateAndGet(t *testing.T) {
@@ -287,6 +309,116 @@ func TestProductRepo_Delete(t *testing.T) {
 		if p.ID == id {
 			t.Errorf("удалённый товар id=%d присутствует в каталоге", id)
 		}
+	}
+}
+
+func TestProductRepo_Favorites(t *testing.T) {
+	sellerID := createTestSeller(t)
+	buyerID := createTestBuyer(t)
+	r := repo.NewProductRepo(testPool)
+	ctx := context.Background()
+
+	id1, err := r.CreateProduct(ctx, m.ProductCreate{
+		SellerID:      sellerID,
+		Name:          "Favorite A",
+		Price:         decimal.NewFromFloat(10),
+		StockQuantity: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateProduct A: %v", err)
+	}
+	id2, err := r.CreateProduct(ctx, m.ProductCreate{
+		SellerID:      sellerID,
+		Name:          "Favorite B",
+		Price:         decimal.NewFromFloat(20),
+		StockQuantity: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateProduct B: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM favorite_products WHERE user_id = $1", buyerID)
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM products WHERE id = $1", id1)
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM products WHERE id = $1", id2)
+	})
+
+	if err := r.AddFavoriteProduct(ctx, buyerID, id1); err != nil {
+		t.Fatalf("AddFavoriteProduct first: %v", err)
+	}
+	if err := r.AddFavoriteProduct(ctx, buyerID, id1); err != nil {
+		t.Fatalf("AddFavoriteProduct duplicate should be idempotent: %v", err)
+	}
+	favorite, err := r.IsFavoriteProduct(ctx, buyerID, id1)
+	if err != nil {
+		t.Fatalf("IsFavoriteProduct after add: %v", err)
+	}
+	if !favorite {
+		t.Fatal("product should be favorite after add")
+	}
+	products, err := r.GetFavoriteProducts(ctx, buyerID, m.PaginationOpts{})
+	if err != nil {
+		t.Fatalf("GetFavoriteProducts after duplicate add: %v", err)
+	}
+	if len(products) != 1 || products[0].ID != id1 {
+		t.Fatalf("expected one favorite product %d, got %v", id1, products)
+	}
+
+	if err := r.AddFavoriteProduct(ctx, buyerID, id2); err != nil {
+		t.Fatalf("AddFavoriteProduct second: %v", err)
+	}
+	page, err := r.GetFavoriteProducts(ctx, buyerID, m.PaginationOpts{Page: 1, Limit: 1})
+	if err != nil {
+		t.Fatalf("GetFavoriteProducts paginated: %v", err)
+	}
+	if len(page) != 1 {
+		t.Fatalf("expected one product on page, got %d", len(page))
+	}
+
+	if err := r.RemoveFavoriteProduct(ctx, buyerID, id1); err != nil {
+		t.Fatalf("RemoveFavoriteProduct: %v", err)
+	}
+	favorite, err = r.IsFavoriteProduct(ctx, buyerID, id1)
+	if err != nil {
+		t.Fatalf("IsFavoriteProduct after remove: %v", err)
+	}
+	if favorite {
+		t.Fatal("product should not be favorite after remove")
+	}
+}
+
+func TestProductRepo_FavoritesHideDeletedProducts(t *testing.T) {
+	sellerID := createTestSeller(t)
+	buyerID := createTestBuyer(t)
+	r := repo.NewProductRepo(testPool)
+	ctx := context.Background()
+
+	id, err := r.CreateProduct(ctx, m.ProductCreate{
+		SellerID:      sellerID,
+		Name:          "Deleted Favorite",
+		Price:         decimal.NewFromFloat(10),
+		StockQuantity: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateProduct: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM favorite_products WHERE user_id = $1", buyerID)
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM products WHERE id = $1", id)
+	})
+
+	if err := r.AddFavoriteProduct(ctx, buyerID, id); err != nil {
+		t.Fatalf("AddFavoriteProduct: %v", err)
+	}
+	if err := r.DeleteProductByID(ctx, id); err != nil {
+		t.Fatalf("DeleteProductByID: %v", err)
+	}
+
+	products, err := r.GetFavoriteProducts(ctx, buyerID, m.PaginationOpts{})
+	if err != nil {
+		t.Fatalf("GetFavoriteProducts: %v", err)
+	}
+	if len(products) != 0 {
+		t.Fatalf("deleted favorites should be hidden, got %v", products)
 	}
 }
 

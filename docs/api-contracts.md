@@ -66,6 +66,10 @@ Service error mapping lives in `internal/handler/service_error.go`.
 | `PATCH` | `/api/v1/users/me` | Update current user profile. |
 | `DELETE` | `/api/v1/users/me` | Delete current account. |
 | `PATCH` | `/api/v1/users/me/password` | Change password. |
+| `GET` | `/api/v1/favorites` | List current user's favorite products. |
+| `GET` | `/api/v1/favorites/{product_id}` | Check whether product is in current user's favorites. |
+| `POST` | `/api/v1/favorites/{product_id}` | Add product to current user's favorites. |
+| `DELETE` | `/api/v1/favorites/{product_id}` | Remove product from current user's favorites. |
 
 ## Buyer Routes
 
