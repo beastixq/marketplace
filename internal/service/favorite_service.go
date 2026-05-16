@@ -8,11 +8,33 @@ import (
 	m "github.com/beastixq/marketplace/internal/model"
 )
 
+// FavoriteRepo is the persistence contract FavoriteService depends on.
+// Implementations live in internal/repository and must honor the semantics
+// documented per method; product-visibility policy is not part of this
+// contract and is enforced by the service before calling here.
+//
 //go:generate mockgen -package mock_service -destination ../mocks/service/mock_favorite_repo.go github.com/beastixq/marketplace/internal/service FavoriteRepo
 type FavoriteRepo interface {
+	// AddFavorite inserts the (userID, productID) pair if it is absent.
+	//   - created == true  → a new row was inserted.
+	//   - created == false → the row already existed; this is not an error.
+	//   - ErrNotFound      → the referenced user or product does not exist.
+	// Implementations must not infer or enforce product-visibility policy
+	// (deleted_at, archived, etc.); that belongs to the caller.
 	AddFavorite(ctx context.Context, userID int64, productID int64) (created bool, err error)
+
+	// DeleteFavorite removes the (userID, productID) pair if present.
+	// Removing an absent row is not an error; the method is idempotent.
 	DeleteFavorite(ctx context.Context, userID int64, productID int64) error
+
+	// ListFavoriteProductsByUserID returns products favorited by userID,
+	// newest favorite first, filtered to currently active visible products.
+	// opts controls pagination; an unset/zero opts means no pagination.
 	ListFavoriteProductsByUserID(ctx context.Context, userID int64, opts m.PaginationOpts) ([]m.Product, error)
+
+	// IsFavorite reports whether a favorite row exists for the pair.
+	// It does not consult product visibility; the caller decides whether
+	// a stale row against a soft-deleted product should be surfaced.
 	IsFavorite(ctx context.Context, userID int64, productID int64) (bool, error)
 }
 

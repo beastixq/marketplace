@@ -25,14 +25,10 @@ func NewFavoriteRepo(pool *pgxpool.Pool) FavoriteRepoImpl {
 	return FavoriteRepoImpl{pool: pool}
 }
 
-// AddFavorite inserts the (user, product) pair if it is absent.
-// Contract:
-//   - created == true  → a new row was inserted.
-//   - created == false → the row already existed (ON CONFLICT).
-//   - service.ErrNotFound → the referenced user or product does not exist.
-//
-// Callers must not infer anything else from created == false. In particular,
-// product-visibility policy lives in the service layer.
+// AddFavorite implements service.FavoriteRepo.AddFavorite using
+// INSERT ... ON CONFLICT (user_id, product_id) DO NOTHING. RowsAffected
+// distinguishes a fresh insert from a conflict no-op; an FK violation maps
+// to service.ErrNotFound.
 func (fr FavoriteRepoImpl) AddFavorite(ctx context.Context, userID int64, productID int64) (bool, error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.
