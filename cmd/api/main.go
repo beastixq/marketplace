@@ -137,7 +137,7 @@ func main() {
 		adminHandler,
 	)
 
-	webHandler := web.NewWebHandler(productService, categoryService, authService, userService, orderService, addressService, sellerService, reviewService, backofficeService, paymentService)
+	webHandler := web.NewWebHandler(productService, categoryService, authService, userService, orderService, addressService, sellerService, reviewService, backofficeService, paymentService, favoriteService)
 	webRouter := web.NewWebRouter(webHandler)
 	webLogger := logger.With("component", "web")
 	webHandlerWithLogs := middleware.ActorHolder()(
