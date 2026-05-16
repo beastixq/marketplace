@@ -10,6 +10,7 @@ import (
 	"github.com/beastixq/marketplace/internal/service"
 
 	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -33,11 +34,17 @@ func NewFavoriteRepo(pool *pgxpool.Pool) FavoriteRepoImpl {
 // Callers must not infer anything else from created == false. In particular,
 // product-visibility policy lives in the service layer.
 func (fr FavoriteRepoImpl) AddFavorite(ctx context.Context, userID int64, productID int64) (bool, error) {
-	const sql = `
-INSERT INTO product_favorites (user_id, product_id)
-VALUES ($1, $2)
-ON CONFLICT (user_id, product_id) DO NOTHING`
-	tag, err := getConn(ctx, fr.pool).Exec(ctx, sql, userID, productID)
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.
+		Insert("product_favorites").
+		Columns("user_id", "product_id").
+		Values(userID, productID).
+		Suffix("ON CONFLICT (user_id, product_id) DO NOTHING").
+		ToSql()
+	if err != nil {
+		return false, fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	tag, err := getConn(ctx, fr.pool).Exec(ctx, sql, args...)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.ForeignKeyViolation {
@@ -101,15 +108,22 @@ func (fr FavoriteRepoImpl) ListFavoriteProductsByUserID(ctx context.Context, use
 }
 
 func (fr FavoriteRepoImpl) IsFavorite(ctx context.Context, userID int64, productID int64) (bool, error) {
-	const sql = `
-SELECT EXISTS (
-    SELECT 1
-    FROM product_favorites
-    WHERE user_id = $1 AND product_id = $2
-)`
-	var exists bool
-	if err := getConn(ctx, fr.pool).QueryRow(ctx, sql, userID, productID).Scan(&exists); err != nil {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.
+		Select("1").
+		From("product_favorites").
+		Where(sq.Eq{"user_id": userID, "product_id": productID}).
+		Limit(1).
+		ToSql()
+	if err != nil {
+		return false, fmt.Errorf("%w: %v", ErrToSql, err)
+	}
+	var one int
+	if err := getConn(ctx, fr.pool).QueryRow(ctx, sql, args...).Scan(&one); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
 		return false, fmt.Errorf("%w: %v", ErrToScan, err)
 	}
-	return exists, nil
+	return true, nil
 }
