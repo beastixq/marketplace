@@ -37,6 +37,8 @@ Ask first before running:
 - Broad diffs or history inspection such as `git diff`, `git show`, `git log -p`, or large patch views.
 - Commands expected to produce large output or scan most of the repository when a narrower check is enough.
 
+Exception: targeted Gomock generation for a new or changed service-owned interface is allowed when the current task includes tests for that interface. Run only the specific `mockgen` command for the needed interface, never broad `go generate ./...`, and do not read or manually edit generated mock files unless generation or compilation fails and the generated file itself is the suspected cause.
+
 Prefer lightweight, targeted checks by default: `rg`, short `sed`/`nl` ranges, focused file reads, and narrow status commands such as `git status --short`.
 
 When asking permission, state the exact command or category, why it is useful, and whether it may produce large output or take noticeable time. If permission is not granted, continue with targeted checks and clearly mark any remaining verification gap.
@@ -181,9 +183,9 @@ var _ service.ProductRepo = (*ProductRepository)(nil)
 - Public service methods should take `context.Context` as the first argument.
 - Service tests should be unit tests with test doubles, generally in package `service_test`.
 - Use package `service` only when intentionally testing unexported helpers.
-- Gomock is preferred for generated mocks; hand-written fakes are acceptable when simpler.
+- Gomock is preferred for service-owned interfaces. Hand-written fakes are acceptable only when the fake is substantially clearer than a generated mock or when mock generation is unavailable.
 - `go:generate mockgen` directives should live near service-defined interfaces or in a dedicated generation file.
-- Generated mocks go to `internal/mocks/service/`.
+- Generated mocks go to `internal/mocks/service/`. Do not inspect or edit generated mocks during normal work; regenerate them from the owning interface instead.
 
 ## Repository Layer
 
