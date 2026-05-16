@@ -10,7 +10,6 @@ import (
 	"github.com/beastixq/marketplace/internal/service"
 
 	"github.com/jackc/pgerrcode"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -25,27 +24,28 @@ func NewFavoriteRepo(pool *pgxpool.Pool) FavoriteRepoImpl {
 	return FavoriteRepoImpl{pool: pool}
 }
 
+// AddFavorite inserts the (user, product) pair if it is absent.
+// Contract:
+//   - created == true  → a new row was inserted.
+//   - created == false → the row already existed (ON CONFLICT).
+//   - service.ErrNotFound → the referenced user or product does not exist.
+//
+// Callers must not infer anything else from created == false. In particular,
+// product-visibility policy lives in the service layer.
 func (fr FavoriteRepoImpl) AddFavorite(ctx context.Context, userID int64, productID int64) (bool, error) {
 	const sql = `
 INSERT INTO product_favorites (user_id, product_id)
-SELECT $1, p.id
-FROM products p
-WHERE p.id = $2 AND p.deleted_at IS NULL
-ON CONFLICT (user_id, product_id) DO NOTHING
-RETURNING true`
-	var created bool
-	err := getConn(ctx, fr.pool).QueryRow(ctx, sql, userID, productID).Scan(&created)
+VALUES ($1, $2)
+ON CONFLICT (user_id, product_id) DO NOTHING`
+	tag, err := getConn(ctx, fr.pool).Exec(ctx, sql, userID, productID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return false, nil
-		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.ForeignKeyViolation {
 			return false, service.ErrNotFound
 		}
-		return false, fmt.Errorf("%w: %v", ErrToScan, err)
+		return false, fmt.Errorf("%w: %v", ErrExec, err)
 	}
-	return created, nil
+	return tag.RowsAffected() == 1, nil
 }
 
 func (fr FavoriteRepoImpl) DeleteFavorite(ctx context.Context, userID int64, productID int64) error {

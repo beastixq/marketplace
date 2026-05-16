@@ -80,7 +80,6 @@ func TestFavoriteHandler_AddFavorite(t *testing.T) {
 			favoriteRepo.EXPECT().AddFavorite(gomock.Any(), int64(7), int64(42)).Return(true, nil),
 			productRepo.EXPECT().GetProductByID(gomock.Any(), int64(42)).Return(activeProduct, nil),
 			favoriteRepo.EXPECT().AddFavorite(gomock.Any(), int64(7), int64(42)).Return(false, nil),
-			productRepo.EXPECT().GetProductByID(gomock.Any(), int64(42)).Return(activeProduct, nil),
 		)
 
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/favorites/42", nil)

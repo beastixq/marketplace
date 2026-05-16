@@ -54,7 +54,7 @@ func TestFavoriteService_AddFavorite(t *testing.T) {
 			RepoCreated: false,
 			Expected:    false,
 			RepoCalls:   1,
-			ProductCalls: 2,
+			ProductCalls: 1,
 		},
 	}
 

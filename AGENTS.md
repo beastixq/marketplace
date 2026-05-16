@@ -180,6 +180,8 @@ var _ service.ProductRepo = (*ProductRepository)(nil)
 
 - Business rules, ownership checks, authorization decisions, order lifecycle transitions, and orchestration belong in service code.
 - Repositories may enforce data-integrity constraints and transactions, but should not decide business policy unless it is purely persistence-level integrity.
+- Service logic must depend only on the repository interface's documented contract, not on how the repository achieves it. If a comment in service code starts to explain repository SQL, indexes, conflict handling, locking, or transaction internals, that is a layer-boundary leak: tighten the repository contract instead, or move the policy into the service so the contract stays minimal.
+- When a service operation needs an atomic "check business invariant, then mutate" sequence, choose the weakest mechanism that protects the invariant: (a) pre-check + plain mutation when stale rows are invisible to every read path and acceptable as eventual consistency, (b) `service.TxManager.WithTransaction` (and `SELECT ... FOR UPDATE` in repository SQL when needed) only when a leaked row would cause user-visible incorrect behavior or money/inventory damage. State the choice and its reason in code review, not in the service implementation comment.
 - Public service methods should take `context.Context` as the first argument.
 - Service tests should be unit tests with test doubles, generally in package `service_test`.
 - Use package `service` only when intentionally testing unexported helpers.

@@ -35,6 +35,7 @@ The distinction is mandatory. The service layer uses repository behavior through
 ## Dependency Rules
 
 - `internal/service` must not import `internal/repository`, `pgx`, `pgconn`, SQLSTATE values, or constraint names.
+- `internal/service` must not *reason* about repository internals either: no service comment, error wrapping, or control flow may rely on knowing the repository's SQL shape, conflict handling, locking, or transaction strategy. The repository interface contract is the only thing the service is allowed to depend on; if reasoning starts to leak, either narrow the contract or move the policy into the service.
 - `internal/handler` and `internal/web` must not import `internal/repository`.
 - Repository interfaces live where consumed, normally `internal/service`.
 - Repository implementations live in `internal/repository`.

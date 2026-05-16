@@ -2,6 +2,7 @@ package repository_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -78,12 +79,9 @@ func TestFavoriteRepo_AddFavorite(t *testing.T) {
 	}
 
 	missingID := productID + 999999
-	created, err = favoriteRepo.AddFavorite(ctx, userID, missingID)
-	if err != nil {
-		t.Fatalf("AddFavorite missing product: %v", err)
-	}
-	if created {
-		t.Fatal("AddFavorite missing product created: got true, want false")
+	_, err = favoriteRepo.AddFavorite(ctx, userID, missingID)
+	if !errors.Is(err, service.ErrNotFound) {
+		t.Fatalf("AddFavorite missing product: got %v, want %v", err, service.ErrNotFound)
 	}
 	isFavorite, err := favoriteRepo.IsFavorite(ctx, userID, missingID)
 	if err != nil {
@@ -93,6 +91,10 @@ func TestFavoriteRepo_AddFavorite(t *testing.T) {
 		t.Fatal("missing product favorite row exists")
 	}
 
+	// Repo does not enforce product-visibility policy. Soft-deleting a product
+	// does not remove the FK target, so AddFavorite succeeds. The service
+	// layer is responsible for rejecting favorites of soft-deleted products
+	// before calling the repo; list/state reads filter by deleted_at.
 	deletedProductID := createFavoriteTestProduct(t, productRepo, "Favorite deleted product")
 	if err = productRepo.DeleteProductByID(ctx, deletedProductID); err != nil {
 		t.Fatalf("DeleteProductByID: %v", err)
@@ -101,15 +103,8 @@ func TestFavoriteRepo_AddFavorite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddFavorite deleted product: %v", err)
 	}
-	if created {
-		t.Fatal("AddFavorite deleted product created: got true, want false")
-	}
-	isFavorite, err = favoriteRepo.IsFavorite(ctx, userID, deletedProductID)
-	if err != nil {
-		t.Fatalf("IsFavorite deleted product: %v", err)
-	}
-	if isFavorite {
-		t.Fatal("deleted product favorite row exists")
+	if !created {
+		t.Fatal("AddFavorite deleted product created: got false, want true")
 	}
 }
 

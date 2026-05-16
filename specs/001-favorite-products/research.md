@@ -37,9 +37,10 @@ should make retries safe.
 
 For the current schema, active visible products are products whose
 `deleted_at` is null. Favorite creation and favorite-state checks reject
-soft-deleted products. Favorite listing joins active products only, so old
-favorite rows for soft-deleted products are not returned. Favorite removal may
-clear a relationship even if the product has since been soft-deleted.
+soft-deleted products at the service layer. Favorite listing joins active
+products only, so old favorite rows for soft-deleted products are not
+returned. Favorite removal may clear a relationship even if the product
+has since been soft-deleted.
 
 **Rationale**: The current product model has `deleted_at` but no separate
 visibility, archived, or published state. Catalog reads already use
@@ -52,6 +53,36 @@ visibility, archived, or published state. Catalog reads already use
 - Hard-delete favorite rows when a product is soft-deleted: rejected because the
   existing product delete path is a soft delete and this feature does not need
   a cross-feature cleanup policy.
+
+## Decision: Pre-check visibility in service, plain INSERT in repository, accept a tiny race window
+
+`FavoriteService.AddFavorite` calls `activeProduct` once, then the repository
+does a plain `INSERT ... ON CONFLICT DO NOTHING`. The repository contract
+exposes only set-membership semantics: `created == true` means a row was
+inserted, `created == false` means the pair already existed, and
+`service.ErrNotFound` means the user or product FK target is missing.
+Product-visibility policy lives entirely in the service.
+
+In the microseconds between the visibility pre-check and the insert, a
+concurrent soft-delete could land. The favorite row is then created against
+a now-soft-deleted product. That stale row is invisible to every user-facing
+read path (`ListFavoriteProductsByUserID` joins `WHERE deleted_at IS NULL`
+and `IsProductFavorite` returns `ErrProductDeleted` before consulting the
+favorite row), and the FK `ON DELETE CASCADE` cleans it up when the product
+is hard-deleted.
+
+**Rationale**: Reserve `TxManager.WithTransaction` plus `SELECT ... FOR UPDATE`
+for invariants where a stale row would corrupt user-visible state or money/
+inventory accounting. Favorites do not have that failure mode; the stronger
+mechanism would write-lock a hot `products` row for every favorite add for
+no observable benefit. The chosen approach also keeps the repository contract
+minimal: the service never has to reason about how the repo handles conflicts
+or visibility, so the layer boundary stays clean.
+
+**Alternatives considered**:
+
+- Repository-side atomic `INSERT ... SELECT FROM products WHERE deleted_at IS NULL ... ON CONFLICT DO NOTHING RETURNING true`: rejected because it forces the service to know which `created == false` cases mean "already favorited" and which mean "product soft-deleted concurrently". That is a layer-boundary leak — service comments would have to describe repository SQL.
+- `TxManager.WithTransaction` + `SELECT ... FOR UPDATE` on `products`: rejected for favorites specifically. Acceptable for invariants that protect inventory, money, or order state transitions; out of proportion for set-membership.
 
 ## Decision: Add authenticated JSON routes under `/api/v1/favorites`
 

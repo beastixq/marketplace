@@ -42,15 +42,6 @@ func (fs FavoriteService) AddFavorite(ctx context.Context, actor Actor, productI
 		}
 		return false, fmt.Errorf("%w: %v", ErrCreateFavorite, err)
 	}
-	// Repo's atomic INSERT ... SELECT ... WHERE deleted_at IS NULL returned
-	// nothing: either the row already existed (re-add), or the product was
-	// soft-deleted between our visibility check and the insert. Re-check to
-	// disambiguate and surface ErrProductDeleted in the race case.
-	if !created {
-		if _, err := fs.activeProduct(ctx, productID); err != nil {
-			return false, err
-		}
-	}
 	return created, nil
 }
 
