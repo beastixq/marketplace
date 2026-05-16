@@ -311,3 +311,8 @@ Do not inspect these unless explicitly requested:
 - `caveman/`
 - report artifacts
 - generated PDFs/images
+
+<!-- SPECKIT START -->
+For the active Spec Kit feature plan, read
+[specs/001-favorite-products/plan.md](specs/001-favorite-products/plan.md).
+<!-- SPECKIT END -->
