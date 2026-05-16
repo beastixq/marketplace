@@ -74,7 +74,7 @@ cmd/
 └── api/                         # wire repository, service, and handler
 
 internal/
-├── model/                       # ProductFavorite domain model / DTO input types
+├── model/                       # FavoriteState domain model
 ├── service/                     # FavoriteService and service-owned FavoriteRepo interface
 ├── repository/                  # PostgreSQL favorite repository implementation
 └── handler/                     # JSON favorite handler, DTOs, route registration, error mapping

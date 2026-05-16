@@ -70,6 +70,7 @@ must not import repositories.
 | Cart and orders | `OrderService` | `OrderRepo`, `OrderItemRepo`, `ProductRepo`, `AddressRepo`, `SellerRepo` | cart/order handlers and web pages |
 | Payments | `PaymentService` | `OrderRepo`, `PaymentGateway` port | payment handler, mock bank web page, tech UI |
 | Reviews and ratings | `ReviewService` | `ReviewRepo`, product lookup, purchase checker | review handlers and product page forms |
+| Favorite products | `FavoriteService` | `FavoriteRepo`, narrow `FavoriteProductGetter` (product lookup) | favorite handler at `/api/v1/favorites` |
 | Seller workflow | `SellerService`, `OrderService`, `ProductService` | seller/product/order repos | seller API routes and seller web dashboard |
 | Admin/backoffice | `UserService`, `SellerService`, `BackofficeService` | user/seller/backoffice repos | admin API routes and admin web pages |
 | Analyst reports | `BackofficeService` | `BackofficeRepo` | analyst web dashboard |

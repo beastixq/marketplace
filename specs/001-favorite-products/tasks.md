@@ -28,7 +28,7 @@
 
 **Purpose**: Create shared backend files for the favorite feature without implementing story behavior yet.
 
-- [X] T001 [P] Create `ProductFavorite` and `FavoriteState` domain types in `internal/model/product_favorite.go`
+- [X] T001 [P] Create `FavoriteState` domain type in `internal/model/product_favorite.go`
 - [X] T002 [P] Create `FavoriteService` scaffold and service-owned `FavoriteRepo` interface scaffold in `internal/service/favorite_service.go`
 - [X] T003 [P] Create `FavoriteRepoImpl` scaffold with constructor and compile-time interface assertion in `internal/repository/favorite_repo.go`
 - [X] T004 [P] Create `FavoriteHandler` scaffold with constructor in `internal/handler/favorite.go`
@@ -124,7 +124,7 @@
 
 - [X] T032 [US3] Implement `DeleteFavorite`, `ListFavoriteProductsByUserID`, and `IsFavorite` SQL behavior in `internal/repository/favorite_repo.go`
 - [X] T033 [US3] Implement `RemoveFavorite`, `GetFavoriteProducts`, and `IsProductFavorite` service methods in `internal/service/favorite_service.go`
-- [X] T034 [US3] Add `FavoriteStateDTO` and favorite list response mapping in `internal/handler/dto.go`
+- [X] T034 [US3] Add `FavoriteStateDTO` in `internal/handler/dto.go`; favorite list reuses the existing `productDTO` mapper
 - [X] T035 [US3] Implement remove, list, and favorite-state handler methods in `internal/handler/favorite.go`
 - [X] T036 [US3] Register authenticated `DELETE /api/v1/favorites/{productID}`, `GET /api/v1/favorites/{productID}`, and `GET /api/v1/favorites` routes in `internal/handler/router.go`
 - [X] T037 [US3] Document favorite endpoints, auth requirements, status codes, and error responses in `docs/api-contracts.md`
@@ -218,7 +218,7 @@ Task: "Document favorite endpoints, auth requirements, status codes, and error r
 
 - Focused package tests are planned: `go test ./internal/service`, `go test ./internal/handler`, and `DATABASE_URL="$DATABASE_URL" go test ./internal/repository`.
 - Full `go test ./...`, broad diffs/history inspection, formatters, linters, code generation, or dependency downloads require explicit user permission.
-- Do not edit generated mocks in `internal/mocks/`; use hand-written fakes unless mock generation is explicitly approved.
+- Do not edit or read generated mocks in `internal/mocks/`; regenerate them from the owning service interface via the `go:generate mockgen` directive. The AGENTS.md cost-controlled-verification rule allows targeted mockgen for a new or changed service-owned interface during the implementing task.
 
 ---
 

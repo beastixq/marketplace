@@ -53,18 +53,24 @@ visibility, archived, or published state. Catalog reads already use
   existing product delete path is a soft delete and this feature does not need
   a cross-feature cleanup policy.
 
-## Decision: Add authenticated JSON routes without role-specific middleware
+## Decision: Add authenticated JSON routes under `/api/v1/favorites`
 
 Expose favorite behavior inside the authenticated route group, not buyer-only,
-seller-only, or admin-only groups. Use product-scoped routes for add/remove/check
-and a current-user route for listing.
+seller-only, or admin-only groups. Mount the feature under a dedicated
+`/api/v1/favorites` namespace: `GET /favorites` for the current actor's list,
+and `GET`/`PUT`/`DELETE /favorites/{productID}` for state probe, idempotent add,
+and idempotent remove on a single product.
 
 **Rationale**: The clarified requirement says all authenticated users may
-favorite products. Product-scoped add/remove/check routes match the product-level
-feature, while `users/me` matches existing current-actor API style.
+favorite products. A dedicated `/favorites` resource keeps the surface uniform
+and avoids nesting a literal segment under `/products/{id}` (which would rely on
+chi route-precedence to disambiguate `favorites` from a product id).
 
 **Alternatives considered**:
 
+- Mount under `/products/{id}/favorite` + `/users/me/favorites`: rejected
+  because it splits the feature across two prefixes and relies on the router's
+  static-over-wildcard precedence for safety.
 - Buyer-only routes: rejected by clarification.
 - Admin or seller special cases: rejected because the spec says all
   authenticated users use the same favorite behavior.
@@ -86,20 +92,23 @@ introduce favorite counts.
 - Invalidate product cache on favorite mutation: rejected because product DTO
   content is unchanged and counts are out of scope.
 
-## Decision: Use focused tests and hand-written fakes for service tests
+## Decision: Use focused tests with gomock for the service-owned interface
 
-Plan for service unit tests using small hand-written fakes, handler tests around
-transport behavior, and repository integration tests for SQL constraints and
-joins.
+Service unit tests use gomock-generated `MockFavoriteRepo` and `MockProductRepo`
+(the latter already exists). Handler tests cover transport behavior with the
+same mocks behind a real `FavoriteService`. Repository integration tests cover
+SQL constraints and the `products`-join behavior against PostgreSQL.
 
-**Rationale**: This avoids code generation during implementation planning and
-keeps verification cost controlled. Repository behavior must still be tested
-against PostgreSQL because uniqueness, foreign keys, and active-product joins
-are database behavior.
+**Rationale**: `FavoriteRepo` is service-owned; gomock matches the rest of the
+codebase. The AGENTS.md gomock-exception clause explicitly allows targeted
+`mockgen` for new service-owned interfaces during the implementing task, so the
+generated mock stays in `internal/mocks/service/` (gitignored, regenerated from
+the `go:generate` directive next to the interface).
 
 **Alternatives considered**:
 
-- Generate gomock mocks immediately: deferred because code generation requires
-  explicit permission under the project verification policy.
+- Hand-written fakes: rejected because the rest of the project standardizes on
+  gomock for service-owned interfaces, and a fake would only have to be rewritten
+  once the rest of the codebase touches `FavoriteRepo`.
 - Full `go test ./...`: deferred because full suites require explicit
   permission; focused packages are enough for this feature's risk.
