@@ -194,6 +194,9 @@ var _ service.ProductRepo = (*ProductRepository)(nil)
 - Repository code should contain SQL, transactions, DB error translation, and DB-to-domain mapping.
 - Repository methods should use domain/value types from `internal/model` or small parameter structs.
 - Do not return DB rows or HTTP DTOs from repositories.
+- Build queries with squirrel (`sq.StatementBuilder.PlaceholderFormat(sq.Dollar)`). Use `Suffix(...)` for `RETURNING ...`, `ON CONFLICT ...`, and `FOR UPDATE` rather than dropping back to a raw `const sql = "..."` block. Raw SQL strings are acceptable only when a query cannot be expressed through the builder; the existing codebase has only a few such cases (joined `SELECT 1` lookups in `order_item_repo.go` against multi-table predicates), so a new raw SQL block in a new repository is a code-style smell.
+- Existence checks use `SELECT 1 ... LIMIT 1` + `pgx.ErrNoRows`, not `SELECT EXISTS (...)`.
+- When porting code from another branch, scaffold, or AI-generated output, normalize it to these conventions *before* committing. Idiomatic style in the source repository is not a license to deviate here.
 - SQL, transactions, constraints, triggers, and PostgreSQL roles should be tested with integration tests against a real database.
 - Pure mapper/helper logic may be unit-tested separately.
 - Repository integration tests should generally use package `repository_test`.
