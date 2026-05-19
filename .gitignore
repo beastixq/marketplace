@@ -1,7 +1,6 @@
 PPO_labs
 scripts/sql
 plantuml.jar
-DBCourseWork
 .env
 requests.http
 .playwright-mcp
@@ -14,3 +13,17 @@ reviews/
 caveman/
 dist/
 logs/
+.claude/skills/speckit*
+
+# rpz/report
+*.aux
+*.fdb_latexmk
+*.fls
+DBCourseWork/*.log
+DBCourseWork/*.toc
+DBCourseWork/*.out
+DBCourseWork/*.pdf
+DBCourseWork/RPZ/*.log
+DBCourseWork/RPZ/*.toc
+DBCourseWork/RPZ/*.out
+DBCourseWork/RPZ/*.pdf
