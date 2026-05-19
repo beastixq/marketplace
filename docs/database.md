@@ -52,6 +52,7 @@ Core tables:
 - `orders`
 - `order_items`
 - `reviews`
+- `product_favorites`
 - `product_price_history`
 
 Keep `docs/db-schema.md` synchronized when schema changes.

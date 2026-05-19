@@ -26,6 +26,7 @@ package "web" {
         -reviewService: ReviewService
         -backofficeService: BackofficeService
         -paymentService: *PaymentService
+        -favoriteService: FavoriteService
         -templates: map[string]*template.Template
         +Catalog(w, r): void
         +ProductDetail(w, r): void
@@ -39,6 +40,9 @@ package "web" {
         +AnalystDashboard(w, r): void
         +MockBankPaymentPage(w, r): void
         +MockBankPaymentSubmit(w, r): void
+        +Favorites(w, r): void
+        +FavoriteAdd(w, r): void
+        +FavoriteRemove(w, r): void
     }
 
     class TemplateSet as "templates/*.html" {
@@ -52,6 +56,7 @@ package "web" {
         +admin-users.html
         +admin-orders.html
         +analyst.html
+        +favorites.html
     }
 
     class StaticFiles as "static/" {
@@ -77,6 +82,7 @@ package "service" {
     class ReviewService
     class BackofficeService
     class PaymentService
+    class FavoriteService
 }
 
 package "model" {
@@ -100,6 +106,7 @@ package "repository" {
     interface SellerRepo
     interface ReviewRepo
     interface BackofficeRepo
+    interface FavoriteRepo
 }
 
 class "PostgreSQL" as postgres <<database>>
@@ -122,6 +129,7 @@ WebHandler o--> SellerService
 WebHandler o--> ReviewService
 WebHandler o--> BackofficeService
 WebHandler o--> PaymentService
+WebHandler o--> FavoriteService
 
 WebHandler ..> User : template data
 WebHandler ..> Product : template data
@@ -142,6 +150,8 @@ SellerService o--> SellerRepo
 ReviewService o--> ReviewRepo
 BackofficeService o--> BackofficeRepo
 PaymentService o--> OrderRepo
+FavoriteService o--> FavoriteRepo
+FavoriteService o--> ProductService : проверка видимости товара
 
 UserRepo --> postgres : SQL
 ProductRepo --> postgres : SQL
@@ -151,6 +161,7 @@ OrderRepo --> postgres : SQL
 SellerRepo --> postgres : SQL
 ReviewRepo --> postgres : SQL
 BackofficeRepo --> postgres : SQL для admin/analytics read models
+FavoriteRepo --> postgres : SQL по product_favorites
 
 note right of WebHandler
   В терминах MVC это Controller:

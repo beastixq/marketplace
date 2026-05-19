@@ -15,6 +15,11 @@ dist/
 logs/
 .claude/skills/speckit*
 
+# Optional, local-only speckit extensions (e.g. git auto-commit).
+# Templates, scripts, integrations and memory under .specify/ stay tracked.
+.specify/extensions/
+.specify/extensions.yml
+
 # rpz/report
 *.aux
 *.fdb_latexmk

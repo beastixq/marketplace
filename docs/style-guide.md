@@ -33,8 +33,11 @@
 - Use parameterized SQL only.
 - Do not concatenate SQL with user input.
 - Keep SQL and pgx code in repository.
+- Build queries with squirrel (`sq.StatementBuilder.PlaceholderFormat(sq.Dollar)`). Reach for raw `const sql = "..."` strings only when a query genuinely cannot be expressed through the builder (rare — CTEs and dialect-specific clauses are the typical exceptions). `Suffix(...)` is the idiomatic way to attach `RETURNING ...`, `ON CONFLICT ...`, and `FOR UPDATE` to a squirrel-built query.
+- Existence checks use `SELECT 1 ... LIMIT 1` and treat `pgx.ErrNoRows` as "absent". Do not use `SELECT EXISTS (...)` unless there is a concrete reason squirrel cannot express the underlying query.
 - Keep transactions explicit.
 - Keep mapper logic explicit; avoid magic struct scanning when a local explicit mapper is clearer.
+- When importing code from another branch, scaffold, or AI-generated output into this repository, normalize it to the conventions above *before* committing. Raw SQL strings that are idiomatic in the source repository are a layer-style smell here.
 
 ## API Style
 

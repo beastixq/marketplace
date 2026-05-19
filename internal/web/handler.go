@@ -45,6 +45,7 @@ type WebHandler struct {
 	reviewService     service.ReviewService
 	backofficeService service.BackofficeService
 	paymentService    *service.PaymentService
+	favoriteService   service.FavoriteService
 	templates         map[string]*template.Template
 }
 
@@ -59,8 +60,9 @@ func NewWebHandler(
 	reviewSvc service.ReviewService,
 	backofficeSvc service.BackofficeService,
 	paymentSvc *service.PaymentService,
+	favoriteSvc service.FavoriteService,
 ) *WebHandler {
-	pages := []string{"catalog", "product", "login", "register", "categories", "profile", "orders", "cart", "addresses", "seller", "product-edit", "seller-profile", "order-detail", "seller-orders", "seller-products", "admin-users", "admin-user-edit", "admin-categories", "admin-orders", "analyst", "payment"}
+	pages := []string{"catalog", "product", "login", "register", "categories", "profile", "orders", "cart", "addresses", "seller", "product-edit", "seller-profile", "order-detail", "seller-orders", "seller-products", "admin-users", "admin-user-edit", "admin-categories", "admin-orders", "analyst", "payment", "favorites"}
 	templates := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
 		templates[page] = template.Must(
@@ -82,6 +84,7 @@ func NewWebHandler(
 		reviewService:     reviewSvc,
 		backofficeService: backofficeSvc,
 		paymentService:    paymentSvc,
+		favoriteService:   favoriteSvc,
 		templates:         templates,
 	}
 }

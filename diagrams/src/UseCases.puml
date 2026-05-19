@@ -1,4 +1,4 @@
-@startuml UseCases2
+@startuml UseCases
 left to right direction
 skinparam packageStyle rectangle
 
@@ -23,6 +23,10 @@ rectangle "Онлайн-маркетплейс" {
   usecase "Просмотр отзывов" as viewReviews
   usecase "Оформление заказа" as placeOrder
   usecase "Оставление отзыва" as leaveReview
+  usecase "Управление избранным" as manageFavorites
+  usecase "Добавление в избранное" as addFavorite
+  usecase "Удаление из избранного" as removeFavorite
+  usecase "Просмотр избранного" as viewFavorites
   usecase "Управление товарами" as manageProducts
   usecase "Добавление товара" as addProduct
   usecase "Редактирование товара" as editProduct
@@ -51,13 +55,16 @@ guest --> viewProduct
 ' --- Покупатель (+ всё от Гостя) ---
 buyer --> placeOrder
 buyer --> leaveReview
+buyer --> manageFavorites
 
 ' --- Продавец (+ всё от Гостя) ---
 seller --> manageProducts
 seller --> viewSellerStats
+seller --> manageFavorites
 
 ' --- Аналитик (+ всё от Гостя) ---
 analyst --> viewReports
+analyst --> manageFavorites
 
 ' --- Администратор (наследует от Гостя: авторизация, каталог, карточка товара) ---
 admin --> manageCategories
@@ -68,6 +75,7 @@ admin --> deleteReview
 admin --> viewAllOrders
 admin --> viewReports
 admin --> viewSellerStats
+admin --> manageFavorites
 
 ' --- Extend: Управление товарами ---
 manageProducts <.. addProduct
@@ -88,5 +96,10 @@ manageCategories <.. deleteCategory
 viewReports <.. reportTopProducts
 viewReports <.. reportOrdersDynamics
 viewReports <.. reportByCategory
+
+' --- Extend: Управление избранным ---
+manageFavorites <.. addFavorite
+manageFavorites <.. removeFavorite
+manageFavorites <.. viewFavorites
 
 @enduml

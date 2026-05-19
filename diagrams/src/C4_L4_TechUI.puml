@@ -42,6 +42,8 @@ package "component/repository" {
         +Order: OrderRepo
         +OrderItem: OrderItemRepo
         +Category: CategoryRepo
+        +Backoffice: BackofficeRepo
+        +Favorite: FavoriteRepo
         +TxManager: TxManager
         +Close(): void
     }
@@ -56,6 +58,8 @@ package "component/service" {
         +Product: ProductService
         +Order: OrderService
         +Category: CategoryService
+        +Backoffice: BackofficeService
+        +Favorite: FavoriteService
         +Auth: AuthService
         +Payment: *PaymentService
     }

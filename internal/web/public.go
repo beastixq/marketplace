@@ -196,6 +196,13 @@ func (wh *WebHandler) ProductDetail(w http.ResponseWriter, r *http.Request) {
 
 	seller, _ := wh.sellerService.GetSellerByID(r.Context(), product.SellerID)
 
+	isFavorite := false
+	if user != nil && product.DeletedAt == nil {
+		if state, ferr := wh.favoriteService.IsProductFavorite(r.Context(), user.actor(), id); ferr == nil {
+			isFavorite = state.IsFavorite
+		}
+	}
+
 	wh.render(w, "product", map[string]any{
 		"Product":           product,
 		"Seller":            seller,
@@ -207,6 +214,7 @@ func (wh *WebHandler) ProductDetail(w http.ResponseWriter, r *http.Request) {
 		"ReviewUserNames":   reviewUserNames,
 		"CurrentUserReview": currentUserReview,
 		"User":              user,
+		"IsFavorite":        isFavorite,
 		"Notice":            r.URL.Query().Get("notice"),
 		"ReviewError":       r.URL.Query().Get("review_error"),
 		"CategoryError":     r.URL.Query().Get("category_error"),

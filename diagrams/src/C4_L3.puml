@@ -27,7 +27,7 @@ Container_Boundary(seedContainer, "cmd/seed — генератор данных"
 
 Container_Boundary(serviceLayer, "Компонент бизнес-логики") {
     Component(serviceComponent, "component/service", "Go facade", "Создаёт и связывает Auth/User/Product/Order/... services")
-    Component(domainServices, "Service package", "Go", "Бизнес-правила, RBAC, checkout,\nоплата, статусы заказов, отзывы, категории")
+    Component(domainServices, "Service package", "Go", "Бизнес-правила, RBAC, checkout,\nоплата, статусы заказов, отзывы, категории,\nизбранное товаров")
     Component(backofficeService, "BackofficeService", "Go", "Read-модели для admin panel и analyst dashboard")
     Component(paymentService, "PaymentService", "Go", "Формирует payment URL и обрабатывает результат оплаты")
     Component(paymentGateway, "MockBankGateway", "Go adapter", "Адаптер платёжного контура")

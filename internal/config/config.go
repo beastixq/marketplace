@@ -20,6 +20,7 @@ const (
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
+	Redis    RedisConfig    `yaml:"redis"`
 	Auth     AuthConfig     `yaml:"auth"`
 	Payment  PaymentConfig  `yaml:"payment"`
 	Orders   OrdersConfig   `yaml:"orders"`
@@ -32,6 +33,14 @@ type ServerConfig struct {
 
 type DatabaseConfig struct {
 	DSN string `yaml:"dsn"`
+}
+
+type RedisConfig struct {
+	Enabled     bool     `yaml:"enabled"`
+	Addr        string   `yaml:"addr"`
+	Password    string   `yaml:"password"`
+	DB          int      `yaml:"db"`
+	DialTimeout Duration `yaml:"dial_timeout"`
 }
 
 type AuthConfig struct {
@@ -128,6 +137,17 @@ func (c *Config) Validate() error {
 	}
 	if c.Orders.ExpirationCheckInterval <= 0 {
 		return errors.New("orders.expiration_check_interval must be positive")
+	}
+	if c.Redis.Enabled {
+		if c.Redis.Addr == "" {
+			return errors.New("redis.addr must be set when redis.enabled is true")
+		}
+		if c.Redis.DialTimeout <= 0 {
+			return errors.New("redis.dial_timeout must be positive when redis.enabled is true")
+		}
+		if c.Redis.DB < 0 {
+			return fmt.Errorf("redis.db must be >= 0, got %d", c.Redis.DB)
+		}
 	}
 	return c.Logging.validate()
 }

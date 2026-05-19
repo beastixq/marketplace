@@ -35,6 +35,8 @@ The distinction is mandatory. The service layer uses repository behavior through
 ## Dependency Rules
 
 - `internal/service` must not import `internal/repository`, `pgx`, `pgconn`, SQLSTATE values, or constraint names.
+- `internal/service` must not *reason* about repository internals either: no service comment, error wrapping, or control flow may rely on knowing the repository's SQL shape, conflict handling, locking, or transaction strategy. The repository interface contract is the only thing the service is allowed to depend on; if reasoning starts to leak, either narrow the contract or move the policy into the service.
+- The business core (`internal/service`) owns the contracts on both its boundaries. Outer layers either invoke service-published methods (handler/web/techui → service) or satisfy service-declared interfaces (repository/adapter → service). Adapters never define what their port means. Document each repository method's semantics on the **interface declaration** in `internal/service`, not on the implementation in `internal/repository`. Implementations may add a brief "how" note naming the SQL idiom they use; they must not restate or redefine the contract. Same split as `io.Reader` (contract) vs. `*os.File.Read` (mechanics).
 - `internal/handler` and `internal/web` must not import `internal/repository`.
 - Repository interfaces live where consumed, normally `internal/service`.
 - Repository implementations live in `internal/repository`.
@@ -90,15 +92,20 @@ Both surfaces call service methods. Neither surface owns business policy, persis
 
 ## Cache Boundary
 
-Cache key mechanics belong behind cache abstractions, not handlers. Cache invalidation should be triggered from service/usecase code or service decorators as part of mutations.
+Cache key mechanics belong behind cache abstractions, not handlers. Cache invalidation should be triggered from service/usecase code or service decorators as part of mutations. Current behavior and gaps are tracked in `docs/cache.md`.
 
-Documented key conventions:
+Currently implemented runtime keys:
 
 | Key | TTL | Invalidation |
 | --- | --- | --- |
+| `products:{id}` | `5m` | Product update/delete only |
+
+Target key conventions that are not implemented unless `docs/cache.md` says otherwise:
+
+| Key | TTL | Intended Invalidation |
+| --- | --- | --- |
 | `products:catalog:page:{n}` | `5m` | Any product change |
-| `products:{id}` | `5m` | Product PATCH/DELETE; review create/update |
 | `categories:tree` | `1h` | Category CRUD |
-| `sessions:{token}` | Session lifetime | Logout |
+| `sessions:{token}` | Session lifetime | Logout/token revocation |
 
 Cache failures should not break core business behavior unless the operation explicitly requires cache consistency.
