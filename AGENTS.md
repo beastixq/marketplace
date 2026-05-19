@@ -27,21 +27,26 @@ Use the project docs as the first stop for task-specific context.
 
 If docs and current code conflict, trust the current code after verifying it directly, then update the relevant doc as part of the change. Keep docs concise and maintenance-oriented.
 
-## Cost-Controlled Verification
+## Cost-Controlled Reads
 
-Do not run heavy verification, broad inspection, or token-heavy commands without explicit user permission.
+Heavy *commands* are fine without asking — running them shifts cost to the shell, not into the agent's context window. Heavy *reads* are not, because the bytes land in the context.
 
-Ask first before running:
+OK to run without asking, when relevant to the task:
 
-- Full test suites, broad build/syntax checks, linters, formatters, code generation, or dependency downloads.
-- Broad diffs or history inspection such as `git diff`, `git show`, `git log -p`, or large patch views.
-- Commands expected to produce large output or scan most of the repository when a narrower check is enough.
+- Full test suites, build/syntax checks, `go vet`, linters, formatters.
+- Code generation, including `go generate ./...` and targeted `mockgen` for new or changed service-owned interfaces.
+- `make` targets, including PlantUML rendering in `diagrams/`.
+- Dependency downloads (`go mod download`, `go mod tidy`).
+- `git diff`, `git show`, `git log` when the diff is reasonable in size for the task at hand.
 
-Exception: targeted Gomock generation for a new or changed service-owned interface is allowed when the current task includes tests for that interface. Run only the specific `mockgen` command for the needed interface, never broad `go generate ./...`, and do not read or manually edit generated mock files unless generation or compilation fails and the generated file itself is the suspected cause.
+Not OK without a specific reason:
 
-Prefer lightweight, targeted checks by default: `rg`, short `sed`/`nl` ranges, focused file reads, and narrow status commands such as `git status --short`.
+- Reading large generated files end-to-end (e.g. all 2000 lines of an `internal/mocks/...` file). Generated mocks are not source — read them only when generation or compilation fails and the file itself is the suspected cause, and even then read the relevant slice, not the whole file.
+- Reading vendored/third-party code, large binary fixtures, or full PDF transcripts cover-to-cover when a targeted slice answers the question.
+- Re-reading a file you just edited "to confirm" — `Edit`/`Write` would have errored if the change failed.
+- Cat'ing a 1k+ line file when `rg` or a `Read` with `offset`/`limit` would do.
 
-When asking permission, state the exact command or category, why it is useful, and whether it may produce large output or take noticeable time. If permission is not granted, continue with targeted checks and clearly mark any remaining verification gap.
+Default to targeted reads: `rg`, `Read` with `offset`+`limit`, `git status --short`, narrow `git log --oneline -N` ranges. Reach for the whole file only when you actually need the whole file.
 
 ## Learning Mode
 

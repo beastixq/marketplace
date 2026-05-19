@@ -14,6 +14,7 @@ package "component/service" {
         +Order: OrderService
         +Category: CategoryService
         +Backoffice: BackofficeService
+        +Favorite: FavoriteService
         +Auth: AuthService
         +Payment: *PaymentService
     }
@@ -130,6 +131,15 @@ package "service" {
         +DeleteCategoryByID(ctx, actor, id): error
     }
 
+    class FavoriteService {
+        -favoriteRepo: FavoriteRepo
+        -productGetter: FavoriteProductGetter
+        +AddFavorite(ctx, actor, productID): bool, error
+        +RemoveFavorite(ctx, actor, productID): error
+        +GetFavoriteProducts(ctx, actor, opts): []Product, error
+        +IsProductFavorite(ctx, actor, productID): FavoriteState, error
+    }
+
     class OrderExpirationWorker {
         -orderExpirer: OrderExpirer
         -interval: time.Duration
@@ -156,6 +166,8 @@ package "service" {
     interface AddressRepo
     interface CategoryRepo
     interface BackofficeRepo
+    interface FavoriteRepo
+    interface FavoriteProductGetter
     interface SellerGetter
     interface TxManager
     interface PaymentGateway
@@ -174,6 +186,7 @@ package "repository component" {
         +OrderItem: OrderItemRepo
         +Category: CategoryRepo
         +Backoffice: BackofficeRepo
+        +Favorite: FavoriteRepo
         +TxManager: TxManager
     }
 }
@@ -198,6 +211,7 @@ ServiceComponent *-- CategoryService
 ServiceComponent *-- BackofficeService
 ServiceComponent *-- AuthService
 ServiceComponent *-- PaymentService
+ServiceComponent *-- FavoriteService
 
 AuthService o--> AuthUserProvider
 AuthService o--> TokenBlocklist
@@ -218,7 +232,11 @@ BackofficeService o--> BackofficeRepo
 ReviewService o--> ReviewRepo
 AddressService o--> AddressRepo
 CategoryService o--> CategoryRepo
+FavoriteService o--> FavoriteRepo
+FavoriteService o--> FavoriteProductGetter
 OrderExpirationWorker o--> OrderExpirer
+
+ProductService ..|> FavoriteProductGetter : реализует
 
 MockBankGateway ..|> PaymentGateway : реализует
 
@@ -233,6 +251,13 @@ note bottom of OrderService
   Бизнес-логика держит транзакционные
   сценарии через TxManager и не знает
   о конкретном pgxpool напрямую.
+end note
+
+note bottom of FavoriteService
+  Видимость товара (deleted_at) проверяется
+  здесь через FavoriteProductGetter, который
+  ProductService уже реализует, — поэтому
+  FavoriteRepo остаётся минимальным CRUD-портом.
 end note
 
 @enduml

@@ -108,10 +108,18 @@ entity "История цен" as product_price_history {
   changed_by
 }
 
+entity "Избранное" as product_favorites {
+  * user_id
+  * product_id
+  --
+  created_at
+}
+
 users ||--o| sellers : "имеет профиль"
 users ||--o{ orders : "оформляет"
 users ||--o{ addresses : "имеет"
 users ||--o{ reviews : "оставляет"
+users ||--o{ product_favorites : "добавляет в избранное"
 
 sellers ||--o{ products : "владеет"
 sellers ||--o{ orders : "обрабатывает"
@@ -123,6 +131,7 @@ categories |o--o{ categories : "родительская"
 products ||--o{ reviews : "получает"
 products ||--o{ product_price_history : "имеет историю"
 products ||--o{ order_items : "включён"
+products ||--o{ product_favorites : "может быть в избранном"
 
 orders ||--o{ order_items : "содержит"
 orders }o--o| addresses : "доставляется на"
@@ -138,6 +147,14 @@ note right of reviews
   Уникальность:
   один пользователь может оставить
   один отзыв на один товар.
+end note
+
+note right of product_favorites
+  Составной первичный ключ (user_id, product_id)
+  гарантирует, что один пользователь не может
+  отметить один и тот же товар избранным
+  больше одного раза.
+  ON DELETE CASCADE для обоих внешних ключей.
 end note
 
 note right of orders

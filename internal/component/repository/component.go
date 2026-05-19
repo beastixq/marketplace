@@ -25,6 +25,7 @@ type Component struct {
 	OrderItem      svc.OrderItemRepo
 	Category       svc.CategoryRepo
 	Backoffice     svc.BackofficeRepo
+	Favorite       svc.FavoriteRepo
 	TxManager      svc.TxManager
 }
 
@@ -72,6 +73,7 @@ func NewFromPoolWithCache(pool *pgxpool.Pool, cfg *CacheConfig) *Component {
 		OrderItem:      store.NewOrderItemRepo(pool),
 		Category:       store.NewCategoryRepo(pool),
 		Backoffice:     store.NewBackofficeRepo(pool),
+		Favorite:       store.NewFavoriteRepo(pool),
 		TxManager:      store.NewPgxTxManager(pool),
 	}
 }
