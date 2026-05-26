@@ -13,6 +13,8 @@ reviews/
 caveman/
 dist/
 logs/
+__pycache__/
+*.py[cod]
 .claude/skills/speckit*
 
 # Optional, local-only speckit extensions (e.g. git auto-commit).
@@ -32,3 +34,6 @@ DBCourseWork/RPZ/*.log
 DBCourseWork/RPZ/*.toc
 DBCourseWork/RPZ/*.out
 DBCourseWork/RPZ/*.pdf
+
+# Generated RPZ research benchmark outputs.
+DBCourseWork/RPZ/research_results/
