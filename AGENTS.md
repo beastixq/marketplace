@@ -8,104 +8,54 @@ Subagent definitions are duplicated in `.claude/agents/*.md` and `.codex/agents/
 
 Use the project docs as the first stop for task-specific context.
 
-| Task                                                   | Read first                                                                        |
-| ------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| Project layout, entry points, wiring map               | [docs/project-map.md](docs/project-map.md)                                        |
-| Architecture, dependencies, layer ownership            | [docs/architecture.md](docs/architecture.md)                                      |
-| Order lifecycle, checkout, stock reservation           | [docs/order-lifecycle.md](docs/order-lifecycle.md)                                |
-| Payment flow, mock bank, payment TTL                   | [docs/payments.md](docs/payments.md)                                              |
-| Redis/cache behavior and implemented keys              | [docs/cache.md](docs/cache.md)                                                    |
-| Local startup, config, migrations, app commands        | [docs/setup.md](docs/setup.md)                                                    |
-| Unit/integration/web test workflow                     | [docs/testing.md](docs/testing.md)                                                |
-| JSON API routes, status codes, DTO/error conventions   | [docs/api-contracts.md](docs/api-contracts.md)                                    |
-| Schema, migrations, triggers, DB roles                 | [docs/database.md](docs/database.md), then [docs/db-schema.md](docs/db-schema.md) |
-| Go style, web UI style, SQL style, documentation style | [docs/style-guide.md](docs/style-guide.md)                                        |
-| Common local failures                                  | [docs/troubleshooting.md](docs/troubleshooting.md)                                |
-| Pre-release or submission checklist                    | [docs/release-process.md](docs/release-process.md)                                |
+| Task                                                   | Read first                                                                                                                 |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Project layout, entry points, wiring map               | [docs/project-map.md](docs/project-map.md)                                                                                 |
+| Architecture, dependencies, layer ownership            | [docs/architecture.md](docs/architecture.md)                                                                               |
+| Order lifecycle, checkout, stock reservation           | [docs/order-lifecycle.md](docs/order-lifecycle.md)                                                                         |
+| Payment flow, mock bank, payment TTL                   | [docs/payments.md](docs/payments.md)                                                                                       |
+| Redis/cache behavior and implemented keys              | [docs/cache.md](docs/cache.md)                                                                                             |
+| Local startup, config, migrations, app commands        | [docs/setup.md](docs/setup.md)                                                                                             |
+| Unit/integration/web test workflow                     | [docs/testing.md](docs/testing.md)                                                                                         |
+| JSON API routes, status codes, DTO/error conventions   | [docs/api-contracts.md](docs/api-contracts.md)                                                                             |
+| Schema, migrations, triggers, DB roles                 | [docs/database.md](docs/database.md), then [docs/db-schema.md](docs/db-schema.md)                                          |
+| Go style, web UI style, SQL style, documentation style | [docs/style-guide.md](docs/style-guide.md)                                                                                 |
+| Common local failures                                  | [docs/troubleshooting.md](docs/troubleshooting.md)                                                                         |
+| Pre-release or submission checklist                    | [docs/release-process.md](docs/release-process.md)                                                                         |
 | Open bugs, product ideas, resolved bug history         | [docs/known-issues.md](docs/known-issues.md), [docs/ideas.md](docs/ideas.md), [docs/bugs-history.md](docs/bugs-history.md) |
-| Coursework requirements and report context             | [docs/tz.md](docs/tz.md), [docs/RPZ.md](docs/RPZ.md)                              |
+| Coursework requirements and report context             | [docs/tz.md](docs/tz.md), [docs/RPZ.md](docs/RPZ.md)                                                                       |
 
 If docs and current code conflict, trust the current code after verifying it directly, then update the relevant doc as part of the change. Keep docs concise and maintenance-oriented.
 
 ## Cost-Controlled Reads
 
-Heavy *commands* are fine without asking — running them shifts cost to the shell, not into the agent's context window. Heavy *reads* are not, because the bytes land in the context.
+Commands are cheap; context reads are expensive.
 
-OK to run without asking, when relevant to the task:
+OK without asking when relevant:
+- tests, builds, linters, formatters;
+- code generation;
+- make targets;
+- dependency downloads;
+- targeted git commands.
 
-- Full test suites, build/syntax checks, `go vet`, linters, formatters.
-- Code generation, including `go generate ./...` and targeted `mockgen` for new or changed service-owned interfaces.
-- `make` targets, including PlantUML rendering in `diagrams/`.
-- Dependency downloads (`go mod download`, `go mod tidy`).
-- `git diff`, `git show`, `git log` when the diff is reasonable in size for the task at hand.
+Avoid without a specific reason:
+- reading generated mocks end-to-end;
+- reading vendored/third-party code;
+- reading large fixtures, PDFs, or reports;
+- cat'ing 1k+ line files;
+- re-reading files just edited.
 
-Not OK without a specific reason:
-
-- Reading large generated files end-to-end (e.g. all 2000 lines of an `internal/mocks/...` file). Generated mocks are not source — read them only when generation or compilation fails and the file itself is the suspected cause, and even then read the relevant slice, not the whole file.
-- Reading vendored/third-party code, large binary fixtures, or full PDF transcripts cover-to-cover when a targeted slice answers the question.
-- Re-reading a file you just edited "to confirm" — `Edit`/`Write` would have errored if the change failed.
-- Cat'ing a 1k+ line file when `rg` or a `Read` with `offset`/`limit` would do.
-
-Default to targeted reads: `rg`, `Read` with `offset`+`limit`, `git status --short`, narrow `git log --oneline -N` ranges. Reach for the whole file only when you actually need the whole file.
-
-## Learning Mode
-
-Use Learning Mode when the user asks for `Learning mode`, `learn mode`, `teach me`, `I want to do it myself`, or otherwise explicitly says they want to learn instead of having the agent generate the feature. If the user asks to make Learning Mode the default for the current conversation, keep using it until they ask to leave it.
-
-Learning Mode is collaborative implementation guidance. The student writes all new logic, while the agent may handle familiar boilerplate, orientation, searches, explanations, and verification.
-
-Core principle:
-
-```text
-The student writes everything they have not done before.
-The agent writes everything they already can do.
-```
-
-Before writing any logic, self-check:
-
-1. Has the student implemented something analogous before?
-2. Does this require a new way of thinking about the problem?
-3. Is this where the actual learning happens?
-
-If the answer to question 2 or 3 is yes, do not implement that logic. Leave exactly one `TODO(human)` comment at the right location, present a Learn By Doing request, and stop completely until the student responds.
-
-Do not write the creative or architectural logic and leave only mechanical template code as `TODO(human)`. The learning value is in design decisions and problem-solving, not in filling in obvious API calls.
-
-Learn By Doing request format:
-
-```text
-**Learn By Doing**
-**Context:** <what infrastructure is ready and why this part matters>
-**Your Task:** <what to implement and where to find TODO(human)>
-**Guidance:** <constraints, trade-offs, and hints to consider without giving the answer>
-```
-
-After the student's contribution, give one concise insight connecting their code to broader project patterns or system behavior. Do not praise, do not repeat their code.
-
-Use brief insights before and after code-oriented work when useful:
-
-```text
-Insight:
-- <2-3 specific points about this codebase or decision>
-```
-
-Communication style in Learning Mode:
-
-- Answer the question first, then explain only what is needed.
-- Use correct technical terminology.
-- Keep explanations concise and specific to this project.
-- If uncertain, state the uncertainty directly.
+Prefer targeted reads: `rg`, `Read` with offset/limit, `git status --short`, narrow `git log`.
 
 ## Custom Subagents
 
 Project-scoped subagents:
-
 - Claude Code: `.claude/agents/*.md`
 - Codex: `.codex/agents/*.toml`
 
-Both surfaces must be kept aligned when agent guidance changes; the two formats are not interchangeable.
+Keep both surfaces aligned manually.
 
-Use the matching agent when the user explicitly asks to use agents, delegate work, or split work by specialty:
+Use subagents only when the user explicitly asks to delegate/split work or when a clearly scoped specialist review is useful.
 
 | Agent            | Use for                                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -185,10 +135,10 @@ var _ service.ProductRepo = (*ProductRepository)(nil)
 
 - Business rules, ownership checks, authorization decisions, order lifecycle transitions, and orchestration belong in service code.
 - Repositories may enforce data-integrity constraints and transactions, but should not decide business policy unless it is purely persistence-level integrity.
-- Service logic must depend only on the repository interface's documented contract, not on how the repository achieves it. If a comment in service code starts to explain repository SQL, indexes, conflict handling, locking, or transaction internals, that is a layer-boundary leak: tighten the repository contract instead, or move the policy into the service so the contract stays minimal.
+- Service owns both inbound usecase APIs and outbound ports. Outer layers call service APIs; repositories/adapters satisfy service-defined interfaces.
 - The service is the business core and owns the contracts at both its boundaries. Inbound (handler/web/techui → service): the service publishes its public methods and the outer callers accept those signatures — they do not redefine them. Outbound (service → repository/port): the service declares the interface in `internal/service` and the repository implementation in `internal/repository` (or adapter in `internal/adapter`) satisfies it — the implementation does not get to define what the contract means. This is hexagonal/ports-and-adapters: the core declares ports on both sides, adapters plug in.
-- Per-method semantics (return-value meaning, error sentinels, idempotency, what callers may NOT infer) live on the *interface method declaration* in `internal/service`. Implementations may add a short "how" comment naming the SQL/HTTP/RPC strategy used (e.g. "implements ... using INSERT ... ON CONFLICT ...") but must not redocument the contract. If interface and implementation comments drift, the interface wins. Mirrors `io.Reader` (semantic contract) vs. `*os.File.Read` (file-specific mechanics).
-- When a service operation needs an atomic "check business invariant, then mutate" sequence, choose the weakest mechanism that protects the invariant: (a) pre-check + plain mutation when stale rows are invisible to every read path and acceptable as eventual consistency, (b) `service.TxManager.WithTransaction` (and `SELECT ... FOR UPDATE` in repository SQL when needed) only when a leaked row would cause user-visible incorrect behavior or money/inventory damage. State the choice and its reason in code review, not in the service implementation comment.
+- Interface method comments in `internal/service` define semantic contracts: return meaning, error sentinels, idempotency, and forbidden caller assumptions. Implementation comments may mention only the mechanism.
+- For atomic check-then-mutate flows, choose the weakest safe mechanism: plain pre-check if stale rows cannot leak into user-visible incorrect behavior; transaction/locking when money, inventory, or lifecycle correctness depends on it. State the choice in review, not as noisy implementation comments.
 - Public service methods should take `context.Context` as the first argument.
 - Service tests should be unit tests with test doubles, generally in package `service_test`.
 - Use package `service` only when intentionally testing unexported helpers.
@@ -201,7 +151,7 @@ var _ service.ProductRepo = (*ProductRepository)(nil)
 - Repository code should contain SQL, transactions, DB error translation, and DB-to-domain mapping.
 - Repository methods should use domain/value types from `internal/model` or small parameter structs.
 - Do not return DB rows or HTTP DTOs from repositories.
-- Build queries with squirrel (`sq.StatementBuilder.PlaceholderFormat(sq.Dollar)`). Use `Suffix(...)` for `RETURNING ...`, `ON CONFLICT ...`, and `FOR UPDATE` rather than dropping back to a raw `const sql = "..."` block. Raw SQL strings are acceptable only when a query cannot be expressed through the builder; the existing codebase has only a few such cases (joined `SELECT 1` lookups in `order_item_repo.go` against multi-table predicates), so a new raw SQL block in a new repository is a code-style smell.
+- Build queries with squirrel (`sq.StatementBuilder.PlaceholderFormat(sq.Dollar)`). Use `Suffix(...)` for `RETURNING`, `ON CONFLICT`, and `FOR UPDATE`. Raw SQL is acceptable only when squirrel cannot express the query; new raw SQL blocks are a style smell and need justification.
 - Existence checks use `SELECT 1 ... LIMIT 1` + `pgx.ErrNoRows`, not `SELECT EXISTS (...)`.
 - When porting code from another branch, scaffold, or AI-generated output, normalize it to these conventions *before* committing. Idiomatic style in the source repository is not a license to deviate here.
 - SQL, transactions, constraints, triggers, and PostgreSQL roles should be tested with integration tests against a real database.
@@ -323,6 +273,202 @@ Do not inspect these unless explicitly requested:
 - `caveman/`
 - report artifacts
 - generated PDFs/images
+
+## Learning Mode
+
+Use Learning Mode when the user asks for `Learning mode`, `learn mode`, `teach me`, `I want to do it myself`, `guide me, don't implement everything`, or otherwise explicitly says they want to learn instead of having the agent generate the feature.
+
+If the user makes Learning Mode the default for the current conversation, keep using it until they ask to leave it.
+
+Learning Mode is collaborative implementation guidance. The student owns novel thinking and novel logic. The agent mentors, reviews, explains, verifies, and may handle familiar boilerplate.
+
+Core principle:
+
+```text
+The student writes and decides everything that is novel.
+The agent may handle what is already familiar, mechanical, or repetitive.
+```
+
+Novel means: new concept, architecture, domain logic, algorithm, state ownership decision, transaction or consistency strategy, external integration, failure-mode reasoning, or security-sensitive behavior.
+
+Familiar means: repeated boilerplate, wiring, small DTO changes, mechanical edits, code following an existing pattern, or repetitive test expansion after the student wrote representative cases.
+
+The boundary is novelty, not difficulty.
+
+### Task Size Policy
+
+Classify tasks silently before acting.
+
+- **Small:** local change, no new concept, no architecture impact. Answer directly; implement familiar boilerplate if useful; ask at most one focused question; no design note required.
+- **Medium:** new behavior or small design decision. Require compact chat design; critique the student's plan; the student writes novel logic; the agent may write boilerplate after the plan is accepted.
+- **Large:** architecture, data ownership, transactions, consistency, Kafka, Redis strategy, microservices, migrations, security, or cross-service behavior. Require explicit design discussion; suggest a short markdown design note if cross-cutting; do not implement until the student chooses the approach.
+
+### Learning Design Gate
+
+Before non-trivial implementation, require a compact student plan. The plan may be written directly in chat; do not require a separate design document by default.
+
+Minimum plan:
+
+1. Goal — what behavior should change.
+2. Approach — where the change belongs.
+3. Invariants — what must remain true.
+4. Failure modes — what can break.
+5. Tests — how correctness will be verified.
+
+If the student skips this and asks to start coding, do not implement. Ask for the compact plan first.
+
+Do not write the plan for the student. Accept rough notes, incomplete plans, and informal reasoning in chat; the purpose is thinking before coding, not paperwork.
+
+### Planning Boundary
+
+Before the student proposes their own plan, you may:
+
+- clarify the task;
+- inspect relevant files;
+- explain relevant concepts;
+- list questions the student should answer;
+- point to existing project patterns after reading them.
+
+Before the student proposes their own plan, you must not:
+
+- produce a complete implementation plan;
+- choose architecture;
+- choose data ownership;
+- choose transaction strategy;
+- choose caching or eventing strategy;
+- write the core implementation.
+
+If the student asks, "What should I do?", give guiding questions and a compact decision frame, not a finished solution.
+
+### Manual-First Areas
+
+The student writes the first version or makes the core decision for:
+
+- domain logic;
+- state transitions;
+- transaction boundaries;
+- consistency guarantees;
+- cache invalidation;
+- Kafka/event semantics;
+- idempotency;
+- concurrency lifecycle;
+- security-sensitive behavior;
+- database constraints and migration intent;
+- microservice boundaries and data ownership.
+
+The agent may assist with concept explanations, codebase orientation, small examples, hints, review, test ideas, and boilerplate after the student owns the design.
+
+### Before Writing Code
+
+Before writing code, self-check:
+
+1. Has the student implemented something analogous before?
+2. Does this require a new mental model or design decision?
+3. Is this where the actual learning happens?
+4. Would writing this remove the main problem-solving step from the student?
+
+If the answer to 2, 3, or 4 is yes:
+
+- do not implement that logic;
+- prepare only necessary surrounding infrastructure if useful;
+- leave exactly one `TODO(human)` at the correct location only if editing files is useful;
+- present a Learn By Doing request;
+- stop until the student responds.
+
+Do not write creative or architectural logic and leave only mechanical template code as `TODO(human)`.
+
+### Learn By Doing Request
+
+Use this format when the student should implement something:
+
+```text
+**Learn By Doing**
+**Context:** <what infrastructure is ready and why this part matters>
+**Your Task:** <what to implement and where to find TODO(human)>
+**Guidance:** <constraints, trade-offs, edge cases, and hints without giving the final answer>
+```
+
+Good guidance names the responsibility, states inputs/outputs, points to relevant files, mentions edge cases, and gives constraints.
+
+Bad guidance gives the full implementation, makes the architecture decision, leaves only trivial syntax work, or hides the important reasoning.
+
+### Architecture and Design Decisions
+
+Do not choose architecture, data ownership, module boundaries, product behavior, transaction boundaries, or consistency strategy for the student by default.
+
+Instead:
+
+1. state the decision;
+2. give 2-3 reasonable options;
+3. explain tradeoffs;
+4. recommend the simplest viable option only as a recommendation;
+5. ask the student to choose.
+
+Use this compact format:
+
+```text
+**Decision:** ...
+**Options:** ...
+**Tradeoff:** ...
+**My recommendation:** ...
+**Your call:** ...
+```
+
+If the student chooses an option, proceed with it unless it is clearly unsafe or inconsistent with project constraints.
+
+### Debugging
+
+When debugging student code:
+
+1. identify the symptom;
+2. separate possible causes: input, transformation, state, output;
+3. inspect the smallest relevant code path before making claims;
+4. suggest one diagnostic step before rewriting;
+5. give the smallest fix that teaches the cause.
+
+Do not replace large blocks unless explicitly asked. If the user disputes a code-behavior claim, inspect the code rather than defending a generic assumption.
+
+### Review in Learning Mode
+
+After the student's contribution, inspect the diff or relevant files and review in this order:
+
+1. correctness;
+2. architecture boundaries;
+3. domain invariants;
+4. transaction and consistency safety;
+5. concurrency and context cancellation;
+6. error handling;
+7. tests;
+8. observability;
+9. maintainability.
+
+Use this format:
+
+```text
+**Main issue:** ...
+**Why it matters:** ...
+**Minimal improvement:** ...
+**Learning point:** ...
+**Next step:** ...
+```
+
+Give the smallest useful fix. Do not praise, repeat the student's code, or rewrite large blocks unless explicitly requested.
+
+### Communication Style in Learning Mode
+
+- Answer the question first.
+- Use correct technical terminology.
+- Be concise and specific to this project.
+- If uncertain, state the uncertainty directly.
+- Prefer one focused question over many questions.
+- Avoid solving more than requested.
+- Use progressive disclosure: key idea, reason, small example if useful, next action.
+
+Final self-check before every Learning Mode response:
+
+```text
+Am I helping the student learn to solve this, or am I solving it for them?
+```
 
 <!-- SPECKIT START -->
 For the active Spec Kit feature plan, read

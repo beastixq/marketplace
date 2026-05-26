@@ -74,9 +74,9 @@ func main() {
 	reviewRepo := repo.NewReviewRepo(pool)
 
 	var productRepo svc.ProductRepo = repo.NewProductRepo(pool)
-	// if rdb != nil && cfg.Redis.Enabled {
-	// 	productRepo = cache.NewProductRepoCache(productRepo, rdb, 5*time.Minute)
-	// }
+	if rdb != nil {
+		productRepo = cache.NewProductRepoCache(productRepo, rdb, cfg.Redis.ProductTTL.Std())
+	}
 
 	orderRepo := repo.NewOrderRepo(pool)
 	orderItemRepo := repo.NewOrderItemRepo(pool)

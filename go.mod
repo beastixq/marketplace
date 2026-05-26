@@ -1,6 +1,6 @@
 module github.com/beastixq/marketplace
 
-go 1.24.4
+go 1.25.0
 
 require (
 	github.com/Masterminds/squirrel v1.5.4
@@ -24,7 +24,7 @@ require (
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/redis/go-redis/v9 v9.19.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

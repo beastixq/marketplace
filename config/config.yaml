@@ -10,11 +10,12 @@ database:
   dsn: "postgres://postgres:postgres@localhost:5432/marketplace?sslmode=disable"
 
 redis:
-  enabled: false
+  enabled: true
   addr: "localhost:6379"
   password: ""
   db: 0
   dial_timeout: "2s"
+  product_ttl: "5m"
 
 auth:
   jwt_secret: "dev-secret-change-me"
