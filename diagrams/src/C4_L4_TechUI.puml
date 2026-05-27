@@ -33,11 +33,11 @@ package "logging" {
 
 package "component/repository" {
     class RepositoryComponent as "Component" {
-        +Pool: *pgxpool.Pool
         +User: UserRepo
         +Seller: SellerRepo
         +Address: AddressRepo
         +Review: ReviewRepo
+        +ReviewPurchase: ReviewPurchaseChecker
         +Product: ProductRepo
         +Order: OrderRepo
         +OrderItem: OrderItemRepo
@@ -45,6 +45,7 @@ package "component/repository" {
         +Backoffice: BackofficeRepo
         +Favorite: FavoriteRepo
         +TxManager: TxManager
+        -closeFn: func()
         +Close(): void
     }
 }
@@ -203,7 +204,8 @@ end note
 
 note bottom of TechUIMain
   cmd/techui является точкой сборки:
-  он связывает repository, service и techui
+  он выбирает repository backend по config,
+  затем связывает repository, service и techui
   в единое запускаемое приложение.
 end note
 

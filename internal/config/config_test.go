@@ -15,7 +15,11 @@ const validYAML = `
 server:
   addr: ":8080"
 database:
+  type: "postgres"
   dsn: "postgres://u:p@host/db"
+  mongo:
+    uri: "mongodb://localhost:27017/?replicaSet=rs0"
+    name: "marketplace"
 auth:
   jwt_secret: "yaml-secret"
   jwt_ttl: "24h"
@@ -43,9 +47,13 @@ func writeConfig(t *testing.T, body string) string {
 }
 
 func TestLoad_Valid(t *testing.T) {
+	t.Setenv("DATABASE_TYPE", "")
 	t.Setenv("DATABASE_URL", "")
+	t.Setenv("MONGODB_URI", "")
 	t.Setenv("JWT_SECRET", "")
+	os.Unsetenv("DATABASE_TYPE")
 	os.Unsetenv("DATABASE_URL")
+	os.Unsetenv("MONGODB_URI")
 	os.Unsetenv("JWT_SECRET")
 
 	cfg, err := config.Load(writeConfig(t, validYAML))
@@ -64,15 +72,23 @@ func TestLoad_Valid(t *testing.T) {
 }
 
 func TestLoad_EnvOverridesSecrets(t *testing.T) {
+	t.Setenv("DATABASE_TYPE", "mongo")
 	t.Setenv("DATABASE_URL", "postgres://from-env")
+	t.Setenv("MONGODB_URI", "mongodb://from-env")
 	t.Setenv("JWT_SECRET", "env-secret")
 
 	cfg, err := config.Load(writeConfig(t, validYAML))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
+	if cfg.Database.Type != config.DatabaseMongo {
+		t.Errorf("database type env override failed: got %q", cfg.Database.Type)
+	}
 	if cfg.Database.DSN != "postgres://from-env" {
 		t.Errorf("DSN env override failed: got %q", cfg.Database.DSN)
+	}
+	if cfg.Database.Mongo.URI != "mongodb://from-env" {
+		t.Errorf("Mongo URI env override failed: got %q", cfg.Database.Mongo.URI)
 	}
 	if cfg.Auth.JWTSecret != "env-secret" {
 		t.Errorf("JWT secret env override failed: got %q", cfg.Auth.JWTSecret)
@@ -102,7 +118,7 @@ func TestValidate(t *testing.T) {
 	base := func() *config.Config {
 		return &config.Config{
 			Server:   config.ServerConfig{Addr: ":8080"},
-			Database: config.DatabaseConfig{DSN: "postgres://x"},
+			Database: config.DatabaseConfig{Type: config.DatabasePostgres, DSN: "postgres://x"},
 			Auth: config.AuthConfig{
 				JWTSecret:  "s",
 				JWTTTL:     config.Duration(time.Hour),
@@ -130,7 +146,18 @@ func TestValidate(t *testing.T) {
 		wantErr string
 	}{
 		{"valid", func(*config.Config) {}, ""},
-		{"empty DSN", func(c *config.Config) { c.Database.DSN = "" }, "database.dsn"},
+		{"empty postgres DSN", func(c *config.Config) { c.Database.DSN = "" }, "database.dsn"},
+		{"bad database type", func(c *config.Config) { c.Database.Type = "sqlite" }, "database.type"},
+		{"empty mongo URI", func(c *config.Config) {
+			c.Database.Type = config.DatabaseMongo
+			c.Database.Mongo.URI = ""
+			c.Database.Mongo.Name = "marketplace"
+		}, "database.mongo.uri"},
+		{"empty mongo name", func(c *config.Config) {
+			c.Database.Type = config.DatabaseMongo
+			c.Database.Mongo.URI = "mongodb://localhost:27017"
+			c.Database.Mongo.Name = ""
+		}, "database.mongo.name"},
 		{"empty JWT", func(c *config.Config) { c.Auth.JWTSecret = "" }, "auth.jwt_secret"},
 		{"zero JWT TTL", func(c *config.Config) { c.Auth.JWTTTL = 0 }, "auth.jwt_ttl"},
 		{"bcrypt below min", func(c *config.Config) { c.Auth.BcryptCost = 1 }, "auth.bcrypt_cost"},

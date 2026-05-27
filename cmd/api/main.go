@@ -8,16 +8,15 @@ import (
 	"os"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
-	payment "github.com/beastixq/marketplace/internal/adapter/payment"
 	"github.com/beastixq/marketplace/internal/cache"
+	repocomponent "github.com/beastixq/marketplace/internal/component/repository"
+	servicecomponent "github.com/beastixq/marketplace/internal/component/service"
 	"github.com/beastixq/marketplace/internal/config"
 	"github.com/beastixq/marketplace/internal/handler"
 	"github.com/beastixq/marketplace/internal/logging"
 	"github.com/beastixq/marketplace/internal/middleware"
-	repo "github.com/beastixq/marketplace/internal/repository"
 	svc "github.com/beastixq/marketplace/internal/service"
 	"github.com/beastixq/marketplace/internal/web"
 )
@@ -41,20 +40,6 @@ func main() {
 
 	logger.Info("marketplace api starting", "addr", cfg.Server.Addr, "log_level", cfg.Logging.Level)
 
-	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer dbCancel()
-	pool, err := pgxpool.New(dbCtx, cfg.Database.DSN)
-	if err != nil {
-		logger.Error("connect database", "error", err)
-		os.Exit(2)
-	}
-	defer pool.Close()
-	if err = pool.Ping(dbCtx); err != nil {
-		logger.Error("ping database", "error", err)
-		os.Exit(2)
-	}
-	logger.Info("database connected")
-
 	// Redis (optional cache layer)
 	var rdb *redis.Client
 	if cfg.Redis.Enabled {
@@ -68,62 +53,53 @@ func main() {
 		logger.Info("redis connected", "addr", cfg.Redis.Addr)
 	}
 
-	userRepo := repo.NewUserRepo(pool)
-	sellerRepo := repo.NewSellerRepo(pool)
-	addressRepo := repo.NewAddressRepo(pool)
-	reviewRepo := repo.NewReviewRepo(pool)
-
-	var productRepo svc.ProductRepo = repo.NewProductRepo(pool)
+	var cacheCfg *repocomponent.CacheConfig
 	if rdb != nil {
-		productRepo = cache.NewProductRepoCache(productRepo, rdb, cfg.Redis.ProductTTL.Std())
+		cacheCfg = &repocomponent.CacheConfig{Client: rdb, ProductTTL: cfg.Redis.ProductTTL.Std()}
 	}
 
-	orderRepo := repo.NewOrderRepo(pool)
-	orderItemRepo := repo.NewOrderItemRepo(pool)
-	categoryRepo := repo.NewCategoryRepo(pool)
-	backofficeRepo := repo.NewBackofficeRepo(pool)
-	favoriteRepo := repo.NewFavoriteRepo(pool)
-	txManager := repo.NewPgxTxManager(pool)
+	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer dbCancel()
+	repositories, err := repocomponent.NewFromConfig(dbCtx, cfg.Database, cacheCfg)
+	if err != nil {
+		logger.Error("connect database", "type", cfg.Database.Type, "error", err)
+		os.Exit(2)
+	}
+	defer repositories.Close()
+	logger.Info("database connected", "type", cfg.Database.Type)
 
-	userService := svc.NewUserService(userRepo, cfg.Auth.BcryptCost)
-	sellerService := svc.NewSellerService(sellerRepo)
-	addressService := svc.NewAddressService(addressRepo)
-	reviewService := svc.NewReviewService(reviewRepo, reviewRepo, productRepo)
-	productService := svc.NewProductService(productRepo, reviewRepo, sellerRepo, txManager)
-	favoriteService := svc.NewFavoriteService(favoriteRepo, productRepo)
-	orderService := svc.NewOrderService(orderRepo, orderItemRepo, productRepo, addressRepo, sellerRepo, txManager)
-	categoryService := svc.NewCategoryService(categoryRepo)
-	backofficeService := svc.NewBackofficeService(backofficeRepo)
-	// TODO: replace with Redis TokenBlocklist implementation
-	authService := svc.NewAuthService(userService, nil, cfg.Auth.JWTSecret, cfg.Auth.JWTTTL.Std())
+	services := servicecomponent.New(repositories, servicecomponent.Config{
+		BcryptCost:            cfg.Auth.BcryptCost,
+		JWTSecret:             cfg.Auth.JWTSecret,
+		TokenTTL:              cfg.Auth.JWTTTL.Std(),
+		PaymentTTL:            cfg.Payment.TTL.Std(),
+		PaymentGatewayBaseURL: cfg.Payment.GatewayURL,
+	})
 
 	paymentTTL := cfg.Payment.TTL.Std()
-	gateway := payment.NewMockBankGateway(cfg.Payment.GatewayURL)
-	paymentService := svc.NewPaymentService(orderRepo, gateway, paymentTTL)
-
 	worker := svc.NewOrderExpirationWorker(
-		orderService,
+		services.Order,
 		cfg.Orders.ExpirationCheckInterval.Std(),
 		paymentTTL,
 		logger.With("component", "order-expiration-worker"),
 	)
 	go worker.Run(context.Background())
 
-	authHandler := handler.NewAuthHandler(authService)
-	userHandler := handler.NewUserHandler(userService)
-	sellerHandler := handler.NewSellerHandler(sellerService, orderService)
-	addressHandler := handler.NewAddressHandler(addressService)
-	productHandler := handler.NewProductHandler(productService)
-	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
-	orderHandler := handler.NewOrderHandler(orderService)
-	paymentHandler := handler.NewPaymentHandler(paymentService)
-	categoryHandler := handler.NewCategoryHandler(categoryService)
-	reviewHandler := handler.NewReviewHandler(reviewService)
-	adminHandler := handler.NewAdminHandler(userService, sellerService)
+	authHandler := handler.NewAuthHandler(services.Auth)
+	userHandler := handler.NewUserHandler(services.User)
+	sellerHandler := handler.NewSellerHandler(services.Seller, services.Order)
+	addressHandler := handler.NewAddressHandler(services.Address)
+	productHandler := handler.NewProductHandler(services.Product)
+	favoriteHandler := handler.NewFavoriteHandler(services.Favorite)
+	orderHandler := handler.NewOrderHandler(services.Order)
+	paymentHandler := handler.NewPaymentHandler(services.Payment)
+	categoryHandler := handler.NewCategoryHandler(services.Category)
+	reviewHandler := handler.NewReviewHandler(services.Review)
+	adminHandler := handler.NewAdminHandler(services.User, services.Seller)
 
 	apiRouter := handler.NewRouter(
 		logger.With("component", "http"),
-		authService,
+		services.Auth,
 		authHandler,
 		userHandler,
 		sellerHandler,
@@ -137,7 +113,7 @@ func main() {
 		adminHandler,
 	)
 
-	webHandler := web.NewWebHandler(productService, categoryService, authService, userService, orderService, addressService, sellerService, reviewService, backofficeService, paymentService, favoriteService)
+	webHandler := web.NewWebHandler(services.Product, services.Category, services.Auth, services.User, services.Order, services.Address, services.Seller, services.Review, services.Backoffice, services.Payment, services.Favorite)
 	webRouter := web.NewWebRouter(webHandler)
 	webLogger := logger.With("component", "web")
 	webHandlerWithLogs := middleware.ActorHolder()(

@@ -13,8 +13,10 @@ import (
 )
 
 const (
-	envDatabaseURL = "DATABASE_URL"
-	envJWTSecret   = "JWT_SECRET"
+	envDatabaseType = "DATABASE_TYPE"
+	envDatabaseURL  = "DATABASE_URL"
+	envMongoDBURI   = "MONGODB_URI"
+	envJWTSecret    = "JWT_SECRET"
 )
 
 type Config struct {
@@ -31,8 +33,22 @@ type ServerConfig struct {
 	Addr string `yaml:"addr"`
 }
 
+type DatabaseType string
+
+const (
+	DatabasePostgres DatabaseType = "postgres"
+	DatabaseMongo    DatabaseType = "mongo"
+)
+
 type DatabaseConfig struct {
-	DSN string `yaml:"dsn"`
+	Type  DatabaseType `yaml:"type"`
+	DSN   string       `yaml:"dsn"`
+	Mongo MongoConfig  `yaml:"mongo"`
+}
+
+type MongoConfig struct {
+	URI  string `yaml:"uri"`
+	Name string `yaml:"name"`
 }
 
 type RedisConfig struct {
@@ -41,6 +57,7 @@ type RedisConfig struct {
 	Password    string   `yaml:"password"`
 	DB          int      `yaml:"db"`
 	DialTimeout Duration `yaml:"dial_timeout"`
+	ProductTTL  Duration `yaml:"product_ttl"`
 }
 
 type AuthConfig struct {
@@ -81,7 +98,7 @@ func (d *Duration) UnmarshalYAML(node *yaml.Node) error {
 func (d Duration) Std() time.Duration { return time.Duration(d) }
 
 // Load reads YAML from path, then overlays secrets from environment variables.
-// DATABASE_URL and JWT_SECRET override the YAML values when present, so that
+// DATABASE_URL, MONGODB_URI and JWT_SECRET override the YAML values when present, so that
 // production secrets stay out of the file.
 func Load(path string) (*Config, error) {
 	raw, err := os.ReadFile(path)
@@ -96,8 +113,14 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parse config %q: %w", path, err)
 	}
 
+	if v, ok := os.LookupEnv(envDatabaseType); ok {
+		cfg.Database.Type = DatabaseType(v)
+	}
 	if v, ok := os.LookupEnv(envDatabaseURL); ok {
 		cfg.Database.DSN = v
+	}
+	if v, ok := os.LookupEnv(envMongoDBURI); ok {
+		cfg.Database.Mongo.URI = v
 	}
 	if v, ok := os.LookupEnv(envJWTSecret); ok {
 		cfg.Auth.JWTSecret = v
@@ -110,8 +133,23 @@ func Load(path string) (*Config, error) {
 }
 
 func (c *Config) Validate() error {
-	if c.Database.DSN == "" {
-		return errors.New("database.dsn must be set (use config file or DATABASE_URL env)")
+	if c.Database.Type == "" {
+		c.Database.Type = DatabasePostgres
+	}
+	switch c.Database.Type {
+	case DatabasePostgres:
+		if c.Database.DSN == "" {
+			return errors.New("database.dsn must be set for postgres (use config file or DATABASE_URL env)")
+		}
+	case DatabaseMongo:
+		if c.Database.Mongo.URI == "" {
+			return errors.New("database.mongo.uri must be set for mongo (use config file or MONGODB_URI env)")
+		}
+		if c.Database.Mongo.Name == "" {
+			return errors.New("database.mongo.name must be set for mongo")
+		}
+	default:
+		return fmt.Errorf("database.type must be one of postgres|mongo, got %q", c.Database.Type)
 	}
 	if c.Auth.JWTSecret == "" {
 		return errors.New("auth.jwt_secret must be set (use config file or JWT_SECRET env)")
@@ -147,6 +185,9 @@ func (c *Config) Validate() error {
 		}
 		if c.Redis.DB < 0 {
 			return fmt.Errorf("redis.db must be >= 0, got %d", c.Redis.DB)
+		}
+		if c.Redis.ProductTTL <= 0 {
+			return errors.New("redis.product_ttl must be positive when redis.enabled is true")
 		}
 	}
 	return c.Logging.validate()

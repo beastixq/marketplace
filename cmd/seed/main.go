@@ -41,6 +41,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v\n", err)
 	}
+	if cfg.Database.Type == config.DatabaseMongo {
+		log.Fatalf("cmd/seed supports PostgreSQL only; MongoDB mode starts empty and is filled through the application")
+	}
 
 	logger, closer, err := logging.New(cfg.Logging)
 	if err != nil {

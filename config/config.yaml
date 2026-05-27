@@ -6,8 +6,14 @@ server:
   addr: ":8080"
 
 database:
+  # Switch with DATABASE_TYPE=postgres|mongo.
+  type: "mongo"
   # Local dev default. Override via DATABASE_URL in prod.
   dsn: "postgres://postgres:postgres@localhost:5432/marketplace?sslmode=disable"
+  mongo:
+    # Used when database.type is "mongo". Override URI via MONGODB_URI.
+    uri: "mongodb://localhost:27017/?replicaSet=rs0"
+    name: "marketplace"
 
 redis:
   enabled: true

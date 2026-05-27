@@ -8,13 +8,14 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/beastixq/marketplace/internal/cache"
+	"github.com/beastixq/marketplace/internal/config"
 	store "github.com/beastixq/marketplace/internal/repository"
+	mongostore "github.com/beastixq/marketplace/internal/repository/mongo"
 	svc "github.com/beastixq/marketplace/internal/service"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Component struct {
-	Pool           *pgxpool.Pool
 	User           svc.UserRepo
 	Seller         svc.SellerRepo
 	Address        svc.AddressRepo
@@ -27,9 +28,26 @@ type Component struct {
 	Backoffice     svc.BackofficeRepo
 	Favorite       svc.FavoriteRepo
 	TxManager      svc.TxManager
+
+	closeFn func()
 }
 
 func New(ctx context.Context, dbURL string) (*Component, error) {
+	return NewPostgres(ctx, dbURL, nil)
+}
+
+func NewFromConfig(ctx context.Context, cfg config.DatabaseConfig, cacheCfg *CacheConfig) (*Component, error) {
+	switch cfg.Type {
+	case "", config.DatabasePostgres:
+		return NewPostgres(ctx, cfg.DSN, cacheCfg)
+	case config.DatabaseMongo:
+		return NewMongo(ctx, cfg.Mongo, cacheCfg)
+	default:
+		return nil, fmt.Errorf("unsupported database type %q", cfg.Type)
+	}
+}
+
+func NewPostgres(ctx context.Context, dbURL string, cacheCfg *CacheConfig) (*Component, error) {
 	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
 		return nil, fmt.Errorf("connect database: %w", err)
@@ -38,7 +56,37 @@ func New(ctx context.Context, dbURL string) (*Component, error) {
 		pool.Close()
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
-	return NewFromPool(pool), nil
+	return NewFromPoolWithCache(pool, cacheCfg), nil
+}
+
+func NewMongo(ctx context.Context, cfg config.MongoConfig, cacheCfg *CacheConfig) (*Component, error) {
+	mongoStore, err := mongostore.New(ctx, cfg.URI, cfg.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	var productRepo svc.ProductRepo = mongoStore
+	if cacheCfg != nil && cacheCfg.Client != nil {
+		productRepo = cache.NewProductRepoCache(productRepo, cacheCfg.Client, cacheCfg.ProductTTL)
+	}
+
+	return &Component{
+		User:           mongoStore,
+		Seller:         mongoStore,
+		Address:        mongoStore,
+		Review:         mongoStore,
+		ReviewPurchase: mongoStore,
+		Product:        productRepo,
+		Order:          mongoStore,
+		OrderItem:      mongoStore,
+		Category:       mongoStore,
+		Backoffice:     mongoStore,
+		Favorite:       mongoStore,
+		TxManager:      mongoStore,
+		closeFn: func() {
+			_ = mongoStore.Close(context.Background())
+		},
+	}, nil
 }
 
 func NewFromPool(pool *pgxpool.Pool) *Component {
@@ -62,7 +110,6 @@ func NewFromPoolWithCache(pool *pgxpool.Pool, cfg *CacheConfig) *Component {
 	}
 
 	return &Component{
-		Pool:           pool,
 		User:           store.NewUserRepo(pool),
 		Seller:         store.NewSellerRepo(pool),
 		Address:        store.NewAddressRepo(pool),
@@ -75,11 +122,12 @@ func NewFromPoolWithCache(pool *pgxpool.Pool, cfg *CacheConfig) *Component {
 		Backoffice:     store.NewBackofficeRepo(pool),
 		Favorite:       store.NewFavoriteRepo(pool),
 		TxManager:      store.NewPgxTxManager(pool),
+		closeFn:        pool.Close,
 	}
 }
 
 func (c *Component) Close() {
-	if c != nil && c.Pool != nil {
-		c.Pool.Close()
+	if c != nil && c.closeFn != nil {
+		c.closeFn()
 	}
 }

@@ -1,16 +1,16 @@
 @startuml C4_L4_Repository
-title Компонент доступа к данным — component/repository и пакет repository (C4 L4)
+title Компонент доступа к данным — PostgreSQL и MongoDB repositories (C4 L4)
 
 skinparam classAttributeIconSize 0
 left to right direction
 
 package "component/repository" {
     class RepositoryComponent as "Component" {
-        +Pool: *pgxpool.Pool
         +User: UserRepo
         +Seller: SellerRepo
         +Address: AddressRepo
         +Review: ReviewRepo
+        +ReviewPurchase: ReviewPurchaseChecker
         +Product: ProductRepo
         +Order: OrderRepo
         +OrderItem: OrderItemRepo
@@ -18,11 +18,12 @@ package "component/repository" {
         +Backoffice: BackofficeRepo
         +Favorite: FavoriteRepo
         +TxManager: TxManager
+        -closeFn: func()
         +Close(): void
     }
 }
 
-package "repository" {
+package "repository (PostgreSQL)" {
     class UserRepoImpl {
         -pool: *pgxpool.Pool
     }
@@ -67,6 +68,24 @@ package "repository" {
     }
 }
 
+package "repository/mongo" {
+    class MongoStore as "Store" {
+        -client: *mongo.Client
+        -db: *mongo.Database
+        +EnsureIndexes(ctx): error
+        +WithTransaction(ctx, fn): error
+    }
+    class MongoDocuments as "BSON documents" {
+        userDoc
+        sellerDoc
+        productDoc
+        orderDoc
+        orderItemDoc
+        reviewDoc
+        favoriteDoc
+    }
+}
+
 package "service interfaces" {
     interface UserRepo {
         +GetUsers(ctx, opts): []User, error
@@ -100,6 +119,9 @@ package "service interfaces" {
         +CreateReview(ctx, rc): int64, error
         +UpdateReview(ctx, id, ru): Review, error
         +DeleteReviewByID(ctx, id): error
+    }
+    interface ReviewPurchaseChecker {
+        +HasPurchasedProduct(ctx, userID, productID): bool, error
     }
     interface ProductRepo {
         +GetProducts(ctx, opts): []Product, error
@@ -190,18 +212,20 @@ package "repository rows" {
 }
 
 class "PostgreSQL" as postgres
+class "MongoDB" as mongo
 
-RepositoryComponent *-- UserRepoImpl
-RepositoryComponent *-- SellerRepoImpl
-RepositoryComponent *-- AddressRepoImpl
-RepositoryComponent *-- ReviewRepoImpl
-RepositoryComponent *-- ProductRepoImpl
-RepositoryComponent *-- OrderRepoImpl
-RepositoryComponent *-- OrderItemRepoImpl
-RepositoryComponent *-- CategoryRepoImpl
-RepositoryComponent *-- BackofficeRepoImpl
-RepositoryComponent *-- FavoriteRepoImpl
-RepositoryComponent *-- PgxTxManager
+RepositoryComponent ..> UserRepoImpl : creates when postgres
+RepositoryComponent ..> SellerRepoImpl : creates when postgres
+RepositoryComponent ..> AddressRepoImpl : creates when postgres
+RepositoryComponent ..> ReviewRepoImpl : creates when postgres
+RepositoryComponent ..> ProductRepoImpl : creates when postgres
+RepositoryComponent ..> OrderRepoImpl : creates when postgres
+RepositoryComponent ..> OrderItemRepoImpl : creates when postgres
+RepositoryComponent ..> CategoryRepoImpl : creates when postgres
+RepositoryComponent ..> BackofficeRepoImpl : creates when postgres
+RepositoryComponent ..> FavoriteRepoImpl : creates when postgres
+RepositoryComponent ..> PgxTxManager : creates when postgres
+RepositoryComponent ..> MongoStore : creates when mongo
 
 FavoriteRepoImpl ..|> FavoriteRepo
 FavoriteRepoImpl ..> DBTX : getConn(ctx)
@@ -212,12 +236,26 @@ SellerRepoImpl ..|> SellerRepo
 SellerRepoImpl ..|> SellerGetter
 AddressRepoImpl ..|> AddressRepo
 ReviewRepoImpl ..|> ReviewRepo
+ReviewRepoImpl ..|> ReviewPurchaseChecker
 ProductRepoImpl ..|> ProductRepo
 OrderRepoImpl ..|> OrderRepo
 OrderItemRepoImpl ..|> OrderItemRepo
 CategoryRepoImpl ..|> CategoryRepo
 BackofficeRepoImpl ..|> BackofficeRepo
 PgxTxManager ..|> TxManager
+MongoStore ..|> UserRepo
+MongoStore ..|> SellerRepo
+MongoStore ..|> SellerGetter
+MongoStore ..|> AddressRepo
+MongoStore ..|> ReviewRepo
+MongoStore ..|> ReviewPurchaseChecker
+MongoStore ..|> ProductRepo
+MongoStore ..|> OrderRepo
+MongoStore ..|> OrderItemRepo
+MongoStore ..|> CategoryRepo
+MongoStore ..|> BackofficeRepo
+MongoStore ..|> FavoriteRepo
+MongoStore ..|> TxManager
 
 UserRepoImpl ..> DBTX : getConn(ctx)
 SellerRepoImpl ..> DBTX : getConn(ctx)
@@ -230,6 +268,8 @@ CategoryRepoImpl ..> DBTX : getConn(ctx)
 BackofficeRepoImpl ..> DBTX : getConn(ctx)
 PgxTxManager ..> postgres : BEGIN / COMMIT / ROLLBACK
 DBTX ..> postgres : SQL
+MongoStore ..> mongo : BSON commands
+MongoStore ..> MongoDocuments : encode/decode
 
 UserRepoImpl ..> userRow : scan
 SellerRepoImpl ..> sellerRow : scan
@@ -246,14 +286,21 @@ BackofficeRepoImpl ..> orderRow : scan
 note right of RepositoryComponent
   component/repository является единицей сборки
   компонента доступа к данным:
-  открывает pgxpool, создаёт repositories
-  и отдаёт интерфейсы, ожидаемые service layer.
+  по database.type открывает pgxpool или MongoDB client,
+  создаёт выбранную реализацию и наружу отдаёт только
+  service-owned repository interfaces.
+  Конкретный pool/store скрыт за private closeFn.
 end note
 
 note bottom of DBTX
   DBTX скрывает различие между pool и tx.
   Если в context есть pgx.Tx, repository
   работает внутри транзакции.
+end note
+
+note bottom of MongoStore
+  MongoDB режим сохраняет те же int64 ID и service contracts.
+  Индексы создаются при подключении; транзакции используют sessions.
 end note
 
 @enduml

@@ -35,12 +35,14 @@ Container_Boundary(serviceLayer, "Компонент бизнес-логики")
 }
 
 Container_Boundary(repositoryLayer, "Компонент доступа к данным") {
-    Component(repositoryComponent, "component/repository", "Go facade", "Создаёт pgxpool, repositories и TxManager")
-    Component(repositories, "Repository package", "Go, pgx/v5, squirrel", "SQL-запросы и преобразование rows -> model")
-    Component(txManager, "PgxTxManager", "Go, pgx.Tx", "Единая граница транзакций для service layer")
+    Component(repositoryComponent, "component/repository", "Go facade", "Выбирает postgres/mongo по config,\nсоздаёт repositories и TxManager")
+    Component(pgRepositories, "repository package", "Go, pgx/v5, squirrel", "PostgreSQL SQL-запросы и rows -> model")
+    Component(mongoRepositories, "repository/mongo package", "Go, mongo-driver/v2", "MongoDB collection access,\nindexes, BSON -> model")
+    Component(txManager, "TxManager", "Go", "PgxTxManager или Mongo session transaction")
 }
 
 ContainerDb(postgres, "База данных", "PostgreSQL 16", "")
+ContainerDb(mongo, "Документная БД", "MongoDB 8", "")
 System_Ext(bank, "Mock Bank", "HTTP payment mock")
 
 Rel(user, router, "HTTP/Web requests", "HTTPS")
@@ -67,17 +69,23 @@ Rel(techuiMain, orderWorker, "Запускает", "goroutine")
 Rel(serviceComponent, domainServices, "Создаёт services", "constructors")
 Rel(serviceComponent, backofficeService, "Создаёт backoffice service", "constructor")
 Rel(serviceComponent, paymentService, "Создаёт payment service", "constructor")
-Rel(domainServices, repositories, "Читает/изменяет данные", "repository interfaces")
-Rel(backofficeService, repositories, "Читает агрегаты и списки", "BackofficeRepo")
-Rel(paymentService, repositories, "Читает/изменяет заказ", "OrderRepo")
+Rel(domainServices, pgRepositories, "Читает/изменяет данные", "repository interfaces")
+Rel(domainServices, mongoRepositories, "Читает/изменяет данные", "repository interfaces")
+Rel(backofficeService, pgRepositories, "Читает агрегаты и списки", "BackofficeRepo")
+Rel(backofficeService, mongoRepositories, "Читает агрегаты и списки", "BackofficeRepo")
+Rel(paymentService, pgRepositories, "Читает/изменяет заказ", "OrderRepo")
+Rel(paymentService, mongoRepositories, "Читает/изменяет заказ", "OrderRepo")
 Rel(domainServices, txManager, "Открывает транзакции", "TxManager")
 Rel(paymentService, paymentGateway, "Запрашивает/обрабатывает оплату", "PaymentGateway")
 Rel(paymentGateway, bank, "HTTP URL / token", "HTTP")
 
-Rel(repositoryComponent, repositories, "Создаёт repositories", "constructors")
+Rel(repositoryComponent, pgRepositories, "Создаёт при database.type=postgres", "constructors")
+Rel(repositoryComponent, mongoRepositories, "Создаёт при database.type=mongo", "constructors")
 Rel(repositoryComponent, txManager, "Создаёт", "constructor")
-Rel(repositories, postgres, "SQL", "pgx/v5")
+Rel(pgRepositories, postgres, "SQL", "pgx/v5")
+Rel(mongoRepositories, mongo, "BSON commands", "mongo-driver/v2")
 Rel(txManager, postgres, "BEGIN / COMMIT / ROLLBACK", "pgx.Tx")
+Rel(txManager, mongo, "session transaction", "MongoDB replica set")
 
 Rel(seedMain, postgres, "Записывает тестовые данные", "pgx/v5")
 

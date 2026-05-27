@@ -163,6 +163,7 @@ package "service" {
     interface OrderRepo
     interface OrderItemRepo
     interface ReviewRepo
+    interface ReviewPurchaseChecker
     interface AddressRepo
     interface CategoryRepo
     interface BackofficeRepo
@@ -181,6 +182,7 @@ package "repository component" {
         +Seller: SellerRepo
         +Address: AddressRepo
         +Review: ReviewRepo
+        +ReviewPurchase: ReviewPurchaseChecker
         +Product: ProductRepo
         +Order: OrderRepo
         +OrderItem: OrderItemRepo
@@ -250,7 +252,7 @@ end note
 note bottom of OrderService
   Бизнес-логика держит транзакционные
   сценарии через TxManager и не знает
-  о конкретном pgxpool напрямую.
+  о pgxpool или MongoDB session напрямую.
 end note
 
 note bottom of FavoriteService

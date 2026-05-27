@@ -40,13 +40,13 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	repositories, err := repocomponent.New(ctx, cfg.Database.DSN)
+	repositories, err := repocomponent.NewFromConfig(ctx, cfg.Database, nil)
 	if err != nil {
 		logger.Error("connect database", "error", err)
 		os.Exit(2)
 	}
 	defer repositories.Close()
-	logger.Info("database connected")
+	logger.Info("database connected", "type", cfg.Database.Type)
 
 	services := servicecomponent.New(repositories, servicecomponent.Config{
 		BcryptCost:            cfg.Auth.BcryptCost,

@@ -109,7 +109,7 @@ package "repository" {
     interface FavoriteRepo
 }
 
-class "PostgreSQL" as postgres <<database>>
+class "Configured storage" as storage <<database>>
 
 APIMain ..> WebHandler : создаёт
 APIMain ..> WebRouter : монтирует в mux
@@ -181,7 +181,8 @@ note bottom of service
   Model в Go-проекте разделён:
   model содержит структуры данных,
   service содержит use cases и RBAC,
-  repository реализует доступ к PostgreSQL.
+  repository реализует доступ к выбранному хранилищу:
+  PostgreSQL или MongoDB.
 end note
 
 @enduml
