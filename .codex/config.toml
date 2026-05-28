@@ -1,0 +1,45 @@
+# Project Codex CLI defaults for this repository.
+
+model = "gpt-5.5"
+model_provider = "openai"
+
+# Safer default for local coding.
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+# Codex web search:
+# "cached" = safer, OpenAI-maintained search cache.
+# "live" = fresher, higher prompt-injection exposure.
+# "disabled" = no web search.
+web_search = "live"
+
+[mcp_servers.chrome_devtools]
+command = "npx"
+args = [
+    "-y",
+    "chrome-devtools-mcp@latest",
+    "--slim",
+    "--headless",
+    "--isolated",
+    "--executablePath=/usr/bin/google-chrome-stable",
+    "--no-usage-statistics",
+]
+env = { npm_config_cache = "/tmp/npm-cache" }
+startup_timeout_sec = 20
+tool_timeout_sec = 45
+enabled = true
+
+[sandbox_workspace_write]
+# Lets shell commands such as npm/pnpm/pip/curl reach the internet.
+# This is separate from Codex's web search tool.
+network_access = true
+
+[features]
+multi_agent = true
+codex_hooks = true
+skill_mcp_dependency_install = true
+
+[agents]
+max_threads = 6
+max_depth = 1
+job_max_runtime_seconds = 1800

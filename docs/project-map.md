@@ -61,6 +61,21 @@ must not import repositories.
 | `docs/` | Maintenance documentation. Keep it synchronized with current code. |
 | `scripts/` | Local helper scripts and SQL snippets. Not runtime application code. |
 
+## Agent Tooling
+
+`AGENTS.md` is the canonical project guidance for AI coding agents. `CLAUDE.md`
+is a legacy symlink to it.
+
+| Path | Purpose |
+| --- | --- |
+| `opencode.json` | Project OpenCode config: default model, sharing mode, LSP, permissions, and watcher ignores. |
+| `.opencode/agents/` | OpenCode project agents for backend, frontend, and architecture work. |
+| `.opencode/commands/review.md` | OpenCode `/review` command for read-only current-diff review. |
+| `.opencode/commands/verify.md` | OpenCode `/verify` command for focused read-only verification. |
+| `.codex/config.toml` | Project Codex CLI defaults. |
+| `.codex/agents/` | Codex project agents matching the same backend/frontend/architecture roles. |
+| `.claude/` | Legacy Claude Code project settings and agents, retained for compatibility only. |
+
 ## Main Use-Case Map
 
 | Area | Primary Service | Repository/Port | API/Web Surface |

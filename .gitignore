@@ -6,7 +6,6 @@ requests.http
 .playwright-mcp
 .vscode
 problems.md
-.codex
 prompts/
 internal/mocks
 reviews/
