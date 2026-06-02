@@ -2,8 +2,6 @@ package cache
 
 import (
 	"context"
-	"log/slog"
-	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -16,50 +14,36 @@ import (
 // and write-through invalidation. It also satisfies svc.ProductCategoryRepo
 // (pass-through) so the service constructor's type assertion still succeeds.
 type ProductRepoCache struct {
-	inner svc.ProductRepo
-	rdb   *redis.Client
-	ttl   time.Duration
+	inner      svc.ProductRepo
+	rdb        *redis.Client
+	productTTL time.Duration
+	catalogTTL time.Duration
 }
 
 // Compile-time interface checks. Decorator must satisfy BOTH interfaces
 // the underlying repo satisfies, otherwise the type assertion in
 // NewProductService will silently lose ProductCategoryRepo features.
-// var (
-// 	_ svc.ProductRepo         = (*ProductRepoCache)(nil)
-// 	_ svc.ProductCategoryRepo = (*ProductRepoCache)(nil)
-// )
+var (
+	_ svc.ProductRepo         = (*ProductRepoCache)(nil)
+	_ svc.ProductCategoryRepo = (*ProductRepoCache)(nil)
+)
 
-func NewProductRepoCache(inner svc.ProductRepo, rdb *redis.Client, ttl time.Duration) *ProductRepoCache {
-	return &ProductRepoCache{inner: inner, rdb: rdb, ttl: ttl}
-}
-
-// ProductByIDKey is the currently implemented Redis product entity key:
-//
-//	products:{id}    TTL configured by wrapper, 5m in cmd/api
-func ProductByIDKey(id int64) string {
-	return "products:" + strconv.FormatInt(id, 10)
-}
-
-// invalidateProduct deletes products:{id} from cache. Fire-and-forget: logs
-// on failure but never fails the mutation.
-func (c *ProductRepoCache) invalidateProduct(ctx context.Context, id int64) {
-	if err := c.rdb.Del(ctx, ProductByIDKey(id)).Err(); err != nil {
-		slog.Default().Warn("cache invalidation failed", "key", ProductByIDKey(id), "error", err)
-	}
+func NewProductRepoCache(inner svc.ProductRepo, rdb *redis.Client, productTTL, catalogTTL time.Duration) *ProductRepoCache {
+	return &ProductRepoCache{inner: inner, rdb: rdb, productTTL: productTTL, catalogTTL: catalogTTL}
 }
 
 // ---------- Cached reads ----------
 
 func (c *ProductRepoCache) GetProductByID(ctx context.Context, id int64) (m.Product, error) {
-	return GetOrLoad(ctx, c.rdb, ProductByIDKey(id), c.ttl, func(ctx context.Context) (m.Product, error) {
+	return GetOrLoad(ctx, c.rdb, ProductByIDKey(id), c.productTTL, func(ctx context.Context) (m.Product, error) {
 		return c.inner.GetProductByID(ctx, id)
 	})
 }
 
-// ---------- Pass-through reads (not cached this round) ----------
-
 func (c *ProductRepoCache) GetProducts(ctx context.Context, options m.CatalogOptions) ([]m.Product, error) {
-	return c.inner.GetProducts(ctx, options)
+	return GetOrLoad(ctx, c.rdb, ProductCatalogKey(options), c.catalogTTL, func(ctx context.Context) ([]m.Product, error) {
+		return c.inner.GetProducts(ctx, options)
+	})
 }
 
 func (c *ProductRepoCache) GetProductByIDForUpdate(ctx context.Context, id int64) (m.Product, error) {
@@ -75,7 +59,14 @@ func (c *ProductRepoCache) GetProductPriceHistory(ctx context.Context, pid int64
 // ---------- Mutations and invalidation ----------
 
 func (c *ProductRepoCache) CreateProduct(ctx context.Context, pc m.ProductCreate) (int64, error) {
-	return c.inner.CreateProduct(ctx, pc)
+	id, err := c.inner.CreateProduct(ctx, pc)
+	if err != nil {
+		return 0, err
+	}
+	invalidateAfterCommit(ctx, func(ctx context.Context) {
+		deleteByPrefix(ctx, c.rdb, ProductCatalogPrefix())
+	})
+	return id, nil
 }
 
 func (c *ProductRepoCache) UpdateProduct(ctx context.Context, id int64, pu m.ProductUpdate) (m.Product, error) {
@@ -83,15 +74,21 @@ func (c *ProductRepoCache) UpdateProduct(ctx context.Context, id int64, pu m.Pro
 	if err != nil {
 		return p, err
 	}
-	c.invalidateProduct(ctx, id)
+	invalidateAfterCommit(ctx, func(ctx context.Context) {
+		invalidateProductReadModels(ctx, c.rdb, id)
+	})
 	return p, nil
 }
 
 func (c *ProductRepoCache) ChangeStockAndReserved(ctx context.Context, productID int64, stockDelta, reservedDelta int) error {
-	// Stock changes happen on every order. Caching products:{id} means stock
-	// can be stale until TTL expiry. See docs/cache.md for the current
-	// cache contract and known staleness caveats.
-	return c.inner.ChangeStockAndReserved(ctx, productID, stockDelta, reservedDelta)
+	err := c.inner.ChangeStockAndReserved(ctx, productID, stockDelta, reservedDelta)
+	if err != nil {
+		return err
+	}
+	invalidateAfterCommit(ctx, func(ctx context.Context) {
+		invalidateProductReadModels(ctx, c.rdb, productID)
+	})
+	return nil
 }
 
 func (c *ProductRepoCache) DeleteProductByID(ctx context.Context, id int64) error {
@@ -99,7 +96,9 @@ func (c *ProductRepoCache) DeleteProductByID(ctx context.Context, id int64) erro
 	if err != nil {
 		return err
 	}
-	c.invalidateProduct(ctx, id)
+	invalidateAfterCommit(ctx, func(ctx context.Context) {
+		invalidateProductReadModels(ctx, c.rdb, id)
+	})
 	return nil
 }
 
@@ -123,5 +122,11 @@ func (c *ProductRepoCache) ReplaceProductCategories(ctx context.Context, product
 	if !ok {
 		return nil
 	}
-	return pcr.ReplaceProductCategories(ctx, productID, categoryIDs)
+	if err := pcr.ReplaceProductCategories(ctx, productID, categoryIDs); err != nil {
+		return err
+	}
+	invalidateAfterCommit(ctx, func(ctx context.Context) {
+		invalidateProductReadModels(ctx, c.rdb, productID)
+	})
+	return nil
 }

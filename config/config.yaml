@@ -16,6 +16,9 @@ redis:
   db: 0
   dial_timeout: "2s"
   product_ttl: "5m"
+  catalog_ttl: "5m"
+  category_ttl: "1h"
+  review_ttl: "5m"
 
 auth:
   jwt_secret: "dev-secret-change-me"

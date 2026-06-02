@@ -48,7 +48,7 @@ must not import repositories.
 | `internal/handler/` | JSON API handlers, DTOs, request validation, router groups, and service error mapping. |
 | `internal/web/` | Server-rendered MPA controllers, templates, static CSS, and web form flows. |
 | `internal/middleware/` | Auth, role checks, actor propagation, request logging, and panic recovery. |
-| `internal/cache/` | Redis client setup and cache-aside decorators. Current runtime cache covers product lookup by ID. |
+| `internal/cache/` | Redis client setup, cache-aside decorators, readable cache keys, prefix invalidation, and JWT token blocklist. |
 | `internal/port/` | External-facing service contracts, currently the payment gateway interface. |
 | `internal/adapter/` | Implementations of ports, currently the mock bank payment gateway. |
 | `internal/component/` | Wiring helpers used by `cmd/techui` and reusable composition paths. `cmd/api` wires manually. |
@@ -85,19 +85,19 @@ is a legacy symlink to it.
 | Cart and orders | `OrderService` | `OrderRepo`, `OrderItemRepo`, `ProductRepo`, `AddressRepo`, `SellerRepo` | cart/order handlers and web pages |
 | Payments | `PaymentService` | `OrderRepo`, `PaymentGateway` port | payment handler, mock bank web page, tech UI |
 | Reviews and ratings | `ReviewService` | `ReviewRepo`, product lookup, purchase checker | review handlers and product page forms |
-| Favorite products | `FavoriteService` | `FavoriteRepo`, narrow `FavoriteProductGetter` (product lookup) | favorite handler at `/api/v1/favorites`, web star toggle on product page and `/favorites` list |
 | Seller workflow | `SellerService`, `OrderService`, `ProductService` | seller/product/order repos | seller API routes and seller web dashboard |
 | Admin/backoffice | `UserService`, `SellerService`, `BackofficeService` | user/seller/backoffice repos | admin API routes and admin web pages |
 | Analyst reports | `BackofficeService` | `BackofficeRepo` | analyst web dashboard |
 
 ## Important Wiring Details
 
-- `cmd/api` wraps `ProductRepo` with `cache.ProductRepoCache` only when
-  `redis.enabled` is true and Redis ping succeeds.
-- `cmd/api` currently passes `nil` as the auth token blocklist. Logout is a
-  no-op in that runtime path until a blocklist implementation is wired.
-- `cmd/techui` uses `internal/component/repository.New`, which does not enable
-  Redis caching by default.
+- `cmd/api` wraps product, category, and review repositories with Redis
+  cache-aside decorators only when `redis.enabled` is true and Redis ping
+  succeeds.
+- `cmd/api` wires Redis `TokenBlocklist` into `AuthService`; logout stores the
+  current JWT `jti` until token expiration.
+- `cmd/techui` does not enable Redis by default. Component wiring can wrap the
+  same read repositories when `NewFromPoolWithCache` receives a Redis client.
 - `OrderExpirationWorker` runs in both API and tech UI commands. It expires
   pending orders using `payment.ttl` and `orders.expiration_check_interval`.
 - PostgreSQL remains the source of truth. Redis is a cache layer only.

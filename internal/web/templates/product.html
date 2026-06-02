@@ -4,19 +4,6 @@
 <div class="product-detail">
     <div class="product-detail__header">
         <div class="product-detail__name">{{.Product.Name}}</div>
-        {{if and .User (not .Product.DeletedAt)}}
-        {{if .IsFavorite}}
-        <form method="POST" action="/favorites/{{.Product.ID}}/remove" class="favorite-form">
-            <input type="hidden" name="return_to" value="/products/{{.Product.ID}}">
-            <button type="submit" class="favorite-btn favorite-btn--active" title="Remove from favorites" aria-label="Remove from favorites">&#9733;</button>
-        </form>
-        {{else}}
-        <form method="POST" action="/favorites/{{.Product.ID}}/add" class="favorite-form">
-            <input type="hidden" name="return_to" value="/products/{{.Product.ID}}">
-            <button type="submit" class="favorite-btn" title="Add to favorites" aria-label="Add to favorites">&#9734;</button>
-        </form>
-        {{end}}
-        {{end}}
     </div>
     {{if .Product.DeletedAt}}
     <div class="alert alert--error" style="margin-bottom: 1rem;">

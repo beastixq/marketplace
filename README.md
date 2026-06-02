@@ -119,7 +119,7 @@
 | РСУБД              | PostgreSQL 16          | Основное хранилище данных                          |
 | Драйвер БД         | pgx/v5 + pgxpool       | Пул соединений с PostgreSQL                        |
 | Query builder      | squirrel               | Построение SQL-запросов                            |
-| InMemory СУБД      | Redis 7                | Опциональный кэш карточек товаров по ID             |
+| InMemory СУБД      | Redis 7                | Опциональный кэш каталога, карточек, категорий, отзывов и JWT blocklist |
 | Redis-клиент       | go-redis/v9            | Работа с Redis из Go                               |
 | Контейнеризация    | Docker + Compose       | Среда разработки и деплоя                          |
 | Миграции           | goose                  | Версионирование схемы БД                           |

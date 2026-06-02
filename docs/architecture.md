@@ -92,20 +92,18 @@ Both surfaces call service methods. Neither surface owns business policy, persis
 
 ## Cache Boundary
 
-Cache key mechanics belong behind cache abstractions, not handlers. Cache invalidation should be triggered from service/usecase code or service decorators as part of mutations. Current behavior and gaps are tracked in `docs/cache.md`.
+Cache key mechanics belong behind cache abstractions, not handlers. Cache
+invalidation is triggered by cache-aware decorators as part of repository
+mutations. Current behavior is tracked in `docs/cache.md`.
 
 Currently implemented runtime keys:
 
 | Key | TTL | Invalidation |
 | --- | --- | --- |
-| `products:{id}` | `5m` | Product update/delete only |
-
-Target key conventions that are not implemented unless `docs/cache.md` says otherwise:
-
-| Key | TTL | Intended Invalidation |
-| --- | --- | --- |
-| `products:catalog:page:{n}` | `5m` | Any product change |
-| `categories:tree` | `1h` | Category CRUD |
-| `sessions:{token}` | Session lifetime | Logout/token revocation |
+| `products:{id}` | `redis.product_ttl` | Product/review/category relation changes |
+| `products:catalog:{canonical-query}` | `redis.catalog_ttl` | Product/review/category changes |
+| `categories:list:{canonical-query}` | `redis.category_ttl` | Category CRUD |
+| `products:{id}:reviews:page={page}&limit={limit}` | `redis.review_ttl` | Review changes |
+| `sessions:{jti}` | Remaining JWT lifetime | Logout/token revocation |
 
 Cache failures should not break core business behavior unless the operation explicitly requires cache consistency.

@@ -71,31 +71,34 @@ func main() {
 	userRepo := repo.NewUserRepo(pool)
 	sellerRepo := repo.NewSellerRepo(pool)
 	addressRepo := repo.NewAddressRepo(pool)
-	reviewRepo := repo.NewReviewRepo(pool)
+	baseReviewRepo := repo.NewReviewRepo(pool)
+	var reviewRepo svc.ReviewRepo = baseReviewRepo
+	var reviewPurchaseChecker svc.ReviewPurchaseChecker = baseReviewRepo
 
 	var productRepo svc.ProductRepo = repo.NewProductRepo(pool)
+	var categoryRepo svc.CategoryRepo = repo.NewCategoryRepo(pool)
+	var tokenBlocklist svc.TokenBlocklist
 	if rdb != nil {
-		productRepo = cache.NewProductRepoCache(productRepo, rdb, cfg.Redis.ProductTTL.Std())
+		productRepo = cache.NewProductRepoCache(productRepo, rdb, cfg.Redis.ProductTTL.Std(), cfg.Redis.CatalogTTL.Std())
+		reviewRepo = cache.NewReviewRepoCache(reviewRepo, rdb, cfg.Redis.ReviewTTL.Std())
+		categoryRepo = cache.NewCategoryRepoCache(categoryRepo, rdb, cfg.Redis.CategoryTTL.Std())
+		tokenBlocklist = cache.NewTokenBlocklist(rdb)
 	}
 
 	orderRepo := repo.NewOrderRepo(pool)
 	orderItemRepo := repo.NewOrderItemRepo(pool)
-	categoryRepo := repo.NewCategoryRepo(pool)
 	backofficeRepo := repo.NewBackofficeRepo(pool)
-	favoriteRepo := repo.NewFavoriteRepo(pool)
 	txManager := repo.NewPgxTxManager(pool)
 
 	userService := svc.NewUserService(userRepo, cfg.Auth.BcryptCost)
 	sellerService := svc.NewSellerService(sellerRepo)
 	addressService := svc.NewAddressService(addressRepo)
-	reviewService := svc.NewReviewService(reviewRepo, reviewRepo, productRepo)
+	reviewService := svc.NewReviewService(reviewRepo, reviewPurchaseChecker, productRepo)
 	productService := svc.NewProductService(productRepo, reviewRepo, sellerRepo, txManager)
-	favoriteService := svc.NewFavoriteService(favoriteRepo, productRepo)
 	orderService := svc.NewOrderService(orderRepo, orderItemRepo, productRepo, addressRepo, sellerRepo, txManager)
 	categoryService := svc.NewCategoryService(categoryRepo)
 	backofficeService := svc.NewBackofficeService(backofficeRepo)
-	// TODO: replace with Redis TokenBlocklist implementation
-	authService := svc.NewAuthService(userService, nil, cfg.Auth.JWTSecret, cfg.Auth.JWTTTL.Std())
+	authService := svc.NewAuthService(userService, tokenBlocklist, cfg.Auth.JWTSecret, cfg.Auth.JWTTTL.Std())
 
 	paymentTTL := cfg.Payment.TTL.Std()
 	gateway := payment.NewMockBankGateway(cfg.Payment.GatewayURL)
@@ -114,7 +117,6 @@ func main() {
 	sellerHandler := handler.NewSellerHandler(sellerService, orderService)
 	addressHandler := handler.NewAddressHandler(addressService)
 	productHandler := handler.NewProductHandler(productService)
-	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	orderHandler := handler.NewOrderHandler(orderService)
 	paymentHandler := handler.NewPaymentHandler(paymentService)
 	categoryHandler := handler.NewCategoryHandler(categoryService)
@@ -129,7 +131,6 @@ func main() {
 		sellerHandler,
 		addressHandler,
 		productHandler,
-		favoriteHandler,
 		orderHandler,
 		paymentHandler,
 		categoryHandler,
@@ -137,7 +138,7 @@ func main() {
 		adminHandler,
 	)
 
-	webHandler := web.NewWebHandler(productService, categoryService, authService, userService, orderService, addressService, sellerService, reviewService, backofficeService, paymentService, favoriteService)
+	webHandler := web.NewWebHandler(productService, categoryService, authService, userService, orderService, addressService, sellerService, reviewService, backofficeService, paymentService)
 	webRouter := web.NewWebRouter(webHandler)
 	webLogger := logger.With("component", "web")
 	webHandlerWithLogs := middleware.ActorHolder()(

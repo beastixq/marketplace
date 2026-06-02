@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 
+	"github.com/beastixq/marketplace/internal/service"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -33,8 +34,13 @@ func (pm PgxTxManager) WithTransaction(ctx context.Context, fn func(context.Cont
 		return fn(ctx)
 	}
 
-	return pgx.BeginFunc(ctx, pm.pool, func(tx pgx.Tx) error {
-		txCtx := SetTxCtx(ctx, tx)
+	hookCtx, hooks := service.WithAfterCommitHooks(ctx)
+	if err := pgx.BeginFunc(hookCtx, pm.pool, func(tx pgx.Tx) error {
+		txCtx := SetTxCtx(hookCtx, tx)
 		return fn(txCtx)
-	})
+	}); err != nil {
+		return err
+	}
+	hooks.Run(context.WithoutCancel(ctx))
+	return nil
 }

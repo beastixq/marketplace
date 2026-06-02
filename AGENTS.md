@@ -207,12 +207,13 @@ var _ service.ProductRepo = (*ProductRepository)(nil)
 
 Handlers must not perform cache invalidation. Redis/key mechanics belong in `internal/cache`. Cache-aside behavior should be implemented behind cache abstractions or service decorators. Service/usecase code or a cache-aware decorator should trigger invalidation as part of mutations. Keep [docs/cache.md](docs/cache.md) synchronized with the implemented keys.
 
-| Key                         | TTL              | Invalidation                               |
-| --------------------------- | ---------------- | ------------------------------------------ |
-| `products:catalog:page:{n}` | `5m`             | Any product change                         |
-| `products:{id}`             | `5m`             | PATCH/DELETE product; create/update review |
-| `categories:tree`           | `1h`             | Category CRUD                              |
-| `sessions:{token}`          | Session lifetime | Logout                                     |
+| Key | TTL | Invalidation |
+| --- | --- | --- |
+| `products:{id}` | `redis.product_ttl` | Product/review/category relation changes |
+| `products:catalog:{canonical-query}` | `redis.catalog_ttl` | Product/review/category changes |
+| `categories:list:{canonical-query}` | `redis.category_ttl` | Category CRUD |
+| `products:{id}:reviews:page={page}&limit={limit}` | `redis.review_ttl` | Review changes |
+| `sessions:{jti}` | Remaining JWT lifetime | Logout/token expiration |
 
 Cache failures should not break core business behavior unless the operation explicitly requires cache consistency.
 
@@ -483,8 +484,3 @@ Final self-check before every Learning Mode response:
 ```text
 Am I helping the student learn to solve this, or am I solving it for them?
 ```
-
-<!-- SPECKIT START -->
-For the active Spec Kit feature plan, read
-[specs/001-favorite-products/plan.md](specs/001-favorite-products/plan.md).
-<!-- SPECKIT END -->

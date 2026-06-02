@@ -25,7 +25,6 @@ type Component struct {
 	OrderItem      svc.OrderItemRepo
 	Category       svc.CategoryRepo
 	Backoffice     svc.BackofficeRepo
-	Favorite       svc.FavoriteRepo
 	TxManager      svc.TxManager
 }
 
@@ -47,18 +46,25 @@ func NewFromPool(pool *pgxpool.Pool) *Component {
 
 // CacheConfig holds optional Redis caching parameters.
 type CacheConfig struct {
-	Client     *redis.Client
-	ProductTTL time.Duration
+	Client      *redis.Client
+	ProductTTL  time.Duration
+	CatalogTTL  time.Duration
+	CategoryTTL time.Duration
+	ReviewTTL   time.Duration
 }
 
 // NewFromPoolWithCache builds Component, optionally wrapping repos with cache
 // decorators when cfg is non-nil and cfg.Client is set.
 func NewFromPoolWithCache(pool *pgxpool.Pool, cfg *CacheConfig) *Component {
-	reviewRepo := store.NewReviewRepo(pool)
+	baseReviewRepo := store.NewReviewRepo(pool)
+	var reviewRepo svc.ReviewRepo = baseReviewRepo
+	var categoryRepo svc.CategoryRepo = store.NewCategoryRepo(pool)
 
 	var productRepo svc.ProductRepo = store.NewProductRepo(pool)
 	if cfg != nil && cfg.Client != nil {
-		productRepo = cache.NewProductRepoCache(productRepo, cfg.Client, cfg.ProductTTL)
+		productRepo = cache.NewProductRepoCache(productRepo, cfg.Client, cfg.ProductTTL, cfg.CatalogTTL)
+		reviewRepo = cache.NewReviewRepoCache(reviewRepo, cfg.Client, cfg.ReviewTTL)
+		categoryRepo = cache.NewCategoryRepoCache(categoryRepo, cfg.Client, cfg.CategoryTTL)
 	}
 
 	return &Component{
@@ -67,13 +73,12 @@ func NewFromPoolWithCache(pool *pgxpool.Pool, cfg *CacheConfig) *Component {
 		Seller:         store.NewSellerRepo(pool),
 		Address:        store.NewAddressRepo(pool),
 		Review:         reviewRepo,
-		ReviewPurchase: reviewRepo,
+		ReviewPurchase: baseReviewRepo,
 		Product:        productRepo,
 		Order:          store.NewOrderRepo(pool),
 		OrderItem:      store.NewOrderItemRepo(pool),
-		Category:       store.NewCategoryRepo(pool),
+		Category:       categoryRepo,
 		Backoffice:     store.NewBackofficeRepo(pool),
-		Favorite:       store.NewFavoriteRepo(pool),
 		TxManager:      store.NewPgxTxManager(pool),
 	}
 }

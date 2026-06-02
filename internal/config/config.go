@@ -41,6 +41,10 @@ type RedisConfig struct {
 	Password    string   `yaml:"password"`
 	DB          int      `yaml:"db"`
 	DialTimeout Duration `yaml:"dial_timeout"`
+	ProductTTL  Duration `yaml:"product_ttl"`
+	CatalogTTL  Duration `yaml:"catalog_ttl"`
+	CategoryTTL Duration `yaml:"category_ttl"`
+	ReviewTTL   Duration `yaml:"review_ttl"`
 }
 
 type AuthConfig struct {
@@ -144,6 +148,18 @@ func (c *Config) Validate() error {
 		}
 		if c.Redis.DialTimeout <= 0 {
 			return errors.New("redis.dial_timeout must be positive when redis.enabled is true")
+		}
+		if c.Redis.ProductTTL <= 0 {
+			return errors.New("redis.product_ttl must be positive when redis.enabled is true")
+		}
+		if c.Redis.CatalogTTL <= 0 {
+			return errors.New("redis.catalog_ttl must be positive when redis.enabled is true")
+		}
+		if c.Redis.CategoryTTL <= 0 {
+			return errors.New("redis.category_ttl must be positive when redis.enabled is true")
+		}
+		if c.Redis.ReviewTTL <= 0 {
+			return errors.New("redis.review_ttl must be positive when redis.enabled is true")
 		}
 		if c.Redis.DB < 0 {
 			return fmt.Errorf("redis.db must be >= 0, got %d", c.Redis.DB)

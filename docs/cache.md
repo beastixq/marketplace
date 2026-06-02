@@ -1,28 +1,47 @@
 # Cache
 
-PostgreSQL is the source of truth. Redis is a performance cache only; cache
-state must never be required for core business correctness.
+PostgreSQL is the source of truth. Redis is a performance cache and token
+revocation store; cached state must never be required for core business
+correctness.
 
-## Current Runtime Wiring
+## Runtime Wiring
 
 `cmd/api/main.go` connects Redis only when `redis.enabled` is true. If Redis is
 enabled and the initial ping fails, the API process exits. To run without Redis,
 set `redis.enabled: false`.
 
-When Redis is connected, `cmd/api` wraps `ProductRepo` with
-`cache.NewProductRepoCache(productRepo, rdb, 5*time.Minute)`.
+When Redis is connected, `cmd/api` wraps:
 
-`cmd/techui` does not enable Redis caching by default because it builds
-repositories through `internal/component/repository.New`. The component package
-can wrap `ProductRepo` when `NewFromPoolWithCache` receives a Redis client.
+- `ProductRepo` with `cache.ProductRepoCache`;
+- `CategoryRepo` with `cache.CategoryRepoCache`;
+- `ReviewRepo` with `cache.ReviewRepoCache`;
+- `AuthService` with `cache.TokenBlocklist`.
+
+`cmd/techui` does not enable Redis by default because it builds repositories
+through `internal/component/repository.New`. The component package can wrap the
+same read repositories when `NewFromPoolWithCache` receives a Redis client.
 
 ## Implemented Keys
 
 | Key | TTL | Read Path | Invalidation |
 | --- | --- | --- | --- |
-| `products:{id}` | `5m` in `cmd/api` | `ProductRepoCache.GetProductByID` | After `UpdateProduct` and `DeleteProductByID`. |
+| `products:{id}` | `redis.product_ttl` | `ProductRepoCache.GetProductByID` | Product update/delete, stock or reserve change, product category replacement, review mutation. |
+| `products:catalog:{canonical-query}` | `redis.catalog_ttl` | `ProductRepoCache.GetProducts` | Any product change, stock or reserve change, product category replacement, category CRUD, review mutation. |
+| `categories:list:{canonical-query}` | `redis.category_ttl` | `CategoryRepoCache.GetCategories` | Category CRUD. |
+| `products:{id}:reviews:page={page}&limit={limit}` | `redis.review_ttl` | `ReviewRepoCache.GetReviewsByProductID` | Review mutation for the product. |
+| `sessions:{jti}` | Remaining JWT lifetime | `TokenBlocklist.Contains` | Key TTL expiration. Logout writes the key. |
 
-No other Redis keys are currently used by the runtime application.
+Catalog and category keys use readable canonical query strings instead of hash
+values. Equivalent options produce the same key: pagination is explicit,
+category filters are sorted, and parameters are URL-encoded in stable order.
+
+Examples:
+
+```text
+products:catalog:limit=12&page=1
+products:catalog:category=Books&limit=12&page=1&sort=asc
+categories:list:limit=1000&page=1&root=true
+```
 
 ## Cache-Aside Contract
 
@@ -37,50 +56,24 @@ No other Redis keys are currently used by the runtime application.
   business read path.
 - Negative caching is intentionally not implemented.
 
-## Product Cache Behavior
+## Invalidation
 
-`ProductRepoCache` satisfies both `service.ProductRepo` and
-`service.ProductCategoryRepo`, so category-related product service behavior
-continues to work after wrapping.
+Cache decorators invalidate Redis from `internal/cache`, not from handlers or
+web controllers. Prefix invalidation uses Redis `SCAN`, never `KEYS`.
 
-Cached:
+When a mutation runs inside the service transaction manager, invalidation is
+registered as an after-commit hook. This avoids deleting a key before commit and
+then letting a concurrent read repopulate Redis with stale PostgreSQL data.
 
-- `GetProductByID`
+## Non-Cached Areas
 
-Passed through without caching:
+These areas intentionally stay uncached:
 
-- catalog/list reads through `GetProducts`;
 - `GetProductByIDForUpdate`, because row locking must hit PostgreSQL inside a
   transaction;
-- price history reads;
-- product category reads and replacements;
-- product creation;
-- stock/reservation changes.
-
-Current staleness caveats:
-
-- `ChangeStockAndReserved` does not invalidate `products:{id}`. Product stock,
-  reserved quantity, available quantity, and derived display state may be stale
-  until the TTL expires.
-- Review create/update/delete does not invalidate `products:{id}`. Product and
-  seller ratings are recalculated by a database trigger, but cached product
-  rating can be stale until the TTL expires.
-- Product category replacement does not invalidate `products:{id}`. The cached
-  product entity does not include category rows, but pages that combine product
-  and category data should be checked carefully before caching broader views.
-
-## Documented But Not Implemented
-
-These keys are architectural conventions, not current runtime behavior:
-
-| Key | Intended TTL | Intended Invalidation |
-| --- | --- | --- |
-| `products:catalog:page:{n}` | `5m` | Any product change. |
-| `categories:tree` | `1h` | Category CRUD. |
-| `sessions:{token}` | Session lifetime | Logout/token revocation. |
-
-`AuthService` has a `TokenBlocklist` interface, but `cmd/api` currently passes
-`nil`, so logout does not store revoked JWT IDs in Redis.
+- product price history, because it is audit data and less frequently read;
+- carts, orders, payments, profiles, and reports, because they are
+  user-specific, rapidly changing, or authorization-sensitive.
 
 ## Rules For Extending Cache
 

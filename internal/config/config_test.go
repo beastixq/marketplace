@@ -124,6 +124,18 @@ func TestValidate(t *testing.T) {
 		}
 	}
 
+	redisEnabled := func(c *config.Config) {
+		c.Redis = config.RedisConfig{
+			Enabled:     true,
+			Addr:        "localhost:6379",
+			DialTimeout: config.Duration(time.Second),
+			ProductTTL:  config.Duration(5 * time.Minute),
+			CatalogTTL:  config.Duration(5 * time.Minute),
+			CategoryTTL: config.Duration(time.Hour),
+			ReviewTTL:   config.Duration(5 * time.Minute),
+		}
+	}
+
 	tests := []struct {
 		name    string
 		mutate  func(*config.Config)
@@ -143,6 +155,11 @@ func TestValidate(t *testing.T) {
 		{"bad log level", func(c *config.Config) { c.Logging.Level = "trace" }, "logging.level"},
 		{"bad log format", func(c *config.Config) { c.Logging.Format = "xml" }, "logging.format"},
 		{"no log sinks", func(c *config.Config) { c.Logging.File = ""; c.Logging.Console = false }, "logging:"},
+		{"redis enabled valid", redisEnabled, ""},
+		{"redis product ttl required", func(c *config.Config) { redisEnabled(c); c.Redis.ProductTTL = 0 }, "redis.product_ttl"},
+		{"redis catalog ttl required", func(c *config.Config) { redisEnabled(c); c.Redis.CatalogTTL = 0 }, "redis.catalog_ttl"},
+		{"redis category ttl required", func(c *config.Config) { redisEnabled(c); c.Redis.CategoryTTL = 0 }, "redis.category_ttl"},
+		{"redis review ttl required", func(c *config.Config) { redisEnabled(c); c.Redis.ReviewTTL = 0 }, "redis.review_ttl"},
 	}
 
 	for _, tt := range tests {
