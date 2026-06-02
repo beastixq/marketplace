@@ -6,7 +6,7 @@ PUML_FILES := $(wildcard $(SRC_DIR)/*.puml)
 PNG_FILES  := $(patsubst $(SRC_DIR)/%.puml,$(OUT_DIR)/%.png,$(PUML_FILES))
 SVG_FILES  := $(patsubst $(SRC_DIR)/%.puml,$(OUT_DIR)/%.svg,$(PUML_FILES))
 
-.PHONY: fmt vet test test-race lint security check run test-repository test-service test-web
+.PHONY: fmt vet build test test-race lint security check run test-repository test-service test-web test-cache
 
 fmt:
 	gofmt -w $$(find . -name '*.go' -not -path './vendor/*')
@@ -14,8 +14,14 @@ fmt:
 vet:
 	go vet ./...
 
+build:
+	go build ./...
+
 test:
 	go test ./...
+
+test-cache:
+	go test ./internal/cache/...
 
 test-race:
 	go test -race ./...
@@ -35,7 +41,7 @@ lint:
 security:
 	govulncheck ./...
 
-check: fmt vet test
+check: fmt vet build test
 
 all: png
 

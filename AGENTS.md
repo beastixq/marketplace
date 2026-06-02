@@ -33,6 +33,7 @@ Use the project docs as the first stop for task-specific context.
 | Pre-release or submission checklist                    | [docs/release-process.md](docs/release-process.md)                                                                         |
 | Open bugs, product ideas, resolved bug history         | [docs/known-issues.md](docs/known-issues.md), [docs/ideas.md](docs/ideas.md), [docs/bugs-history.md](docs/bugs-history.md) |
 | Coursework requirements and report context             | [docs/tz.md](docs/tz.md), [docs/RPZ.md](docs/RPZ.md)                                                                       |
+| Working on the РПЗ (LaTeX report): build, style, methodology rules, RPZ↔code consistency, skills | [DBCourseWork/AGENTS.md](DBCourseWork/AGENTS.md) — read first for any РПЗ task |
 
 If docs and current code conflict, trust the current code after verifying it directly, then update the relevant doc as part of the change. Keep docs concise and maintenance-oriented.
 
@@ -279,7 +280,7 @@ For code tasks, focus on:
 
 Do not inspect these unless explicitly requested:
 
-- `DBCourseWork/`
+- `DBCourseWork/` (exception: for РПЗ/coursework tasks, [DBCourseWork/AGENTS.md](DBCourseWork/AGENTS.md) is the canonical guide and must be read first)
 - `PPO_labs/`
 - `diagrams/out/`
 - `diagrams/old/`
