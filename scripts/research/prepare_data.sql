@@ -1,6 +1,33 @@
 \set ON_ERROR_STOP on
-\set product_count 40000
-\set order_count 80000
+
+-- Параметры можно переопределить через psql -v ... (run.sh гоняет лестницу размеров).
+-- Значения по умолчанию задаются только если переменная не передана извне.
+\if :{?product_count}
+\else
+  \set product_count 40000
+\endif
+\if :{?order_count}
+\else
+  \set order_count 80000
+\endif
+\if :{?review_count}
+\else
+  \set review_count 50000
+\endif
+-- Отзывы концентрируются на первых review_focus товарах, чтобы у части товаров
+-- было много отзывов (запрос reviews_by_product и эндпоинт отзывов становятся показательными).
+\if :{?review_focus}
+\else
+  \set review_focus 2000
+\endif
+-- Заказы концентрируются на первых order_focus покупателях, чтобы у активного
+-- покупателя было много заказов. Тогда для orders_by_user составной индекс
+-- (user_id, created_at) обслуживает сортировку (узел Sort исчезает), а простой —
+-- нет. На равномерном распределении эффект не виден.
+\if :{?order_focus}
+\else
+  \set order_focus 100
+\endif
 
 \echo 'Preparing additional research data...'
 
@@ -49,7 +76,12 @@ where company_name like 'Research Seller %';
 insert into products (seller_id, name, description, price, stock_quantity, created_at)
 select
     sa.ids[(((g - 1) % sa.cnt) + 1)::integer],
-    'Research Product ' || g,
+    -- Имя из словаря частотных токенов (~1/10 на токен для ILIKE '%phone%')
+    -- плюс редкий токен Zephyr (~0.1%) для демонстрации эффекта GIN/pg_trgm
+    -- против последовательного сканирования при низкой селективности.
+    (array['Phone','Case','Cable','Laptop','Mouse','Keyboard','Monitor','Charger','Headset','Speaker'])[(g % 10) + 1]
+        || case when g % 1000 = 0 then ' Zephyr' else '' end
+        || ' Research Product ' || g,
     'Synthetic product for RPZ research benchmark',
     (100 + (g % 50000))::numeric(12, 2) / 10,
     10 + (g % 500),
@@ -71,7 +103,7 @@ select
     array_agg(price order by id) as prices,
     count(*)::integer as cnt
 from products
-where name like 'Research Product %';
+where name like '%Research Product %';
 
 create temp table research_order_source as
 select
@@ -97,7 +129,7 @@ cross join research_buyer_array ba
 cross join research_product_array pa
 cross join lateral (
     select
-        (((g - 1) % ba.cnt) + 1)::integer as buyer_idx,
+        (((g - 1) % least(:order_focus, ba.cnt)) + 1)::integer as buyer_idx,
         (((g - 1) % pa.cnt) + 1)::integer as product_idx
 ) pick;
 
@@ -122,6 +154,27 @@ select
     price_at_purchase
 from research_order_source
 on conflict (order_id, product_id) do nothing;
+
+-- Отзывы. Триггер update_ratings_on_review (миграция 007) срабатывает на каждую
+-- строку и делает два UPDATE с агрегатами, поэтому на время массовой вставки он
+-- отключается. Рейтинги для исследования не измеряются.
+-- Покупатель меняется каждые review_focus строк, товар берётся из первых
+-- review_focus товаров — пары (user_id, product_id) уникальны до исчерпания.
+alter table reviews disable trigger user;
+
+insert into reviews (user_id, product_id, rating, comment, created_at)
+select
+    ba.ids[(((((g - 1) / :review_focus) % ba.cnt) + 1))::integer],
+    pa.product_ids[(((g - 1) % least(:review_focus, pa.cnt)) + 1)::integer],
+    (g % 5) + 1,
+    'Synthetic review for RPZ research benchmark',
+    timestamp '2025-01-01' + ((g % 400) * interval '1 day')
+from generate_series(1, :review_count) as g
+cross join research_buyer_array ba
+cross join research_product_array pa
+on conflict (user_id, product_id) do nothing;
+
+alter table reviews enable trigger user;
 
 analyze users;
 analyze sellers;

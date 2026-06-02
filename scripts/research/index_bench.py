@@ -87,27 +87,204 @@ def avg(values):
     return statistics.fmean(values) if values else 0.0
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--database-url", required=True)
-    parser.add_argument("--out-dir", required=True)
-    parser.add_argument("--repeats", type=int, default=5)
-    args = parser.parse_args()
+def std(values):
+    return statistics.stdev(values) if len(values) > 1 else 0.0
 
-    out_dir = Path(args.out_dir)
+
+def has_node_type(plan_json, node_type: str) -> bool:
+    root = plan_json[0]["Plan"]
+    return any(n.get("Node Type") == node_type for n in walk_plan(root))
+
+
+def measure(db_url: str, query: str, repeats: int):
+    """Прогоняет EXPLAIN ANALYZE repeats+1 раз, отбрасывает первый прогон (прогрев),
+    возвращает (список метрик по повторам, последний JSON-план)."""
+    explain_json(db_url, query)  # прогрев плана/кэша, не учитывается
+    samples = []
+    last_plan = None
+    for _ in range(repeats):
+        plan = explain_json(db_url, query)
+        last_plan = plan
+        samples.append(plan_metrics(plan))
+    return samples, last_plan
+
+
+def summarize(samples):
+    execution = [s["execution_ms"] for s in samples]
+    planning = [s["planning_ms"] for s in samples]
+    return {
+        "avg_execution_ms": f"{avg(execution):.3f}",
+        "std_execution_ms": f"{std(execution):.3f}",
+        "min_execution_ms": f"{min(execution):.3f}",
+        "max_execution_ms": f"{max(execution):.3f}",
+        "avg_planning_ms": f"{avg(planning):.3f}",
+        "root_node": samples[-1]["root_node"],
+        "actual_rows": f"{samples[-1]['actual_rows']:.0f}",
+        "indexes_used": samples[-1]["indexes_used"],
+    }
+
+
+def exec_sql(db_url: str, sql: str) -> None:
+    run_psql(db_url, sql)
+
+
+def run_type_experiments(db_url: str, out_dir: Path, repeats: int) -> None:
+    """И1/И2: влияние ТИПА индекса (простой vs составной; B-tree vs GIN/pg_trgm)."""
+    user_id = scalar(
+        db_url,
+        "select user_id from orders group by user_id order by count(*) desc, user_id limit 1",
+    )
+
+    orders_query = f"""
+        select id, status, total_amount, created_at
+        from orders
+        where user_id = {user_id}
+        order by created_at desc
+        limit 100
+    """
+    text_query = (
+        "select id, name, price from products "
+        "where deleted_at is null and name ilike '%Zephyr%'"
+    )
+
+    # (имя_кейса, описание, SQL подготовки индексов под тест)
+    cases = [
+        (
+            "orders_simple_btree",
+            "orders_by_user: простой индекс (user_id)",
+            orders_query,
+            "drop index if exists bench_orders; drop index if exists idx_orders_user_id;"
+            " create index bench_orders on orders (user_id); analyze orders;",
+            "Sort",
+        ),
+        (
+            "orders_composite_btree",
+            "orders_by_user: составной индекс (user_id, created_at desc)",
+            orders_query,
+            "drop index if exists bench_orders; drop index if exists idx_orders_user_id;"
+            " create index bench_orders on orders (user_id, created_at desc); analyze orders;",
+            "Sort",
+        ),
+        (
+            "text_btree_only",
+            "text_search: только B-tree (для '%x%' неприменим -> Seq Scan)",
+            text_query,
+            "drop index if exists bench_name_trgm; analyze products;",
+            None,
+        ),
+        (
+            "text_gin_trgm",
+            "text_search: GIN + pg_trgm",
+            text_query,
+            "create extension if not exists pg_trgm;"
+            " drop index if exists bench_name_trgm;"
+            " create index bench_name_trgm on products using gin (name gin_trgm_ops);"
+            " analyze products;",
+            None,
+        ),
+    ]
+
+    detail_rows = []
+    summary_rows = []
+    plans_dir = out_dir / "plans"
+    for case, label, query, setup_sql, _watch in cases:
+        exec_sql(db_url, setup_sql)
+        samples, last_plan = measure(db_url, query, repeats)
+        (plans_dir / f"type_{case}.json").write_text(
+            json.dumps(last_plan, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        has_sort = "yes" if has_node_type(last_plan, "Sort") else "no"
+        for i, s in enumerate(samples, start=1):
+            detail_rows.append({"case": case, "repeat": i, **s})
+        summary_rows.append(
+            {
+                "case": case,
+                "label": label,
+                "has_sort": has_sort,
+                **summarize(samples),
+            }
+        )
+
+    # очистить тестовые индексы, чтобы не влияли на study «наличие»
+    exec_sql(db_url, "drop index if exists bench_orders; drop index if exists bench_name_trgm;")
+
+    write_csv(
+        out_dir / "db_index_type.csv",
+        ["case", "repeat", "planning_ms", "execution_ms", "actual_rows", "root_node",
+         "shared_hit_blocks", "shared_read_blocks", "temp_read_blocks", "temp_written_blocks",
+         "indexes_used"],
+        detail_rows,
+    )
+    write_csv(
+        out_dir / "db_index_type_summary.csv",
+        ["case", "label", "has_sort", "avg_execution_ms", "std_execution_ms",
+         "min_execution_ms", "max_execution_ms", "avg_planning_ms", "root_node",
+         "actual_rows", "indexes_used"],
+        summary_rows,
+    )
+
+
+def run_scaling_point(db_url: str, out_dir: Path, repeats: int, scale: int) -> None:
+    """Одна точка кривой масштабирования: добавляет строки в db_scaling.csv.
+    Для текстового поиска сравнивает Seq Scan (без GIN) и GIN/pg_trgm."""
+    text_query = (
+        "select id, name, price from products "
+        "where deleted_at is null and name ilike '%Zephyr%'"
+    )
+    variants = [
+        ("text_seq", "drop index if exists bench_name_trgm; analyze products;"),
+        (
+            "text_gin_trgm",
+            "create extension if not exists pg_trgm;"
+            " drop index if exists bench_name_trgm;"
+            " create index bench_name_trgm on products using gin (name gin_trgm_ops);"
+            " analyze products;",
+        ),
+    ]
+    rows = []
+    for variant, setup_sql in variants:
+        exec_sql(db_url, setup_sql)
+        samples, _ = measure(db_url, text_query, repeats)
+        rows.append(
+            {
+                "scale": scale,
+                "variant": variant,
+                "query": "text_search_zephyr",
+                **summarize(samples),
+            }
+        )
+    exec_sql(db_url, "drop index if exists bench_name_trgm;")
+
+    path = out_dir / "db_scaling.csv"
+    fieldnames = ["scale", "variant", "query", "avg_execution_ms", "std_execution_ms",
+                  "min_execution_ms", "max_execution_ms", "avg_planning_ms", "root_node",
+                  "actual_rows", "indexes_used"]
+    write_csv(path, fieldnames, rows, append=path.exists())
+
+
+def write_csv(path: Path, fieldnames, rows, append: bool = False) -> None:
+    mode = "a" if append else "w"
+    with path.open(mode, newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        if not append:
+            writer.writeheader()
+        writer.writerows(rows)
+
+
+def run_presence_study(db_url: str, out_dir: Path, repeats: int) -> None:
     plans_dir = out_dir / "plans"
     plans_dir.mkdir(parents=True, exist_ok=True)
 
     user_id = scalar(
-        args.database_url,
+        db_url,
         "select user_id from orders group by user_id order by count(*) desc, user_id limit 1",
     )
     product_id = scalar(
-        args.database_url,
+        db_url,
         "select product_id from reviews group by product_id order by count(*) desc, product_id limit 1",
     )
     seller_id = scalar(
-        args.database_url,
+        db_url,
         "select seller_id from products group by seller_id order by count(*) desc, seller_id limit 1",
     )
 
@@ -166,13 +343,13 @@ def main() -> None:
     ]
 
     for variant, setup in variants:
-        setup(args.database_url)
+        setup(db_url)
         for query_name, query in queries:
-            explain_json(args.database_url, query)
-            text_plan = explain_text(args.database_url, query)
+            explain_json(db_url, query)
+            text_plan = explain_text(db_url, query)
             (plans_dir / f"{query_name}.{variant}.txt").write_text(text_plan, encoding="utf-8")
-            for repeat in range(1, args.repeats + 1):
-                plan = explain_json(args.database_url, query)
+            for repeat in range(1, repeats + 1):
+                plan = explain_json(db_url, query)
                 (plans_dir / f"{query_name}.{variant}.{repeat}.json").write_text(
                     json.dumps(plan, ensure_ascii=False, indent=2),
                     encoding="utf-8",
@@ -187,7 +364,7 @@ def main() -> None:
                     }
                 )
 
-    create_indexes(args.database_url)
+    create_indexes(db_url)
 
     detail_path = out_dir / "db_index_results.csv"
     with detail_path.open("w", newline="", encoding="utf-8") as f:
@@ -247,6 +424,26 @@ def main() -> None:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(summary_rows)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--database-url", required=True)
+    parser.add_argument("--out-dir", required=True)
+    parser.add_argument("--repeats", type=int, default=11)
+    parser.add_argument("--mode", choices=["presence", "type", "scaling"], default="presence")
+    parser.add_argument("--scale", type=int, default=0, help="размер набора (для mode=scaling)")
+    args = parser.parse_args()
+
+    out_dir = Path(args.out_dir)
+    (out_dir / "plans").mkdir(parents=True, exist_ok=True)
+
+    if args.mode == "presence":
+        run_presence_study(args.database_url, out_dir, args.repeats)
+    elif args.mode == "type":
+        run_type_experiments(args.database_url, out_dir, args.repeats)
+    elif args.mode == "scaling":
+        run_scaling_point(args.database_url, out_dir, args.repeats, args.scale)
 
 
 if __name__ == "__main__":

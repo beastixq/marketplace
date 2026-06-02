@@ -27,17 +27,28 @@
 ### Исследовательский раздел
 **Тема:** Исследование влияния индексов и Redis-кэширования на производительность
 
-**Исследование 1 — индексы PostgreSQL:**
-- Инструмент: `EXPLAIN (ANALYZE, BUFFERS)`
-- Запросы: поиск по категории, заказы пользователя, отзывы на товар
-- Метрика: actual time в миллисекундах, seq scan vs index scan
+Воспроизводимый пакет измерений: `scripts/research/` (`run.sh` — основной
+прогон, `scaling.sh` — лестница масштабирования). Числа в РПЗ берутся только из
+сгенерированных артефактов (`research_results/latest/`).
 
-**Исследование 2 — Redis-кэширование:**
-- Инструмент: Go `testing.B` или `hey`
-- Нагрузка: повторяющиеся GET `/api/v1/products`, `/api/v1/products/{id}`,
-  `/api/v1/categories`, `/api/v1/products/{id}/reviews`
-- Метрики: среднее время ответа, P99 latency, кол-во запросов к PostgreSQL,
-  доля cache hit/cache miss
+**Исследование 1 — наличие и тип индексов PostgreSQL:**
+- Инструмент: `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`, повторы с отбрасыванием
+  прогрева, среднее ± СКО.
+- 1.1 Наличие: набор запросов с индексами и без них — seq scan vs index scan,
+  включая случай хранимой функции, где индекс не помогает.
+- 1.2 Тип (простой vs составной): `orders_by_user` — `(user_id)` против
+  `(user_id, created_at desc)`; составной устраняет узел `Sort`.
+- 1.3 Тип (B-tree vs GIN/`pg_trgm`): подстрочный поиск `name ILIKE '%x%'` —
+  B-tree неприменим (Seq Scan) против GIN (Bitmap Heap Scan).
+- 1.4 Масштабирование: время текстового поиска при росте числа товаров
+  (лестница ~10k/100k/500k) — кроссовер seq scan и GIN.
+
+**Исследование 2 — Redis-кэширование под нагрузкой:**
+- Инструмент: нагрузочный тест (`scripts/research/http_load.go`).
+- Нагрузка: GET `/api/v1/products/{id}`, `/api/v1/products`,
+  `/api/v1/products/{id}/reviews`, `/api/v1/categories`; сценарии Redis off / warm.
+- Метрики: среднее время ответа, P95/P99, доля cache hit/miss (Redis `INFO`),
+  относительное число обращений к PostgreSQL (`pg_stat_database`).
 
 ### Redis-кэширование для описания в РПЗ
 

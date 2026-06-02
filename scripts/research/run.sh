@@ -11,7 +11,12 @@ API_PORT_OFF="${API_PORT_OFF:-18080}"
 API_PORT_ON="${API_PORT_ON:-18081}"
 HTTP_REQUESTS="${HTTP_REQUESTS:-600}"
 HTTP_CONCURRENCY="${HTTP_CONCURRENCY:-30}"
-ADD_RESEARCH_DATA="${ADD_RESEARCH_DATA:-false}"
+ADD_RESEARCH_DATA="${ADD_RESEARCH_DATA:-true}"
+# Размер синтетического набора для основного прогона (исследования И1/И2/И3).
+PRODUCT_COUNT="${PRODUCT_COUNT:-40000}"
+ORDER_COUNT="${ORDER_COUNT:-80000}"
+REVIEW_COUNT="${REVIEW_COUNT:-50000}"
+INDEX_REPEATS="${INDEX_REPEATS:-11}"
 
 if [[ ! "${RESEARCH_DB}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
   echo "Invalid RESEARCH_DB: ${RESEARCH_DB}" >&2
@@ -34,6 +39,7 @@ need curl
 
 mkdir -p "${OUT_DIR}"
 rm -f "${OUT_DIR}/http_summary.csv"
+printf 'label,keyspace_hits,keyspace_misses,hit_ratio,pg_tup_returned,pg_blocks\n' >"${OUT_DIR}/http_cache_meta.csv"
 
 echo "[research] output: ${OUT_DIR}"
 echo "[research] database: ${RESEARCH_DB}"
@@ -90,8 +96,12 @@ echo "[research] running base seed command"
 DATABASE_URL="${DATABASE_URL}" go run ./cmd/seed -config config/config.yaml >"${OUT_DIR}/seed.log" 2>&1
 
 if [[ "${ADD_RESEARCH_DATA}" == "true" ]]; then
-  echo "[research] adding set-based research data"
-  psql "${DATABASE_URL}" -X -q -v ON_ERROR_STOP=1 -f "${SCRIPT_DIR}/prepare_data.sql" >"${OUT_DIR}/prepare_data.log" 2>&1
+  echo "[research] adding set-based research data (products=${PRODUCT_COUNT}, orders=${ORDER_COUNT}, reviews=${REVIEW_COUNT})"
+  psql "${DATABASE_URL}" -X -q -v ON_ERROR_STOP=1 \
+    -v product_count="${PRODUCT_COUNT}" \
+    -v order_count="${ORDER_COUNT}" \
+    -v review_count="${REVIEW_COUNT}" \
+    -f "${SCRIPT_DIR}/prepare_data.sql" >"${OUT_DIR}/prepare_data.log" 2>&1
 else
   echo "[research] skipping extra set-based data; using project seed dataset"
   echo "Skipped. Set ADD_RESEARCH_DATA=true to add extra synthetic benchmark rows." >"${OUT_DIR}/prepare_data.log"
@@ -114,11 +124,19 @@ echo "[research] writing metadata"
   echo '```'
 } >"${OUT_DIR}/metadata.md"
 
-echo "[research] running EXPLAIN ANALYZE index benchmark"
+echo "[research] running EXPLAIN ANALYZE index benchmark (наличие индексов)"
 python3 "${SCRIPT_DIR}/index_bench.py" \
   --database-url "${DATABASE_URL}" \
   --out-dir "${OUT_DIR}" \
+  --mode presence \
   --repeats 5
+
+echo "[research] running EXPLAIN ANALYZE index benchmark (тип индекса: простой/составной, B-tree/GIN)"
+python3 "${SCRIPT_DIR}/index_bench.py" \
+  --database-url "${DATABASE_URL}" \
+  --out-dir "${OUT_DIR}" \
+  --mode type \
+  --repeats "${INDEX_REPEATS}"
 
 PRODUCT_ID="$(psql "${DATABASE_URL}" -X -A -t -q -c "select id from products where deleted_at is null order by id desc limit 1")"
 if [[ -z "${PRODUCT_ID}" ]]; then
@@ -144,6 +162,9 @@ redis:
   db: 0
   dial_timeout: "2s"
   product_ttl: "5m"
+  catalog_ttl: "5m"
+  category_ttl: "1h"
+  review_ttl: "5m"
 
 auth:
   jwt_secret: "research-secret"
@@ -178,13 +199,33 @@ wait_api() {
   return 1
 }
 
+redis_stats() {
+  redis-cli -h localhost -p 6379 INFO stats 2>/dev/null | tr -d '\r' \
+    | awk -F: '/^keyspace_hits:/{h=$2} /^keyspace_misses:/{m=$2} END{printf "%d %d", h+0, m+0}'
+}
+
+pg_db_stats() {
+  psql "${DB_ADMIN_URL}" -X -A -t -q -c \
+    "select coalesce(tup_returned,0)||' '||coalesce(blks_read+blks_hit,0) from pg_stat_database where datname='${RESEARCH_DB}'" 2>/dev/null
+}
+
+# Эндпоинты И3: разные по стоимости запросы. Каждый чувствителен к кэшу по-своему
+# (дорогой каталог и отзывы выигрывают сильнее точечной карточки).
+api_endpoints() {
+  printf '%s\n' \
+    "product=/api/v1/products/${PRODUCT_ID}" \
+    "catalog=/api/v1/products?limit=12&page=1" \
+    "reviews=/api/v1/products/${PRODUCT_ID}/reviews?limit=10&page=1" \
+    "categories=/api/v1/categories"
+}
+
 run_api_bench() {
   local label="$1"
   local port="$2"
   local redis_enabled="$3"
   local warm="$4"
   local cfg="${OUT_DIR}/api.${label}.yaml"
-  local url="http://127.0.0.1:${port}/api/v1/products/${PRODUCT_ID}"
+  local ready="http://127.0.0.1:${port}/api/v1/products/${PRODUCT_ID}"
 
   write_api_config "${cfg}" ":${port}" "${redis_enabled}"
   echo "[research] starting API scenario ${label}"
@@ -192,18 +233,42 @@ run_api_bench() {
   local api_pid=$!
   trap 'kill ${api_pid} >/dev/null 2>&1 || true' RETURN
 
-  wait_api "${url}"
+  wait_api "${ready}"
+
+  local name path
   if [[ "${warm}" == "warm" ]]; then
-    curl -fsS "${url}" >/dev/null
+    while IFS= read -r ep; do
+      path="${ep#*=}"
+      curl -fsS "http://127.0.0.1:${port}${path}" >/dev/null || true
+    done < <(api_endpoints)
   fi
 
-  go run "${SCRIPT_DIR}/http_load.go" \
-    -url "${url}" \
-    -label "${label}" \
-    -requests "${HTTP_REQUESTS}" \
-    -concurrency "${HTTP_CONCURRENCY}" \
-    -csv "${OUT_DIR}/http_${label}_requests.csv" \
-    -summary "${OUT_DIR}/http_summary.csv"
+  local rh0 rm0 pt0 pb0
+  read -r rh0 rm0 <<<"$(redis_stats)"; : "${rh0:=0}" "${rm0:=0}"
+  read -r pt0 pb0 <<<"$(pg_db_stats)"; : "${pt0:=0}" "${pb0:=0}"
+
+  while IFS= read -r ep; do
+    name="${ep%%=*}"
+    path="${ep#*=}"
+    go run "${SCRIPT_DIR}/http_load.go" \
+      -url "http://127.0.0.1:${port}${path}" \
+      -label "${label}__${name}" \
+      -requests "${HTTP_REQUESTS}" \
+      -concurrency "${HTTP_CONCURRENCY}" \
+      -csv "${OUT_DIR}/http_${label}__${name}_requests.csv" \
+      -summary "${OUT_DIR}/http_summary.csv"
+  done < <(api_endpoints)
+
+  local rh1 rm1 pt1 pb1
+  read -r rh1 rm1 <<<"$(redis_stats)"; : "${rh1:=0}" "${rm1:=0}"
+  read -r pt1 pb1 <<<"$(pg_db_stats)"; : "${pt1:=0}" "${pb1:=0}"
+  local dh=$((rh1 - rh0)) dm=$((rm1 - rm0))
+  local total=$((dh + dm))
+  local ratio="0.000"
+  if [[ ${total} -gt 0 ]]; then
+    ratio="$(LC_ALL=C awk "BEGIN{printf \"%.3f\", ${dh}/${total}}")"
+  fi
+  echo "${label},${dh},${dm},${ratio},$((pt1 - pt0)),$((pb1 - pb0))" >>"${OUT_DIR}/http_cache_meta.csv"
 
   kill "${api_pid}" >/dev/null 2>&1 || true
   wait "${api_pid}" 2>/dev/null || true
@@ -223,8 +288,10 @@ echo "[research] rendering tables and charts"
 python3 "${SCRIPT_DIR}/render_results.py" --out-dir "${OUT_DIR}"
 
 if command -v convert >/dev/null 2>&1; then
-  convert "${OUT_DIR}/db_index_execution_ms.svg" "${OUT_DIR}/db_index_execution_ms.png" || true
-  convert "${OUT_DIR}/http_cache_latency_ms.svg" "${OUT_DIR}/http_cache_latency_ms.png" || true
+  for f in "${OUT_DIR}"/*.svg; do
+    [[ -e "$f" ]] || continue
+    convert -density 150 "$f" "${f%.svg}.png" || true
+  done
 fi
 
 if command -v google-chrome >/dev/null 2>&1; then
