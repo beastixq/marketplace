@@ -61,6 +61,10 @@ func TestReadableCacheKeysAreCanonical(t *testing.T) {
 	name := "phone case"
 	minPrice := decimal.NewFromInt(10)
 	maxPrice := decimal.NewFromInt(99)
+	minPriceWithScale, err := decimal.NewFromString("10.00")
+	if err != nil {
+		t.Fatalf("decimal fixture: %v", err)
+	}
 	sortOrder := m.SortingOrderAsc
 	page := m.PaginationOpts{Page: 1, Limit: 12}
 
@@ -83,6 +87,17 @@ func TestReadableCacheKeysAreCanonical(t *testing.T) {
 
 	if key1 != key2 {
 		t.Fatalf("catalog keys differ for equivalent category sets:\n%s\n%s", key1, key2)
+	}
+	key3 := ProductCatalogKey(m.CatalogOptions{
+		MinPrice:   &minPriceWithScale,
+		Pagination: &page,
+	})
+	key4 := ProductCatalogKey(m.CatalogOptions{
+		MinPrice:   &minPrice,
+		Pagination: &page,
+	})
+	if key3 != key4 {
+		t.Fatalf("catalog keys differ for equivalent decimal values:\n%s\n%s", key3, key4)
 	}
 	if !strings.HasPrefix(key1, ProductCatalogPrefix()) {
 		t.Fatalf("catalog key %q does not use readable prefix", key1)
@@ -122,6 +137,28 @@ func TestProductRepoCacheCatalogHitAndInvalidation(t *testing.T) {
 	}
 	assertRedisMissing(t, rdb, ProductByIDKey(1))
 	assertRedisMissing(t, rdb, ProductCatalogKey(opts))
+}
+
+func TestProductRepoCacheStockChangeInvalidatesProductOnly(t *testing.T) {
+	ctx := context.Background()
+	rdb := redisClient(t)
+	repo := &fakeProductRepo{product: product(1, "Phone")}
+	cache := NewProductRepoCache(repo, rdb, time.Hour, time.Hour)
+	catalogOpts := m.CatalogOptions{Pagination: &m.PaginationOpts{Page: 1, Limit: 12}}
+
+	if err := rdb.Set(ctx, ProductByIDKey(1), "{}", time.Hour).Err(); err != nil {
+		t.Fatalf("seed product key: %v", err)
+	}
+	if err := rdb.Set(ctx, ProductCatalogKey(catalogOpts), "[]", time.Hour).Err(); err != nil {
+		t.Fatalf("seed catalog key: %v", err)
+	}
+
+	if err := cache.ChangeStockAndReserved(ctx, 1, 0, 1); err != nil {
+		t.Fatalf("ChangeStockAndReserved: %v", err)
+	}
+
+	assertRedisMissing(t, rdb, ProductByIDKey(1))
+	assertRedisExists(t, rdb, ProductCatalogKey(catalogOpts))
 }
 
 func TestCategoryRepoCacheInvalidatesCategoriesAndCatalog(t *testing.T) {
@@ -172,6 +209,25 @@ func TestReviewRepoCacheInvalidatesProductReadModels(t *testing.T) {
 	assertRedisMissing(t, rdb, ProductCatalogKey(catalogOpts))
 }
 
+func TestReviewPrefixInvalidationDoesNotTouchOtherProducts(t *testing.T) {
+	ctx := context.Background()
+	rdb := redisClient(t)
+	productFiveReviews := ProductReviewsKey(5, m.PaginationOpts{Page: 1, Limit: 10})
+	productFiftyReviews := ProductReviewsKey(50, m.PaginationOpts{Page: 1, Limit: 10})
+
+	if err := rdb.Set(ctx, productFiveReviews, "[]", time.Hour).Err(); err != nil {
+		t.Fatalf("seed product 5 reviews key: %v", err)
+	}
+	if err := rdb.Set(ctx, productFiftyReviews, "[]", time.Hour).Err(); err != nil {
+		t.Fatalf("seed product 50 reviews key: %v", err)
+	}
+
+	deleteByPrefix(ctx, rdb, ProductReviewsPrefix(5))
+
+	assertRedisMissing(t, rdb, productFiveReviews)
+	assertRedisExists(t, rdb, productFiftyReviews)
+}
+
 func TestInvalidationDefersUntilAfterCommitHook(t *testing.T) {
 	ctx := context.Background()
 	rdb := redisClient(t)
@@ -217,6 +273,21 @@ func TestTokenBlocklistExpires(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("token blocklist key did not expire")
+}
+
+func TestGetOrLoadDoesNotWriteNegativeCache(t *testing.T) {
+	ctx := context.Background()
+	rdb := redisClient(t)
+	key := "negative-cache-test"
+	loaderErr := errors.New("loader failed")
+
+	_, err := GetOrLoad(ctx, rdb, key, time.Hour, func(context.Context) (string, error) {
+		return "", loaderErr
+	})
+	if !errors.Is(err, loaderErr) {
+		t.Fatalf("GetOrLoad error: got %v, want %v", err, loaderErr)
+	}
+	assertRedisMissing(t, rdb, key)
 }
 
 func TestGetOrLoadFallsBackOnRedisError(t *testing.T) {

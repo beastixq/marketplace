@@ -100,8 +100,8 @@ Currently implemented runtime keys:
 
 | Key | TTL | Invalidation |
 | --- | --- | --- |
-| `products:{id}` | `redis.product_ttl` | Product/review/category relation changes |
-| `products:catalog:{canonical-query}` | `redis.catalog_ttl` | Product/review/category changes |
+| `products:{id}` | `redis.product_ttl` | Product/review/category relation/stock changes |
+| `products:catalog:{canonical-query}` | `redis.catalog_ttl` | Product/review/category changes; stock changes wait for TTL |
 | `categories:list:{canonical-query}` | `redis.category_ttl` | Category CRUD |
 | `products:{id}:reviews:page={page}&limit={limit}` | `redis.review_ttl` | Review changes |
 | `sessions:{jti}` | Remaining JWT lifetime | Logout/token revocation |

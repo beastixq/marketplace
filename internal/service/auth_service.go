@@ -149,11 +149,16 @@ func (as AuthService) ValidateToken(ctx context.Context, token string) (claims m
 		return m.TokenClaims{}, ErrParseToken
 	}
 
+	jti, err := uuid.Parse(c.ID)
+	if err != nil {
+		return m.TokenClaims{}, ErrParseToken
+	}
+
 	claims = m.TokenClaims{
 		UserID: c.UserID,
 		Role:   m.UserRole(c.Role),
 		Exp:    c.ExpiresAt.Time,
-		JTI:    uuid.MustParse(c.ID),
+		JTI:    jti,
 	}
 
 	if as.blocklist != nil {

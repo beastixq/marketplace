@@ -266,6 +266,12 @@ func TestValidateToken(t *testing.T) {
 		"exp":    float64(time.Now().Add(time.Hour).Unix()),
 		"jti":    errorJTI,
 	}
+	invalidJTIClaims := jwt.MapClaims{
+		"UserID": float64(someID),
+		"Role":   string(someRole),
+		"exp":    float64(time.Now().Add(time.Hour).Unix()),
+		"jti":    "not-a-uuid",
+	}
 
 	type userLookup struct {
 		User m.User
@@ -327,6 +333,11 @@ func TestValidateToken(t *testing.T) {
 		{
 			Description: "Malformed token",
 			Token:       "not-a-jwt-token",
+			ExpectedErr: service.ErrParseToken,
+		},
+		{
+			Description: "Invalid JTI",
+			Token:       makeToken(invalidJTIClaims, testSecret, jwt.SigningMethodHS256),
 			ExpectedErr: service.ErrParseToken,
 		},
 		{

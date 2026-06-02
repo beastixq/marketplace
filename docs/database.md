@@ -39,6 +39,12 @@ Run:
 goose -dir migrations postgres "$DATABASE_URL" up
 ```
 
+Migration `013` existed in an earlier branch version and was removed together
+with an unused branch-only table. A fresh coursework database uses migrations
+`001` through `012`. If a local database already applied the old `013`, reset
+that local database or remove the orphaned `goose_db_version` record before
+using this branch.
+
 ## Tables
 
 Core tables:

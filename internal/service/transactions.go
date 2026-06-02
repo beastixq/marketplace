@@ -1,6 +1,9 @@
 package service
 
-import "context"
+import (
+	"context"
+	"log/slog"
+)
 
 type TxManager interface {
 	WithTransaction(ctx context.Context, fn func(context.Context) error) error
@@ -36,6 +39,15 @@ func (h *AfterCommitHooks) Run(ctx context.Context) {
 		return
 	}
 	for _, hook := range h.hooks {
-		hook(ctx)
+		runAfterCommitHook(ctx, hook)
 	}
+}
+
+func runAfterCommitHook(ctx context.Context, hook func(context.Context)) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Default().Warn("after-commit hook panicked", "panic", r)
+		}
+	}()
+	hook(ctx)
 }

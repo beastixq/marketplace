@@ -14,10 +14,11 @@ import (
 // and write-through invalidation. It also satisfies svc.ProductCategoryRepo
 // (pass-through) so the service constructor's type assertion still succeeds.
 type ProductRepoCache struct {
-	inner      svc.ProductRepo
-	rdb        *redis.Client
-	productTTL time.Duration
-	catalogTTL time.Duration
+	inner               svc.ProductRepo
+	productCategoryRepo svc.ProductCategoryRepo
+	rdb                 *redis.Client
+	productTTL          time.Duration
+	catalogTTL          time.Duration
 }
 
 // Compile-time interface checks. Decorator must satisfy BOTH interfaces
@@ -29,7 +30,17 @@ var (
 )
 
 func NewProductRepoCache(inner svc.ProductRepo, rdb *redis.Client, productTTL, catalogTTL time.Duration) *ProductRepoCache {
-	return &ProductRepoCache{inner: inner, rdb: rdb, productTTL: productTTL, catalogTTL: catalogTTL}
+	productCategoryRepo, ok := inner.(svc.ProductCategoryRepo)
+	if !ok {
+		panic("cache.ProductRepoCache requires inner repository to implement service.ProductCategoryRepo")
+	}
+	return &ProductRepoCache{
+		inner:               inner,
+		productCategoryRepo: productCategoryRepo,
+		rdb:                 rdb,
+		productTTL:          productTTL,
+		catalogTTL:          catalogTTL,
+	}
 }
 
 // ---------- Cached reads ----------
@@ -86,7 +97,7 @@ func (c *ProductRepoCache) ChangeStockAndReserved(ctx context.Context, productID
 		return err
 	}
 	invalidateAfterCommit(ctx, func(ctx context.Context) {
-		invalidateProductReadModels(ctx, c.rdb, productID)
+		deleteKeys(ctx, c.rdb, ProductByIDKey(productID))
 	})
 	return nil
 }
@@ -110,19 +121,11 @@ func (c *ProductRepoCache) DeleteProductByID(ctx context.Context, id int64) erro
 // + secondary-interface assertions.
 
 func (c *ProductRepoCache) GetProductCategories(ctx context.Context, productID int64) ([]m.Category, error) {
-	pcr, ok := c.inner.(svc.ProductCategoryRepo)
-	if !ok {
-		return nil, nil
-	}
-	return pcr.GetProductCategories(ctx, productID)
+	return c.productCategoryRepo.GetProductCategories(ctx, productID)
 }
 
 func (c *ProductRepoCache) ReplaceProductCategories(ctx context.Context, productID int64, categoryIDs []int64) error {
-	pcr, ok := c.inner.(svc.ProductCategoryRepo)
-	if !ok {
-		return nil
-	}
-	if err := pcr.ReplaceProductCategories(ctx, productID, categoryIDs); err != nil {
+	if err := c.productCategoryRepo.ReplaceProductCategories(ctx, productID, categoryIDs); err != nil {
 		return err
 	}
 	invalidateAfterCommit(ctx, func(ctx context.Context) {
