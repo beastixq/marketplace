@@ -67,12 +67,8 @@ must not import repositories.
 
 | Path | Purpose |
 | --- | --- |
-| `.opencode/agents/` | OpenCode project agents for backend, frontend, and architecture work. |
-| `.opencode/commands/review.md` | OpenCode `/review` command for read-only current-diff review. |
-| `.opencode/commands/verify.md` | OpenCode `/verify` command for focused read-only verification. |
 | `.codex/config.toml` | Project Codex CLI defaults. |
-| `.codex/agents/` | Codex project agents matching the same backend/frontend/architecture roles. |
-| `.claude/` | Legacy Claude Code project settings and agents, retained for compatibility only. |
+| `.codex/agents/` | Codex project agents for backend, frontend, and architecture work. |
 
 ## Main Use-Case Map
 

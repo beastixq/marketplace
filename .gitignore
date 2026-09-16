@@ -14,7 +14,6 @@ dist/
 logs/
 __pycache__/
 *.py[cod]
-.claude/skills/speckit*
 
 # Optional, local-only speckit extensions (e.g. git auto-commit).
 # Templates, scripts, integrations and memory under .specify/ stay tracked.
