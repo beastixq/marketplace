@@ -1,7 +1,6 @@
 # Project Codex CLI defaults for this repository.
 
-model = "gpt-5.5"
-model_provider = "openai"
+model = "gpt-5.6-sol"
 
 # Safer default for local coding.
 approval_policy = "on-request"
@@ -36,7 +35,7 @@ network_access = true
 
 [features]
 multi_agent = true
-codex_hooks = true
+hooks = true
 skill_mcp_dependency_install = true
 
 [agents]
