@@ -63,12 +63,10 @@ must not import repositories.
 
 ## Agent Tooling
 
-`AGENTS.md` is the canonical project guidance for AI coding agents. `CLAUDE.md`
-is a legacy symlink to it.
+`AGENTS.md` is the canonical project guidance for AI coding agents.
 
 | Path | Purpose |
 | --- | --- |
-| `opencode.json` | Project OpenCode config: default model, sharing mode, LSP, permissions, and watcher ignores. |
 | `.opencode/agents/` | OpenCode project agents for backend, frontend, and architecture work. |
 | `.opencode/commands/review.md` | OpenCode `/review` command for read-only current-diff review. |
 | `.opencode/commands/verify.md` | OpenCode `/verify` command for focused read-only verification. |
@@ -85,7 +83,6 @@ is a legacy symlink to it.
 | Cart and orders | `OrderService` | `OrderRepo`, `OrderItemRepo`, `ProductRepo`, `AddressRepo`, `SellerRepo` | cart/order handlers and web pages |
 | Payments | `PaymentService` | `OrderRepo`, `PaymentGateway` port | payment handler, mock bank web page, tech UI |
 | Reviews and ratings | `ReviewService` | `ReviewRepo`, product lookup, purchase checker | review handlers and product page forms |
-| Favorite products | `FavoriteService` | `FavoriteRepo`, narrow `FavoriteProductGetter` (product lookup) | favorite handler at `/api/v1/favorites`, web star toggle on product page and `/favorites` list |
 | Seller workflow | `SellerService`, `OrderService`, `ProductService` | seller/product/order repos | seller API routes and seller web dashboard |
 | Admin/backoffice | `UserService`, `SellerService`, `BackofficeService` | user/seller/backoffice repos | admin API routes and admin web pages |
 | Analyst reports | `BackofficeService` | `BackofficeRepo` | analyst web dashboard |

@@ -75,14 +75,13 @@ func main() {
 
 	var productRepo svc.ProductRepo = repo.NewProductRepo(pool)
 	if rdb != nil {
-		productRepo = cache.NewProductRepoCache(productRepo, rdb, cfg.Redis.ProductTTL.Std())
+		productRepo = cache.NewProductRepoCache(productRepo, rdb, 5*time.Minute)
 	}
 
 	orderRepo := repo.NewOrderRepo(pool)
 	orderItemRepo := repo.NewOrderItemRepo(pool)
 	categoryRepo := repo.NewCategoryRepo(pool)
 	backofficeRepo := repo.NewBackofficeRepo(pool)
-	favoriteRepo := repo.NewFavoriteRepo(pool)
 	txManager := repo.NewPgxTxManager(pool)
 
 	userService := svc.NewUserService(userRepo, cfg.Auth.BcryptCost)
@@ -90,7 +89,6 @@ func main() {
 	addressService := svc.NewAddressService(addressRepo)
 	reviewService := svc.NewReviewService(reviewRepo, reviewRepo, productRepo)
 	productService := svc.NewProductService(productRepo, reviewRepo, sellerRepo, txManager)
-	favoriteService := svc.NewFavoriteService(favoriteRepo, productRepo)
 	orderService := svc.NewOrderService(orderRepo, orderItemRepo, productRepo, addressRepo, sellerRepo, txManager)
 	categoryService := svc.NewCategoryService(categoryRepo)
 	backofficeService := svc.NewBackofficeService(backofficeRepo)
@@ -114,7 +112,6 @@ func main() {
 	sellerHandler := handler.NewSellerHandler(sellerService, orderService)
 	addressHandler := handler.NewAddressHandler(addressService)
 	productHandler := handler.NewProductHandler(productService)
-	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	orderHandler := handler.NewOrderHandler(orderService)
 	paymentHandler := handler.NewPaymentHandler(paymentService)
 	categoryHandler := handler.NewCategoryHandler(categoryService)
@@ -129,7 +126,6 @@ func main() {
 		sellerHandler,
 		addressHandler,
 		productHandler,
-		favoriteHandler,
 		orderHandler,
 		paymentHandler,
 		categoryHandler,
@@ -137,7 +133,7 @@ func main() {
 		adminHandler,
 	)
 
-	webHandler := web.NewWebHandler(productService, categoryService, authService, userService, orderService, addressService, sellerService, reviewService, backofficeService, paymentService, favoriteService)
+	webHandler := web.NewWebHandler(productService, categoryService, authService, userService, orderService, addressService, sellerService, reviewService, backofficeService, paymentService)
 	webRouter := web.NewWebRouter(webHandler)
 	webLogger := logger.With("component", "web")
 	webHandlerWithLogs := middleware.ActorHolder()(

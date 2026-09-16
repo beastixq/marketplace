@@ -26,7 +26,6 @@ type Component struct {
 	Order      svc.OrderService
 	Category   svc.CategoryService
 	Backoffice svc.BackofficeService
-	Favorite   svc.FavoriteService
 	Auth       svc.AuthService
 	Payment    *svc.PaymentService
 }
@@ -42,7 +41,6 @@ func New(repos *repocomponent.Component, cfg Config) *Component {
 	order := svc.NewOrderService(repos.Order, repos.OrderItem, repos.Product, repos.Address, repos.Seller, repos.TxManager)
 	category := svc.NewCategoryService(repos.Category)
 	backoffice := svc.NewBackofficeService(repos.Backoffice)
-	favorite := svc.NewFavoriteService(repos.Favorite, product)
 	auth := svc.NewAuthService(user, cfg.TokenBlocklist, cfg.JWTSecret, cfg.TokenTTL)
 	gateway := payment.NewMockBankGateway(cfg.PaymentGatewayBaseURL)
 	payments := svc.NewPaymentService(repos.Order, gateway, cfg.PaymentTTL)
@@ -56,7 +54,6 @@ func New(repos *repocomponent.Component, cfg Config) *Component {
 		Order:      order,
 		Category:   category,
 		Backoffice: backoffice,
-		Favorite:   favorite,
 		Auth:       auth,
 		Payment:    payments,
 	}

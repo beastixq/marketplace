@@ -1,11 +1,10 @@
 # AGENTS.md
 
 This file is the single canonical source for agent guidance.
-OpenCode and Codex CLI read `AGENTS.md` directly. `CLAUDE.md` is a legacy
-symlink to this file.
+OpenCode and Codex CLI read `AGENTS.md` directly.
 
 Active project agent surfaces:
-- OpenCode: `opencode.json`, `.opencode/agents/*.md`, `.opencode/commands/*.md`
+- OpenCode: `.opencode/agents/*.md`, `.opencode/commands/*.md`
 - Codex: `.codex/config.toml`, `.codex/agents/*.toml`
 - Legacy Claude Code: `.claude/agents/*.md`, `.claude/settings.json`
 
@@ -483,8 +482,3 @@ Final self-check before every Learning Mode response:
 ```text
 Am I helping the student learn to solve this, or am I solving it for them?
 ```
-
-<!-- SPECKIT START -->
-For the active Spec Kit feature plan, read
-[specs/001-favorite-products/plan.md](specs/001-favorite-products/plan.md).
-<!-- SPECKIT END -->

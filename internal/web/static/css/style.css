@@ -98,21 +98,6 @@ a:hover { text-decoration: underline; }
     align-items: flex-start;
     gap: 1rem;
 }
-.favorite-form { margin: 0; }
-.favorite-btn {
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    font-size: 2rem;
-    line-height: 1;
-    color: #cbd5e1;
-    padding: 0.25rem 0.5rem;
-    border-radius: var(--radius);
-    transition: color 0.15s ease, transform 0.15s ease;
-}
-.favorite-btn:hover { color: #f59e0b; transform: scale(1.1); }
-.favorite-btn--active { color: #f59e0b; }
-.favorite-btn--active:hover { color: #d97706; }
 .product-detail__price { font-size: 1.5rem; color: var(--primary); font-weight: 700; margin-bottom: 1rem; }
 .product-detail__meta { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
 .product-detail__desc { margin-bottom: 2rem; line-height: 1.8; }

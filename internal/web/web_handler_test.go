@@ -26,7 +26,6 @@ func TestTemplatesParse(t *testing.T) {
 		service.ReviewService{},
 		service.BackofficeService{},
 		nil,
-		service.FavoriteService{},
 	)
 	if len(handler.templates) == 0 {
 		t.Fatal("templates: got 0, want parsed templates")
@@ -45,7 +44,6 @@ func TestProductTemplateRendersCurrentUserReview(t *testing.T) {
 		service.ReviewService{},
 		service.BackofficeService{},
 		nil,
-		service.FavoriteService{},
 	)
 
 	comment := "good"
@@ -83,7 +81,6 @@ func TestProductTemplateRendersAdminCategoryPicker(t *testing.T) {
 		service.ReviewService{},
 		service.BackofficeService{},
 		nil,
-		service.FavoriteService{},
 	)
 
 	selected := model.Category{ID: 1, Name: "Books"}
@@ -121,7 +118,6 @@ func TestProfileTemplateRendersPasswordForm(t *testing.T) {
 		service.ReviewService{},
 		service.BackofficeService{},
 		nil,
-		service.FavoriteService{},
 	)
 
 	var out bytes.Buffer

@@ -62,11 +62,6 @@ func NewWebRouter(wh *WebHandler) http.Handler {
 	r.Post("/seller/orders/{id}/ship", wh.SellerOrderShip)
 	r.Post("/seller/orders/{id}/deliver", wh.SellerOrderDeliver)
 
-	// Favorites
-	r.Get("/favorites", wh.Favorites)
-	r.Post("/favorites/{productID}/add", wh.FavoriteAdd)
-	r.Post("/favorites/{productID}/remove", wh.FavoriteRemove)
-
 	// Reviews
 	r.Post("/products/{id}/review", wh.ReviewSubmit)
 	r.Post("/reviews/{id}/edit", wh.ReviewUpdate)
