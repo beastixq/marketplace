@@ -76,9 +76,9 @@ where company_name like 'Research Seller %';
 insert into products (seller_id, name, description, price, stock_quantity, created_at)
 select
     sa.ids[(((g - 1) % sa.cnt) + 1)::integer],
-    -- Имя из словаря частотных токенов (~1/10 на токен для ILIKE '%phone%')
-    -- плюс редкий токен Zephyr (~0.1%) для демонстрации эффекта GIN/pg_trgm
-    -- против последовательного сканирования при низкой селективности.
+    -- Имя из обычного словаря (~1/10 на слово для ILIKE '%phone%')
+    -- плюс редкое слово Zephyr (~0.1%) для демонстрации эффекта GIN/pg_trgm
+    -- против последовательного просмотра таблицы.
     (array['Phone','Case','Cable','Laptop','Mouse','Keyboard','Monitor','Charger','Headset','Speaker'])[(g % 10) + 1]
         || case when g % 1000 = 0 then ' Zephyr' else '' end
         || ' Research Product ' || g,

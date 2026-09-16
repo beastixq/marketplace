@@ -16,7 +16,7 @@ RESEARCH_DB="${RESEARCH_DB:-marketplace_scaling}"
 DB_ADMIN_URL="${DB_ADMIN_URL:-postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable}"
 DATABASE_URL="${DATABASE_URL:-postgres://postgres:postgres@localhost:5432/${RESEARCH_DB}?sslmode=disable}"
 SIZES="${SIZES:-10000 100000 500000}"
-INDEX_REPEATS="${INDEX_REPEATS:-11}"
+INDEX_REPEATS="${INDEX_REPEATS:-10}"
 
 if [[ ! "${RESEARCH_DB}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
   echo "Invalid RESEARCH_DB: ${RESEARCH_DB}" >&2

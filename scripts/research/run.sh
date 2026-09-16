@@ -12,11 +12,11 @@ API_PORT_ON="${API_PORT_ON:-18081}"
 HTTP_REQUESTS="${HTTP_REQUESTS:-600}"
 HTTP_CONCURRENCY="${HTTP_CONCURRENCY:-30}"
 ADD_RESEARCH_DATA="${ADD_RESEARCH_DATA:-true}"
-# Размер синтетического набора для основного прогона (исследования И1/И2/И3).
+# Размер набора для основного прогона (исследования И1/И2/И3).
 PRODUCT_COUNT="${PRODUCT_COUNT:-40000}"
 ORDER_COUNT="${ORDER_COUNT:-80000}"
 REVIEW_COUNT="${REVIEW_COUNT:-50000}"
-INDEX_REPEATS="${INDEX_REPEATS:-11}"
+INDEX_REPEATS="${INDEX_REPEATS:-10}"
 
 if [[ ! "${RESEARCH_DB}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
   echo "Invalid RESEARCH_DB: ${RESEARCH_DB}" >&2
@@ -210,7 +210,7 @@ pg_db_stats() {
 }
 
 # Эндпоинты И3: разные по стоимости запросы. Каждый чувствителен к кэшу по-своему
-# (дорогой каталог и отзывы выигрывают сильнее точечной карточки).
+# (каталог и отзывы выполняют больше чтений из PostgreSQL, чем точечная карточка).
 api_endpoints() {
   printf '%s\n' \
     "product=/api/v1/products/${PRODUCT_ID}" \

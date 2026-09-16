@@ -1,12 +1,13 @@
-% !TEX root = report.tex
+% !TEX root = report_with_tz.tex
 
 \input{parts/00_config}
 
 \begin{document}
 
 \includepdf[pages={1},pagecommand={\rpzhideimportedpagenumber}]{Titul.pdf}
+\includepdf[pages={2},pagecommand={\rpzhideimportedpagenumber}]{../ТЗ.pdf}
 \setcounter{page}{4}
-\newcommand{\rpzextraaccountedpages}{2}
+\newcommand{\rpzextraaccountedpages}{1}
 
 \include{parts/02_abstract}
 

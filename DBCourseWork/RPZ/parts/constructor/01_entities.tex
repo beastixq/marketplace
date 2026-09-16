@@ -22,157 +22,167 @@
 \begin{table}[H]
     \caption{Описание столбцов таблицы users}
     \label{tbl:t_users}
+    \rpzcompacttable
     \begin{tabular}[]{|c|c|c|c|}
         \hline
         \textbf{Столбец} & \textbf{Тип данных} & \textbf{Ограничения} & \textbf{Описание} \\ \hline
-        id & BIGSERIAL & \makecell{NOT NULL \\ PRIMARY KEY} & идентификатор \\ \hline
-        email & VARCHAR(255) & \makecell{NOT NULL \\ UNIQUE} & электронная почта \\ \hline
-        password\_hash & VARCHAR(255) & NOT NULL & хеш пароля \\ \hline
-        full\_name & VARCHAR(255) & NOT NULL & полное имя \\ \hline
-        phone & VARCHAR(20) & --- & номер телефона \\ \hline
-        role & VARCHAR(20) & \makecell{NOT NULL \\ CHECK} & \makecell{роль: buyer, seller,\\admin, analyst} \\ \hline
-        created\_at & TIMESTAMPTZ & \makecell{NOT NULL \\ DEFAULT now()} & дата создания \\ \hline
-        deleted\_at & TIMESTAMPTZ & --- & \makecell{дата мягкого\\удаления} \\ \hline
+        id & bigserial & \makecell{not null \\ primary key} & идентификатор \\ \hline
+        email & varchar(255) & \makecell{not null \\ unique} & электронная почта \\ \hline
+        password\_hash & varchar(255) & not null & хеш пароля \\ \hline
+        full\_name & varchar(255) & not null & полное имя \\ \hline
+        phone & varchar(20) & --- & номер телефона \\ \hline
+        role & varchar(20) & \makecell{not null \\ check} & \makecell{роль: buyer, seller,\\admin, analyst} \\ \hline
+        created\_at & timestamptz & \makecell{not null \\ default now()} & дата создания \\ \hline
+        deleted\_at & timestamptz & --- & \makecell{дата мягкого\\удаления} \\ \hline
     \end{tabular}
 \end{table}
 
 \begin{table}[H]
     \caption{Описание столбцов таблицы sellers}
     \label{tbl:t_sellers}
+    \rpzcompacttable
     \begin{tabular}[]{|c|c|c|c|}
         \hline
         \textbf{Столбец} & \textbf{Тип данных} & \textbf{Ограничения} & \textbf{Описание} \\ \hline
-        id & BIGSERIAL & \makecell{NOT NULL \\ PRIMARY KEY} & идентификатор \\ \hline
-        user\_id & BIGINT & \makecell{NOT NULL \\ UNIQUE \\ FOREIGN KEY} & \makecell{ссылка на\\пользователя} \\ \hline
-        company\_name & VARCHAR(255) & NOT NULL & название компании \\ \hline
-        description & TEXT & --- & описание \\ \hline
-        rating & NUMERIC(3,2) & --- & \makecell{рейтинг\\(пересчитывается\\триггером)} \\ \hline
-        created\_at & TIMESTAMPTZ & \makecell{NOT NULL \\ DEFAULT now()} & дата создания \\ \hline
+        id & bigserial & \makecell{not null \\ primary key} & идентификатор \\ \hline
+        user\_id & bigint & \makecell{not null \\ unique \\ foreign key} & \makecell{ссылка на\\пользователя} \\ \hline
+        company\_name & varchar(255) & not null & название компании \\ \hline
+        description & text & --- & описание \\ \hline
+        rating & numeric(3,2) & --- & \makecell{рейтинг\\(пересчитывается\\триггером)} \\ \hline
+        created\_at & timestamptz & \makecell{not null \\ default now()} & дата создания \\ \hline
     \end{tabular}
 \end{table}
 
 \begin{table}[H]
     \caption{Описание столбцов таблицы products}
     \label{tbl:t_products}
+    \rpzcompacttable
     \begin{tabular}[]{|c|c|c|c|}
         \hline
         \textbf{Столбец} & \textbf{Тип данных} & \textbf{Ограничения} & \textbf{Описание} \\ \hline
-        id & BIGSERIAL & \makecell{NOT NULL \\ PRIMARY KEY} & идентификатор \\ \hline
-        seller\_id & BIGINT & \makecell{NOT NULL \\ FOREIGN KEY} & \makecell{ссылка на\\продавца} \\ \hline
-        name & VARCHAR(255) & NOT NULL & название товара \\ \hline
-        description & TEXT & --- & описание \\ \hline
-        price & NUMERIC(12,2) & \makecell{NOT NULL \\ CHECK $> 0$} & цена \\ \hline
-        stock\_quantity & INTEGER & \makecell{NOT NULL \\ CHECK $\geq 0$ \\ DEFAULT 0} & \makecell{количество\\на складе} \\ \hline
-        reserved\_quantity & INTEGER & \makecell{NOT NULL \\ CHECK $\geq 0$ \\ DEFAULT 0 \\ CHECK $\leq$\\stock\_quantity} & \makecell{количество\\в резерве} \\ \hline
-        rating & NUMERIC(3,2) & --- & \makecell{рейтинг\\(пересчитывается\\триггером)} \\ \hline
-        created\_at & TIMESTAMPTZ & \makecell{NOT NULL \\ DEFAULT now()} & дата создания \\ \hline
-        deleted\_at & TIMESTAMPTZ & --- & \makecell{дата мягкого\\удаления} \\ \hline
+        id & bigserial & \makecell{not null \\ primary key} & идентификатор \\ \hline
+        seller\_id & bigint & \makecell{not null \\ foreign key} & \makecell{ссылка на\\продавца} \\ \hline
+        name & varchar(255) & not null & название товара \\ \hline
+        description & text & --- & описание \\ \hline
+        price & numeric(12,2) & \makecell{not null \\ check $> 0$} & цена \\ \hline
+        stock\_quantity & integer & \makecell{not null \\ check $\geq 0$ \\ default 0} & \makecell{количество\\на складе} \\ \hline
+        reserved\_quantity & integer & \makecell{not null \\ check $\geq 0$ \\ default 0 \\ check $\leq$\\stock\_quantity} & \makecell{количество\\в резерве} \\ \hline
+        rating & numeric(3,2) & --- & \makecell{рейтинг\\(пересчитывается\\триггером)} \\ \hline
+        created\_at & timestamptz & \makecell{not null \\ default now()} & дата создания \\ \hline
+        deleted\_at & timestamptz & --- & \makecell{дата мягкого\\удаления} \\ \hline
     \end{tabular}
 \end{table}
 
 \begin{table}[H]
     \caption{Описание столбцов таблицы categories}
     \label{tbl:t_categories}
+    \rpzcompacttable
     \begin{tabular}[]{|c|c|c|c|}
         \hline
         \textbf{Столбец} & \textbf{Тип данных} & \textbf{Ограничения} & \textbf{Описание} \\ \hline
-        id & BIGSERIAL & \makecell{NOT NULL \\ PRIMARY KEY} & идентификатор \\ \hline
-        parent\_id & BIGINT & FOREIGN KEY & \makecell{ссылка на\\родительскую\\категорию} \\ \hline
-        name & VARCHAR(255) & \makecell{NOT NULL \\ UNIQUE} & название категории \\ \hline
-        description & TEXT & --- & описание \\ \hline
+        id & bigserial & \makecell{not null \\ primary key} & идентификатор \\ \hline
+        parent\_id & bigint & foreign key & \makecell{ссылка на\\родительскую\\категорию} \\ \hline
+        name & varchar(255) & \makecell{not null \\ unique} & название категории \\ \hline
+        description & text & --- & описание \\ \hline
     \end{tabular}
 \end{table}
 
 \begin{table}[H]
     \caption{Описание столбцов таблицы product\_categories}
     \label{tbl:t_product_categories}
+    \rpzcompacttable
     \begin{tabular}[]{|c|c|c|c|}
         \hline
         \textbf{Столбец} & \textbf{Тип данных} & \textbf{Ограничения} & \textbf{Описание} \\ \hline
-        product\_id & BIGINT & \makecell{NOT NULL \\ FOREIGN KEY} & \makecell{ссылка на\\товар} \\ \hline
-        category\_id & BIGINT & \makecell{NOT NULL \\ FOREIGN KEY} & \makecell{ссылка на\\категорию} \\ \hline
-        \multicolumn{4}{|c|}{PRIMARY KEY (product\_id, category\_id)} \\ \hline
+        product\_id & bigint & \makecell{not null \\ foreign key} & \makecell{ссылка на\\товар} \\ \hline
+        category\_id & bigint & \makecell{not null \\ foreign key} & \makecell{ссылка на\\категорию} \\ \hline
+        \multicolumn{4}{|c|}{primary key (product\_id, category\_id)} \\ \hline
     \end{tabular}
 \end{table}
 
 \begin{table}[H]
     \caption{Описание столбцов таблицы addresses}
     \label{tbl:t_addresses}
+    \rpzcompacttable
     \begin{tabular}[]{|c|c|c|c|}
         \hline
         \textbf{Столбец} & \textbf{Тип данных} & \textbf{Ограничения} & \textbf{Описание} \\ \hline
-        id & BIGSERIAL & \makecell{NOT NULL \\ PRIMARY KEY} & идентификатор \\ \hline
-        user\_id & BIGINT & \makecell{NOT NULL \\ FOREIGN KEY} & \makecell{ссылка на\\пользователя} \\ \hline
-        city & VARCHAR(100) & NOT NULL & город \\ \hline
-        street & VARCHAR(255) & NOT NULL & улица \\ \hline
-        house & VARCHAR(20) & NOT NULL & дом \\ \hline
-        apartment & VARCHAR(20) & --- & квартира \\ \hline
-        zip\_code & VARCHAR(20) & NOT NULL & почтовый индекс \\ \hline
-        is\_default & BOOLEAN & \makecell{NOT NULL \\ DEFAULT false} & \makecell{признак основного\\адреса} \\ \hline
-        created\_at & TIMESTAMPTZ & \makecell{NOT NULL \\ DEFAULT now()} & дата создания \\ \hline
+        id & bigserial & \makecell{not null \\ primary key} & идентификатор \\ \hline
+        user\_id & bigint & \makecell{not null \\ foreign key} & \makecell{ссылка на\\пользователя} \\ \hline
+        city & varchar(100) & not null & город \\ \hline
+        street & varchar(255) & not null & улица \\ \hline
+        house & varchar(20) & not null & дом \\ \hline
+        apartment & varchar(20) & --- & квартира \\ \hline
+        zip\_code & varchar(20) & not null & почтовый индекс \\ \hline
+        is\_default & boolean & \makecell{not null \\ default false} & \makecell{признак основного\\адреса} \\ \hline
+        created\_at & timestamptz & \makecell{not null \\ default now()} & дата создания \\ \hline
     \end{tabular}
 \end{table}
 
 \begin{table}[H]
     \caption{Описание столбцов таблицы orders}
     \label{tbl:t_orders}
+    \rpzcompacttable
     \begin{tabular}[]{|c|c|c|c|}
         \hline
         \textbf{Столбец} & \textbf{Тип данных} & \textbf{Ограничения} & \textbf{Описание} \\ \hline
-        id & BIGSERIAL & \makecell{NOT NULL \\ PRIMARY KEY} & идентификатор \\ \hline
-        user\_id & BIGINT & \makecell{NOT NULL \\ FOREIGN KEY} & \makecell{ссылка на\\покупателя} \\ \hline
-        seller\_id & BIGINT & \makecell{FOREIGN KEY \\ (nullable)} & \makecell{ссылка на продавца\\(заполняется при\\оформлении)} \\ \hline
-        address\_id & BIGINT & \makecell{FOREIGN KEY \\ (nullable)} & \makecell{ссылка на адрес\\(null для\\корзины-черновика)} \\ \hline
-        status & VARCHAR(30) & \makecell{NOT NULL \\ CHECK} & \makecell{статус: draft,\\pending, paid,\\shipped, delivered,\\cancelled} \\ \hline
-        total\_amount & NUMERIC(12,2) & \makecell{NOT NULL \\ CHECK $\geq 0$} & итоговая сумма \\ \hline
-        created\_at & TIMESTAMPTZ & \makecell{NOT NULL \\ DEFAULT now()} & дата создания \\ \hline
-        updated\_at & TIMESTAMPTZ & \makecell{NOT NULL \\ DEFAULT now()} & дата обновления \\ \hline
+        id & bigserial & \makecell{not null \\ primary key} & идентификатор \\ \hline
+        user\_id & bigint & \makecell{not null \\ foreign key} & \makecell{ссылка на\\покупателя} \\ \hline
+        seller\_id & bigint & \makecell{foreign key \\ (nullable)} & \makecell{ссылка на продавца\\(заполняется при\\оформлении)} \\ \hline
+        address\_id & bigint & \makecell{foreign key \\ (nullable)} & \makecell{ссылка на адрес\\(null для\\корзины-черновика)} \\ \hline
+        status & varchar(30) & \makecell{not null \\ check} & \makecell{статус: draft,\\pending, paid,\\shipped, delivered,\\cancelled} \\ \hline
+        total\_amount & numeric(12,2) & \makecell{not null \\ check $\geq 0$} & итоговая сумма \\ \hline
+        created\_at & timestamptz & \makecell{not null \\ default now()} & дата создания \\ \hline
+        updated\_at & timestamptz & \makecell{not null \\ default now()} & дата обновления \\ \hline
     \end{tabular}
 \end{table}
 
 \begin{table}[H]
     \caption{Описание столбцов таблицы order\_items}
     \label{tbl:t_order_items}
+    \rpzcompacttable
     \begin{tabular}[]{|c|c|c|c|}
         \hline
         \textbf{Столбец} & \textbf{Тип данных} & \textbf{Ограничения} & \textbf{Описание} \\ \hline
-        id & BIGSERIAL & \makecell{NOT NULL \\ PRIMARY KEY} & идентификатор \\ \hline
-        order\_id & BIGINT & \makecell{NOT NULL \\ FOREIGN KEY} & ссылка на заказ \\ \hline
-        product\_id & BIGINT & \makecell{NOT NULL \\ FOREIGN KEY} & ссылка на товар \\ \hline
-        quantity & INTEGER & \makecell{NOT NULL \\ CHECK $> 0$} & количество \\ \hline
-        price\_at\_purchase & NUMERIC(12,2) & \makecell{NOT NULL \\ CHECK $> 0$} & \makecell{цена на момент\\покупки} \\ \hline
-        \multicolumn{4}{|c|}{UNIQUE (order\_id, product\_id)} \\ \hline
+        id & bigserial & \makecell{not null \\ primary key} & идентификатор \\ \hline
+        order\_id & bigint & \makecell{not null \\ foreign key} & ссылка на заказ \\ \hline
+        product\_id & bigint & \makecell{not null \\ foreign key} & ссылка на товар \\ \hline
+        quantity & integer & \makecell{not null \\ check $> 0$} & количество \\ \hline
+        price\_at\_purchase & numeric(12,2) & \makecell{not null \\ check $> 0$} & \makecell{цена на момент\\покупки} \\ \hline
+        \multicolumn{4}{|c|}{unique (order\_id, product\_id)} \\ \hline
     \end{tabular}
 \end{table}
 
 \begin{table}[H]
     \caption{Описание столбцов таблицы reviews}
     \label{tbl:t_reviews}
+    \rpzcompacttable
     \begin{tabular}[]{|c|c|c|c|}
         \hline
         \textbf{Столбец} & \textbf{Тип данных} & \textbf{Ограничения} & \textbf{Описание} \\ \hline
-        id & BIGSERIAL & \makecell{NOT NULL \\ PRIMARY KEY} & идентификатор \\ \hline
-        user\_id & BIGINT & \makecell{NOT NULL \\ FOREIGN KEY} & \makecell{ссылка на\\пользователя} \\ \hline
-        product\_id & BIGINT & \makecell{NOT NULL \\ FOREIGN KEY} & ссылка на товар \\ \hline
-        rating & SMALLINT & \makecell{NOT NULL \\ CHECK 1..5} & оценка от 1 до 5 \\ \hline
-        comment & TEXT & --- & текст отзыва \\ \hline
-        created\_at & TIMESTAMPTZ & \makecell{NOT NULL \\ DEFAULT now()} & дата создания \\ \hline
-        \multicolumn{4}{|c|}{UNIQUE (user\_id, product\_id)} \\ \hline
+        id & bigserial & \makecell{not null \\ primary key} & идентификатор \\ \hline
+        user\_id & bigint & \makecell{not null \\ foreign key} & \makecell{ссылка на\\пользователя} \\ \hline
+        product\_id & bigint & \makecell{not null \\ foreign key} & ссылка на товар \\ \hline
+        rating & smallint & \makecell{not null \\ check 1..5} & оценка от 1 до 5 \\ \hline
+        comment & text & --- & текст отзыва \\ \hline
+        created\_at & timestamptz & \makecell{not null \\ default now()} & дата создания \\ \hline
+        \multicolumn{4}{|c|}{unique (user\_id, product\_id)} \\ \hline
     \end{tabular}
 \end{table}
 
 \begin{table}[H]
     \caption{Описание столбцов таблицы product\_price\_history}
     \label{tbl:t_price_history}
+    \rpzcompacttable
     \begin{tabular}[]{|c|c|c|c|}
         \hline
         \textbf{Столбец} & \textbf{Тип данных} & \textbf{Ограничения} & \textbf{Описание} \\ \hline
-        id & BIGSERIAL & \makecell{NOT NULL \\ PRIMARY KEY} & идентификатор \\ \hline
-        product\_id & BIGINT & \makecell{NOT NULL \\ FOREIGN KEY} & ссылка на товар \\ \hline
-        old\_price & NUMERIC(12,2) & NOT NULL & старая цена \\ \hline
-        new\_price & NUMERIC(12,2) & NOT NULL & новая цена \\ \hline
-        changed\_at & TIMESTAMPTZ & \makecell{NOT NULL \\ DEFAULT now()} & дата изменения \\ \hline
-        changed\_by & TEXT & \makecell{NOT NULL \\ DEFAULT\\current\_user} & \makecell{инициатор\\изменения} \\ \hline
+        id & bigserial & \makecell{not null \\ primary key} & идентификатор \\ \hline
+        product\_id & bigint & \makecell{not null \\ foreign key} & ссылка на товар \\ \hline
+        old\_price & numeric(12,2) & not null & старая цена \\ \hline
+        new\_price & numeric(12,2) & not null & новая цена \\ \hline
+        changed\_at & timestamptz & \makecell{not null \\ default now()} & дата изменения \\ \hline
+        changed\_by & text & \makecell{not null \\ default\\current\_user} & \makecell{инициатор\\изменения} \\ \hline
     \end{tabular}
 \end{table}
 
@@ -186,16 +196,16 @@
         \textbf{Индекс} & \textbf{Столбцы} & \textbf{Назначение} \\ \hline
         \makecell[l]{idx\_products\_\\seller\_id} & \makecell[l]{products\\(seller\_id)} & \makecell[l]{выборка товаров\\продавца} \\ \hline
         \makecell[l]{idx\_orders\_\\user\_id} & \makecell[l]{orders\\(user\_id)} & \makecell[l]{выборка заказов\\покупателя} \\ \hline
-        \makecell[l]{ux\_orders\_one\_\\draft\_per\_user} & \makecell[l]{orders\\(user\_id)\\WHERE status = 'draft'} & \makecell[l]{единственная\\корзина покупателя} \\ \hline
+        \makecell[l]{ux\_orders\_one\_\\draft\_per\_user} & \makecell[l]{orders\\(user\_id)\\where status = 'draft'} & \makecell[l]{единственная\\корзина покупателя} \\ \hline
         \makecell[l]{idx\_orders\_\\status\_created\_at} & \makecell[l]{orders\\(status, created\_at)} & \makecell[l]{фильтрация заказов\\по статусу и дате} \\ \hline
         \makecell[l]{idx\_product\_\\categories\_\\category\_id} & \makecell[l]{product\_categories\\(category\_id)} & \makecell[l]{выборка товаров\\по категории} \\ \hline
         \makecell[l]{idx\_reviews\_\\product\_id} & \makecell[l]{reviews\\(product\_id)} & \makecell[l]{выборка отзывов\\на товар} \\ \hline
-        \makecell[l]{idx\_products\_\\id\_not\_deleted} & \makecell[l]{products (id)\\WHERE deleted\_at\\IS NULL} & \makecell[l]{частичный индекс:\\только активные\\товары} \\ \hline
-        \makecell[l]{idx\_users\_\\id\_not\_deleted} & \makecell[l]{users (id)\\WHERE deleted\_at\\IS NULL} & \makecell[l]{частичный индекс:\\только активные\\пользователи} \\ \hline
+        \makecell[l]{idx\_products\_\\id\_not\_deleted} & \makecell[l]{products (id)\\where deleted\_at\\is null} & \makecell[l]{частичный индекс:\\только активные\\товары} \\ \hline
+        \makecell[l]{idx\_users\_\\id\_not\_deleted} & \makecell[l]{users (id)\\where deleted\_at\\is null} & \makecell[l]{частичный индекс:\\только активные\\пользователи} \\ \hline
         \makecell[l]{idx\_products\_\\price} & \makecell[l]{products\\(price)} & \makecell[l]{сортировка и\\фильтрация по цене} \\ \hline
     \end{tabular}
 \end{table}
 
-Частичные индексы (\texttt{WHERE deleted\_at IS NULL}) обеспечивают эффективный поиск только среди активных записей, исключая мягко удалённые строки из индексного дерева.
+Частичные индексы (\texttt{where deleted\_at is null}) обеспечивают эффективный поиск только среди активных записей, исключая мягко удалённые строки из индексного дерева.
 
 \clearpage

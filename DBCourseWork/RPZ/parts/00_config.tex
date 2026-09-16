@@ -34,7 +34,7 @@
 \usepackage{pdfpages}
 \usepackage{enumerate,letltxmacro}
 \usepackage{threeparttable}
-\usepackage[hidelinks]{hyperref}
+\usepackage[hidelinks,bookmarks=false]{hyperref}
 \usepackage{url}
 \def\UrlBreaks{\do\/\do-\do_\do.\do:\do=\do?\do\&\do\#\do\%}
 \usepackage{flafter}
@@ -51,9 +51,29 @@
 
 \setlist{nosep}
 
-\newcommand{\ssr}[1]{\begin{center}
+\newcommand{\rpzheading}[1]{\begin{center}
 		\LARGE\bfseries{#1}
-	\end{center} \addcontentsline{toc}{chapter}{#1}  }
+	\end{center}}
+\newcommand{\ssr}[1]{\rpzheading{#1} \addcontentsline{toc}{chapter}{#1}  }
+\newcommand{\rpzcontents}{%
+	\rpzheading{СОДЕРЖАНИЕ}
+	\begingroup
+	\setlength{\cftbeforetoctitleskip}{0pt}
+	\setlength{\cftaftertoctitleskip}{0pt}
+	\def\contentsname{}
+	\renewcommand{\cfttoctitlefont}{}
+	\renewcommand{\cftaftertoctitle}{}
+	\tableofcontents
+	\endgroup}
+\newcommand{\rpzcompacttable}{%
+	\footnotesize
+	\setlength{\tabcolsep}{3pt}
+	\renewcommand{\arraystretch}{0.82}}
+\newcommand{\rpzhideimportedpagenumber}{%
+	\thispagestyle{empty}%
+	\begin{tikzpicture}[remember picture,overlay]
+		\fill[white] (current page.south west) rectangle ([yshift=1.6cm]current page.south east);
+	\end{tikzpicture}}
 
 \makeatletter
 \renewcommand\LARGE{\@setfontsize\LARGE{22pt}{20}}

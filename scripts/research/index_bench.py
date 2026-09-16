@@ -430,7 +430,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--database-url", required=True)
     parser.add_argument("--out-dir", required=True)
-    parser.add_argument("--repeats", type=int, default=11)
+    parser.add_argument("--repeats", type=int, default=10)
     parser.add_argument("--mode", choices=["presence", "type", "scaling"], default="presence")
     parser.add_argument("--scale", type=int, default=0, help="размер набора (для mode=scaling)")
     args = parser.parse_args()
@@ -448,4 +448,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

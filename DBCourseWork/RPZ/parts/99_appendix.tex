@@ -1,0 +1,26 @@
+% !TEX root = ../report.tex
+
+\clearpage
+\appendix
+\phantomsection
+\addcontentsline{toc}{chapter}{ПРИЛОЖЕНИЯ}
+\begin{center}
+    \large\bfseries ПРИЛОЖЕНИЕ А
+
+    \large\bfseries Сценарии создания базы данных
+\end{center}
+
+В приложении приведены SQL-миграции, используемые для создания и изменения схемы базы данных.
+
+\lstinputlisting[language=SQL, caption={Создание основных таблиц}]{../../migrations/001_create_tables.sql}
+\lstinputlisting[language=SQL, caption={Создание индексов}]{../../migrations/002_create_indexes.sql}
+\lstinputlisting[language=SQL, caption={Создание ролей и привилегий}]{../../migrations/003_create_roles.sql}
+\lstinputlisting[language=SQL, caption={Создание триггера журнала изменения цен}]{../../migrations/004_create_trigger.sql}
+\lstinputlisting[language=SQL, caption={Создание функции статистики продавца}]{../../migrations/005_create_functions.sql}
+\lstinputlisting[language=SQL, caption={Добавление связи заказа с продавцом}]{../../migrations/006_orders_add_seller_id.sql}
+\lstinputlisting[language=SQL, caption={Добавление рейтингов и триггера пересчёта}]{../../migrations/007_product_and_seller_rating.sql}
+\lstinputlisting[language=SQL, caption={Создание системных учётных записей}]{../../migrations/008_system_accounts.sql}
+\lstinputlisting[language=SQL, caption={Добавление зарезервированного количества товара}]{../../migrations/009_add_reserved_quantity.sql}
+\lstinputlisting[language=SQL, caption={Добавление дома и квартиры в адрес}]{../../migrations/010_add_address_house.sql}
+\lstinputlisting[language=SQL, caption={Добавление инвариантов корзины}]{../../migrations/011_order_cart_item_invariants.sql}
+\lstinputlisting[language=SQL, caption={Снятие уникальности с номера телефона}]{../../migrations/012_drop_users_phone_unique.sql}
