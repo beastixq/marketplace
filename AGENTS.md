@@ -1,16 +1,12 @@
 # AGENTS.md
 
 This file is the single canonical source for agent guidance.
-OpenCode and Codex CLI read `AGENTS.md` directly.
+Codex CLI reads `AGENTS.md` directly.
 
 Active project agent surfaces:
-- OpenCode: `.opencode/agents/*.md`, `.opencode/commands/*.md`
 - Codex: `.codex/config.toml`, `.codex/agents/*.toml`
-- Legacy Claude Code: `.claude/agents/*.md`, `.claude/settings.json`
 
-When changing agent guidance, keep the active OpenCode and Codex surfaces
-aligned manually. Update the legacy Claude Code surface only if Claude Code is
-used again.
+When changing agent guidance, keep `AGENTS.md` and the Codex surface aligned.
 
 ## Documentation Use
 
@@ -58,15 +54,9 @@ Prefer targeted reads: `rg`, `Read` with offset/limit, `git status --short`, nar
 ## Custom Subagents
 
 Project-scoped subagents:
-- OpenCode: `.opencode/agents/*.md`
 - Codex: `.codex/agents/*.toml`
-- Legacy Claude Code: `.claude/agents/*.md`
 
-Keep active surfaces aligned manually.
-
-OpenCode project commands:
-- `/review`: review the current diff without editing files.
-- `/verify`: run focused verification for the current change without editing files.
+Keep the Codex agent definitions aligned with this file.
 
 Use subagents only when the user explicitly asks to delegate/split work or when a clearly scoped specialist review is useful.
 
