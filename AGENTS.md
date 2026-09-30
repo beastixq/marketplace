@@ -8,6 +8,11 @@ Active project agent surfaces:
 - Codex: `.codex/config.toml`, `.codex/agents/*.toml`
 
 When changing agent guidance, keep `AGENTS.md` and the Codex surface aligned.
+Application-layer rules are maintained here and in the linked documentation;
+the duplicate `AGENTS.md` files in `internal/service`, `internal/repository`,
+`internal/cache` and `migrations` were removed at the student's request.
+The separate `DBCourseWork/AGENTS.md` retains report-specific writing rules.
+Do not recreate duplicate layer instructions as incidental cleanup.
 
 ## Goal, Scope, And Current State
 
@@ -88,7 +93,9 @@ This does not close the separate Checkout BPMN debt. The student accepted the
 other materials and the thematic commit plan, with this sequence correction.
 The correction was source/visually checked by Codex; another student viewing
 of the corrected rendering is not claimed. The agreed set contains 46 files,
-excluding the local Fulfillment generator and its tests. Do not
+excluding the local Fulfillment generator and its tests. These were assessed
+as one-off preparation tools, not the maintained diagram workflow, and were
+added to the student's global Git ignore at their request. Do not
 delete the local scripts or present their past checks as runnable from a fresh
 checkout. Any extra files from diagram refinement need separate agreement.
 Keep artifact acceptance distinct from source checks and future runtime checks.
@@ -150,10 +157,16 @@ The checkout sequence diagram was updated from current handlers/services,
 restricted to checkout after student review, and exported to PNG/SVG.
 The student accepted the remaining materials and the eight-commit plan for a
 versioned handoff; agree any additions to the approved 46-file set.
-Source checks refer to the working tree. Pre-existing, uncommitted review
+The original source checks referred to the working tree. Pre-existing review
 changes enforce delivered-only eligibility; baseline commit `7ad0f94` also
-allowed paid/shipped purchases. Keep that distinction in the handoff; do not
-silently stage or alter application code in the WebLab#1 documentation commit.
+allowed paid/shipped purchases. The documentation handoff at `a36b45e` excluded
+those changes. After accepting it, the student separately requested their
+verification and code/UI commits; this is not implementation of later labs.
+The reviewed changes are versioned separately in `8110c79` (eligibility) and
+`41c000d` (MPA form); they were not authored by the documentation-preparation
+agent, who added the focused service/template tests during this final audit.
+Go tests with an isolated PostgreSQL database, service/web race tests and
+`go vet ./...` passed; template checks are not a browser or NF measurement.
 Deferred diagram gaps remain in `docs/known-issues.md`. For
 WebLab#2, lint the approved OpenAPI and validate its examples/schemas. For
 WebLab#3, run the API against the contract and test both valid and error paths.
@@ -410,6 +423,13 @@ Cache failures should not break core business behavior unless the operation expl
 | `marketplace_seller`  | CRUD own products; SELECT order_items for own products           |
 | `marketplace_admin`   | ALL PRIVILEGES                                                   |
 | `marketplace_analyst` | SELECT ALL, no writes                                            |
+
+## Migrations
+
+- Keep migrations deterministic; do not edit old migrations without an explicit request.
+- Add schema changes as new Goose files with the next numeric prefix.
+- For order/payment/stock schema changes, update `docs/database.md` and integration tests.
+- Consider indexes for new foreign keys and query filters.
 
 ## Go And Clean Code
 
