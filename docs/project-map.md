@@ -69,6 +69,9 @@ must not import repositories.
 ## Agent Tooling
 
 `AGENTS.md` is the canonical project guidance for Codex in the AI track.
+Duplicate layer instructions in `internal/service`, `internal/repository`,
+`internal/cache` and `migrations` were removed by student agreement. The
+report-specific `DBCourseWork/AGENTS.md` remains separate.
 [`AI_REVIEW.md`](../AI_REVIEW.md) records factual work and checks per lab.
 
 | Path | Purpose |
@@ -112,10 +115,13 @@ work, so their paths are not part of the runtime map above.
 
 WebLab#1 AI-track review, 2026-09-30. These facts were checked in source code;
 they are not results from running the application or measuring the NF targets.
-The evidence is the current working tree. Pre-existing uncommitted review
-changes restrict eligibility to `delivered`; baseline commit `7ad0f94` still
-accepts `paid`/`shipped` as well. Those code changes are preserved separately
-and are not part of the proposed WebLab#1 documentation commit. F-6 and the
+The original evidence was the working tree. Pre-existing review changes
+restrict eligibility to `delivered`; baseline commit `7ad0f94` still accepts
+`paid`/`shipped` as well. Documentation handoff `a36b45e` excluded those changes.
+The student subsequently requested separate code/UI commits: `8110c79` contains
+the delivered-only rule and `41c000d` the MPA form correction. Unit tests,
+template tests, isolated-PostgreSQL integration tests, service/web race tests
+and `go vet ./...` passed; this is not a browser/NF stand measurement. F-6 and the
 accepted scenario criteria will define the expected WebLab#2/#3 behavior.
 
 | Confirmed Fact | Evidence | Consequence For WebLab#1/#2 |
@@ -152,6 +158,8 @@ checked the correction; another student viewing of the rendering is not claimed.
 The student accepted the remaining material and the eight-commit handoff plan.
 The student approved 46 documentation/diagram/agent-guidance files for thematic
 commits; the local Fulfillment generator and its tests are excluded, not deleted.
+The two scripts are one-off preparation helpers, now explicitly ignored in
+the student's global Git ignore rather than maintained repository tooling.
 Any additional diagram files need agreement before committing.
 Commit messages are Russian and describe completed changes, not plans;
 see the root AGENTS and the style guide.
