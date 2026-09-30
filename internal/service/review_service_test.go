@@ -45,6 +45,40 @@ func assertReview(t *testing.T, got, want m.Review) {
 	}
 }
 
+func TestCanReviewProduct(t *testing.T) {
+	checkErr := errors.New("purchase lookup failed")
+	tCases := []struct {
+		name      string
+		role      m.UserRole
+		purchased bool
+		checkErr  error
+		want      bool
+	}{
+		{name: "buyer with delivered product", role: m.RoleBuyer, purchased: true, want: true},
+		{name: "buyer without delivered product", role: m.RoleBuyer},
+		{name: "buyer lookup error", role: m.RoleBuyer, checkErr: checkErr},
+		{name: "guest"},
+		{name: "seller", role: m.RoleSeller},
+		{name: "admin", role: m.RoleAdmin},
+		{name: "analyst", role: m.RoleAnalyst},
+	}
+	for _, tCase := range tCases {
+		t.Run(tCase.name, func(t *testing.T) {
+			var checker service.ReviewPurchaseChecker
+			if tCase.role == m.RoleBuyer {
+				checker = fakeReviewPurchaseChecker{purchased: tCase.purchased, err: tCase.checkErr}
+			}
+			// A non-buyer must not call the checker, even when it is absent.
+			svc := service.NewReviewService(nil, checker, nil)
+			got, err := svc.CanReviewProduct(context.Background(), testActor(someID, tCase.role), someID)
+			if got != tCase.want {
+				t.Fatalf("CanReviewProduct = %v, want %v", got, tCase.want)
+			}
+			assertError(t, err, tCase.checkErr)
+		})
+	}
+}
+
 func TestGetReviewByID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := mock_service.NewMockReviewRepo(ctrl)

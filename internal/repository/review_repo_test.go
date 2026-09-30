@@ -222,8 +222,30 @@ func TestReviewRepo_UserPurchasedProduct(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UserPurchasedProduct paid: %v", err)
 	}
+	if purchased {
+		t.Fatal("paid order must not allow review")
+	}
+
+	if err := orders.UpdateOrderStatus(ctx, paidOrderID, []m.OrderStatus{m.StatusPaid}, m.StatusShipped); err != nil {
+		t.Fatalf("UpdateOrderStatus shipped: %v", err)
+	}
+	purchased, err = reviews.UserPurchasedProduct(ctx, buyerID, productID)
+	if err != nil {
+		t.Fatalf("UserPurchasedProduct shipped: %v", err)
+	}
+	if purchased {
+		t.Fatal("shipped order must not allow review")
+	}
+
+	if err := orders.UpdateOrderStatus(ctx, paidOrderID, []m.OrderStatus{m.StatusShipped}, m.StatusDelivered); err != nil {
+		t.Fatalf("UpdateOrderStatus delivered: %v", err)
+	}
+	purchased, err = reviews.UserPurchasedProduct(ctx, buyerID, productID)
+	if err != nil {
+		t.Fatalf("UserPurchasedProduct delivered: %v", err)
+	}
 	if !purchased {
-		t.Fatal("expected paid order to allow review")
+		t.Fatal("delivered order must allow review")
 	}
 
 	purchased, err = reviews.UserPurchasedProduct(ctx, otherBuyerID, productID)

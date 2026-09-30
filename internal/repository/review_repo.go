@@ -76,7 +76,7 @@ SELECT EXISTS (
     JOIN order_items oi ON oi.order_id = o.id
     WHERE o.user_id = $1
       AND oi.product_id = $2
-      AND o.status IN ('paid', 'shipped', 'delivered')
+      AND o.status = 'delivered'
 )`
 	var purchased bool
 	if err := getConn(ctx, rr.pool).QueryRow(ctx, sql, userID, productID).Scan(&purchased); err != nil {
