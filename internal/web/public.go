@@ -193,6 +193,10 @@ func (wh *WebHandler) ProductDetail(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	canReview := false
+	if user != nil && user.Role == "buyer" && currentUserReview == nil {
+		canReview, _ = wh.reviewService.CanReviewProduct(r.Context(), user.actor(), id)
+	}
 
 	seller, _ := wh.sellerService.GetSellerByID(r.Context(), product.SellerID)
 
@@ -206,6 +210,7 @@ func (wh *WebHandler) ProductDetail(w http.ResponseWriter, r *http.Request) {
 		"CategoryPicker":    categoryPicker,
 		"ReviewUserNames":   reviewUserNames,
 		"CurrentUserReview": currentUserReview,
+		"CanReview":         canReview,
 		"User":              user,
 		"Notice":            r.URL.Query().Get("notice"),
 		"ReviewError":       r.URL.Query().Get("review_error"),
