@@ -13,14 +13,11 @@ Person(analyst, "Аналитик", "Формирует аналитически
 
 System(marketplace, "Онлайн-маркетплейс", "Платформа, на которой продавцы размещают товары, а покупатели выбирают, заказывают, оплачивают и оценивают покупки")
 
-System_Ext(bank, "Mock Bank", "Внешний платёжный контур / имитация банка для получения и обработки платежей")
-
-Rel(guest, marketplace, "Просматривает каталог и карточки товаров", "HTTPS / Web GUI")
-Rel(buyer, marketplace, "Управляет корзиной, оформляет и оплачивает заказы", "HTTPS / Web GUI")
-Rel(seller, marketplace, "Управляет товарами и заказами продавца", "HTTPS / Web GUI")
-Rel(admin, marketplace, "Модерирует пользователей, товары, отзывы и категории", "HTTPS / Web GUI")
-Rel(analyst, marketplace, "Просматривает аналитические отчёты", "HTTPS / Web GUI")
-Rel(marketplace, bank, "Запрашивает платёжную ссылку и обрабатывает callback", "HTTP")
+Rel(guest, marketplace, "Просматривает каталог и карточки товаров", "HTTP / Web GUI (локально)")
+Rel(buyer, marketplace, "Управляет корзиной, оформляет и оплачивает заказы", "HTTP / Web GUI (локально)")
+Rel(seller, marketplace, "Управляет товарами и заказами продавца", "HTTP / Web GUI (локально)")
+Rel(admin, marketplace, "Модерирует пользователей, товары, отзывы и категории", "HTTP / Web GUI (локально)")
+Rel(analyst, marketplace, "Просматривает аналитические отчёты", "HTTP / Web GUI (локально)")
 
 LAYOUT_WITH_LEGEND()
 

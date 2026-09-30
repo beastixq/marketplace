@@ -27,7 +27,7 @@ Container_Boundary(seedContainer, "cmd/seed — генератор данных"
 
 Container_Boundary(serviceLayer, "Компонент бизнес-логики") {
     Component(serviceComponent, "component/service", "Go facade", "Создаёт и связывает Auth/User/Product/Order/... services")
-    Component(domainServices, "Service package", "Go", "Бизнес-правила, RBAC, checkout,\nоплата, статусы заказов, отзывы, категории,\nизбранное товаров")
+    Component(domainServices, "Service package", "Go", "Бизнес-правила, RBAC, checkout,\nоплата, статусы заказов, отзывы и категории")
     Component(backofficeService, "BackofficeService", "Go", "Read-модели для admin panel и analyst dashboard")
     Component(paymentService, "PaymentService", "Go", "Формирует payment URL и обрабатывает результат оплаты")
     Component(paymentGateway, "MockBankGateway", "Go adapter", "Адаптер платёжного контура")
@@ -41,9 +41,8 @@ Container_Boundary(repositoryLayer, "Компонент доступа к дан
 }
 
 ContainerDb(postgres, "База данных", "PostgreSQL 16", "")
-System_Ext(bank, "Mock Bank", "HTTP payment mock")
 
-Rel(user, router, "HTTP/Web requests", "HTTPS")
+Rel(user, router, "HTTP/Web requests", "HTTP (локально)")
 Rel(router, loggingMiddleware, "Оборачивает запросы", "middleware")
 Rel(router, authMiddleware, "Защищает закрытые маршруты", "middleware")
 Rel(router, apiHandlers, "Передаёт API requests", "net/http")
@@ -72,7 +71,6 @@ Rel(backofficeService, repositories, "Читает агрегаты и спис�
 Rel(paymentService, repositories, "Читает/изменяет заказ", "OrderRepo")
 Rel(domainServices, txManager, "Открывает транзакции", "TxManager")
 Rel(paymentService, paymentGateway, "Запрашивает/обрабатывает оплату", "PaymentGateway")
-Rel(paymentGateway, bank, "HTTP URL / token", "HTTP")
 
 Rel(repositoryComponent, repositories, "Создаёт repositories", "constructors")
 Rel(repositoryComponent, txManager, "Создаёт", "constructor")
