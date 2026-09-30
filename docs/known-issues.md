@@ -1,6 +1,6 @@
 # Known Issues
 
-Открытые баги и подтвержденные технические риски.
+Открытые баги, подтвержденные технические риски и отложенный технический долг документации.
 
 ## BUG-001 Payment TTL Starts From Draft Cart Creation
 
@@ -32,6 +32,57 @@ Options:
 
 Decision:
 TBD.
+
+## TD-001 ER Chen Missing Entity Relationships
+
+Status: deferred by student, 2026-09-30
+Severity: low
+Area: docs/WebLab#1/diagrams
+
+Problem:
+ER-диаграмма Чена, опубликованная в README, не показывает связи
+«пользователь — профиль продавца», «заказ — продавец», «заказ — адрес» и
+«позиция заказа — товар». Эти связи присутствуют в текущей схеме DBML.
+
+Artifacts:
+- [Редактируемый источник ER Chen](../diagrams/src/ER_Chen.graphml).
+- [Изображение в README](../diagrams/out/ER_Chen.png).
+- [Схема DBML для сверки](../diagrams/src/schema.dbml).
+
+Expected:
+При последующем исправлении согласовать связи и их кратности с предметной
+областью и схемой БД, затем обновить экспорт диаграммы.
+
+Decision:
+Студент явно отложил исправление. Наличие диаграммы не означает, что её
+согласованность со схемой БД проверена и принята.
+
+## TD-002 Checkout BPMN Stock Reservation
+
+Status: deferred by student, 2026-09-30
+Severity: low
+Area: docs/WebLab#1/diagrams
+
+Problem:
+BPMN оформления показывает проверку наличия товара и переходы статусов,
+но не отражает резервирование при checkout и освобождение резерва при
+истечении срока оплаты. Эти действия определены в ADR-1 и жизненном цикле
+заказа.
+
+Artifacts:
+- [Редактируемый источник BPMN](../diagrams/src/BPMN_Checkout.graphml).
+- [Текущий экспорт](../diagrams/out/BPMN_Checkout.png).
+- [ADR-1](ADR.md#adr-1-резервировать-товар-при-оформлении-заказа).
+- [Жизненный цикл заказа](order-lifecycle.md).
+
+Expected:
+При последующем исправлении показать резервирование и освобождение резерва,
+а также отсутствие частичного оформления при ошибке; сверить процесс с ADR-1
+и текущим поведением checkout.
+
+Decision:
+Студент явно отложил исправление исходника и экспортов этой BPMN. Новую BPMN
+оформлять отдельно; она не закрывает этот технический долг.
 
 ## BUG-002 Absolute Stock Update Can Override Seller's Stale Intent
 
