@@ -1,12 +1,166 @@
 # AGENTS.md
 
-This file is the single canonical source for agent guidance.
-Codex CLI reads `AGENTS.md` directly.
+This file is the single canonical entry point for Codex in the Web Technologies
+2026 AI track. Codex CLI reads `AGENTS.md` directly. The completed PPO project
+is the starting point, not evidence that a WebLab has been completed.
 
 Active project agent surfaces:
 - Codex: `.codex/config.toml`, `.codex/agents/*.toml`
 
 When changing agent guidance, keep `AGENTS.md` and the Codex surface aligned.
+
+## Goal, Scope, And Current State
+
+- Product: an online marketplace where independent sellers publish products and
+  buyers use a shared catalog, draft cart, checkout, mock payment, and reviews.
+  Seller, admin, and analyst workflows also exist. PostgreSQL is the source of
+  truth; Redis is an optional product cache.
+- The PPO baseline is preserved at tag `ppo-final`; `main` retains its earlier
+  agent guidance. Work for WebLabs belongs on `lab1` or later task branches.
+  Do not rewrite the baseline or assume features exist merely because a lab
+  requires them.
+- Selected submission path: **Backend (solo), WebLab#1–#6**. WebLab#1 includes
+  rough future web screen sketches; WebLab#7–#9 are outside the chosen
+  submission path unless the student later expands scope.
+- Current application: one Go HTTP process serves JSON routes under `/api/v1/`
+  and a server-rendered MPA under `/`; `cmd/techui` is a console client of the
+  service layer. The MPA is the legacy interface for WebLab#4. A separately
+  deployed SPA and its generated browser API client belong to WebLab#8.
+- Current state has no approved WebLab OpenAPI YAML. The student selected two
+  WebLab#1 architectural decisions, recorded in `docs/ADR.md`. The existing API
+  inventory and PPO diagrams are inputs to WebLab#1/#2; verify them before
+  treating them as accepted results. Treat unverified requirements and future
+  designs as plans.
+- Scope changes only with the task. For documentation tasks, do not implement
+  laboratory features. For later labs, follow the relevant WebLabs deliverable
+  and update this context before changing code.
+
+Vocabulary: **draft cart** = the buyer's draft order; **pending order** = an
+order created by checkout with reserved stock; **MPA** = the current Go-rendered
+web UI; **SPA** = the later browser client; **contract** = an approved external
+API or interservice specification, not a route inventory.
+
+## Requirements, Contracts, And Decisions
+
+| Source | Role |
+| --- | --- |
+| [WebLabs 2026 assignment](WEB_labs/WebLabs_2026_AI_transformation.docx.pdf) | Normative requirements for WebLab#1–#9 and the AI track. |
+| [PPO technical assignment](docs/tz.md) and [project README](README.md) | Historical PPO product context; reconcile with WebLabs before reuse. |
+| [Current API inventory](docs/api-contracts.md) | Implemented JSON routes and conventions; not the approved OpenAPI 3.1 YAML required in WebLab#2. |
+| [Current architecture](docs/architecture.md), [project map](docs/project-map.md), [order lifecycle](docs/order-lifecycle.md) | Verified PPO implementation context. |
+| [WebLab#1 ADRs](docs/ADR.md) | Student-selected stock reservation and draft-cart decisions, with alternatives and consequences. |
+
+The WebLab#1 review set in `README.md` includes the project brief, measurable
+target requirements, four scenarios with success/error criteria and links to
+requirements/entities/screens, editable diagrams, and rough screen sketches.
+On 2026-09-30 the student confirmed the instructor-approved exception to the
+written minimum of three processes: two BPMNs, Checkout and Fulfillment, are
+sufficient. The BPMN count is closed. Fulfillment's notation and pool/lane
+structure are accepted by the student. Its yEd PDF exists at
+`diagrams/out/BPMN_Fulfillment.pdf` and was rendered and visually checked.
+Do not redesign Fulfillment without a material error or overwrite the manual
+`diagrams/src/BPMN_Fulfillment_Roman.graphml`.
+ER Chen relationship gaps and checkout BPMN reservation
+gaps are deferred documentation debt in `docs/known-issues.md`; do not fix them
+unless requested. The separate fulfillment BPMN follows BPMN 2.0.2 with three
+logical participant pools, intra-pool sequence flows and inter-pool request/
+response message flows; it does not add services, queues or push notifications.
+Editable yEd GraphML and descriptive `.bpmn` XML/DI are prepared. The XML passed
+the official OMG XSD; 14 generator regression tests and visual checks in yEd
+passed. Its three action-result gateways do not
+verify physical delivery: the seller sets `delivered`, subject to access and
+status checks. There is no visible delivery comment on the diagram. The two
+student-selected ADRs are accepted; do not require another choice without a
+new material reason. The final AI-track review records confirmed limitations,
+contradictions and actual checks in `AI_REVIEW.md`. The student agreed the
+minimal Use Case correction: buyer payment/cancellation and seller order
+management as three goals with direct actor links. The student accepted all
+four scenario success/error criteria with the stated TTL/cache/API limitations.
+NF-P/NF-R/NF-S and the i5-13500H, 16 GB RAM, Ubuntu 24.04 stand are accepted
+as targets for future checks, not measured outcomes.
+The student rejected a historical-only note for the outdated checkout
+sequence diagram and requested an update from current code. Its existing
+PlantUML source and PNG were updated, and an SVG export added. After review,
+the student restricted this diagram to checkout only: address/cart checks,
+reservation/prices, single/multi-seller branches and rollback. Cart mutations
+and payment are not part of it; no separate payment diagram was requested.
+This does not close the separate Checkout BPMN debt. The student accepted the
+other materials and the thematic commit plan, with this sequence correction.
+The correction was source/visually checked by Codex; another student viewing
+of the corrected rendering is not claimed. The agreed set contains 46 files,
+excluding the local Fulfillment generator and its tests. Do not
+delete the local scripts or present their past checks as runnable from a fresh
+checkout. Any extra files from diagram refinement need separate agreement.
+Keep artifact acceptance distinct from source checks and future runtime checks.
+Agree the exact file list before any Git commit; preserve
+unrelated worktree changes and do not implement application code or later labs
+as part of finishing WebLab#1.
+Reuse existing PPO material only after checking it. WebLab#2 then creates and
+validates OpenAPI 3.1+ YAML; WebLab#3 implements and contract-tests the API;
+WebLab#4 adds the routing/deployment stand and preserves this MPA at `/legacy`;
+WebLab#5 adds measured load, balancing, mirroring, and monitoring; WebLab#6
+splits independently deployable services. If later requested, WebLab#7 produces
+editable UI design, WebLab#8 builds the SPA, and WebLab#9 adds browser/Telegram
+extensions and measures their effect. None of these planned outcomes is implied
+by the PPO code.
+
+## AI Track Workflow
+
+- The student sets the goal, constraints, acceptance criteria, and consequential
+  architecture choices. Codex creates/revises artifacts and verifies them against
+  requirements; the student accepts the result and can explain it at defense.
+- For each lab, record at least one task → plan → artifact → check → review →
+  correction cycle. If no correction is needed, record how the result was checked.
+  Derive expected results from the approved requirements and contracts; do not
+  claim a command, measurement, browser check, or decision that did not happen.
+- Keep [AI_REVIEW.md](AI_REVIEW.md) short: task, tool/model (or state when the
+  actual model is unknown), links to result and checks, and a material accepted
+  or rejected decision with reason. Full chats, prompt counts, and generated-code
+  percentages are unnecessary. The WebLab#1 entry records actual document and
+  source checks; do not present them as a running-stand or NF measurement result.
+- Before each new lab, refresh the requirement/contract/ADR links and the
+  current-versus-planned status here. Change the approved source contract first,
+  then dependent diagrams, tests, code, and documentation. Keep editable sources.
+- Do not include secrets or real personal data in agent prompts or committed
+  artifacts. AI functionality inside the product is optional WebLab#9 scope; using
+  Codex in the development process does not require it.
+
+## Run And Check Commands
+
+From the repository root: `docker compose config -q` checks the current Compose
+file; `docker compose up -d` starts PostgreSQL and Redis; set `DATABASE_URL` and
+run `goose -dir migrations postgres "$DATABASE_URL" up` before database-backed
+work. `go run ./cmd/api -config config/config.yaml` serves API plus MPA;
+`go run ./cmd/techui -config config/config.yaml` starts the console UI.
+`go test ./...` runs Go tests; repository integration tests need a real database
+and `DATABASE_URL`, otherwise they skip. `git diff --check` checks patch whitespace.
+See [setup](docs/setup.md) and [testing](docs/testing.md) for exact prerequisites
+and focused commands. These are current PPO commands, not checks for unbuilt
+OpenAPI, SPA, proxy, load stand, or services; record those commands only after
+their labs create and verify them.
+
+WebLab#1 checks performed: Compose config and entry-point help/build checks,
+targeted source/document review, scenario-link preparation, XML/graph validation
+and visual checks of fulfillment BPMN in both preview and yEd after layout and
+notation correction, official OMG XSD validation and generator regression
+tests; see `AI_REVIEW.md`. The final pass rechecked the saved BPMN XML/GraphML,
+14 generator tests, PlantUML syntax, diagram exports and the existing
+Fulfillment PDF. The agreed three-UC correction updates PlantUML and its PNG.
+The checkout sequence diagram was updated from current handlers/services,
+restricted to checkout after student review, and exported to PNG/SVG.
+The student accepted the remaining materials and the eight-commit plan for a
+versioned handoff; agree any additions to the approved 46-file set.
+Source checks refer to the working tree. Pre-existing, uncommitted review
+changes enforce delivered-only eligibility; baseline commit `7ad0f94` also
+allowed paid/shipped purchases. Keep that distinction in the handoff; do not
+silently stage or alter application code in the WebLab#1 documentation commit.
+Deferred diagram gaps remain in `docs/known-issues.md`. For
+WebLab#2, lint the approved OpenAPI and validate its examples/schemas. For
+WebLab#3, run the API against the contract and test both valid and error paths.
+For WebLab#4, run HTTP route/access checks on the deployed stand. For WebLab#5,
+compare reproducible load and failure measurements before/after changes. For
+WebLab#6, test interservice contracts, failure behavior, and traces on running
+services. Record actual commands and results only when these artifacts exist.
 
 ## Documentation Use
 
@@ -26,10 +180,23 @@ Use the project docs as the first stop for task-specific context.
 | Go style, web UI style, SQL style, documentation style | [docs/style-guide.md](docs/style-guide.md)                                                                                 |
 | Common local failures                                  | [docs/troubleshooting.md](docs/troubleshooting.md)                                                                         |
 | Pre-release or submission checklist                    | [docs/release-process.md](docs/release-process.md)                                                                         |
-| Open bugs, product ideas, resolved bug history         | [docs/known-issues.md](docs/known-issues.md), [docs/ideas.md](docs/ideas.md), [docs/bugs-history.md](docs/bugs-history.md) |
+| Open bugs, product ideas, resolved bug history         | [docs/known-issues.md](docs/known-issues.md), [docs/ideas.md](docs/ideas.md), [docs/bugs-history/README.md](docs/bugs-history/README.md) |
 | Coursework requirements and report context             | [docs/tz.md](docs/tz.md), [docs/RPZ.md](docs/RPZ.md)                                                                       |
+| WebLabs requirements, status, and evidence              | [WebLabs 2026 assignment](WEB_labs/WebLabs_2026_AI_transformation.docx.pdf), [AI_REVIEW.md](AI_REVIEW.md)                 |
 
 If docs and current code conflict, trust the current code after verifying it directly, then update the relevant doc as part of the change. Keep docs concise and maintenance-oriented.
+
+## Git Commits
+
+- Write commit subjects and bodies in Russian. Keep technical names and paths
+  as identifiers, but do not use English subjects or message prose.
+- Describe completed changes in the past tense, not an infinitive or a plan:
+  `Разделены текущий PPO и будущие лабораторные`, not `Разделить текущий PPO`.
+- Keep messages concise and specific: state what changed and the relevant
+  boundary or limitation. Split unrelated areas into thematic commits; keep
+  editable diagram sources with their corresponding exports.
+- Agree the exact file set before committing. Do not silently include unrelated
+  staged/worktree changes. See [commit style](docs/style-guide.md#git-commits).
 
 ## Cost-Controlled Reads
 
@@ -58,12 +225,12 @@ Project-scoped subagents:
 
 Keep the Codex agent definitions aligned with this file.
 
-Use subagents only when the user explicitly asks to delegate/split work or when a clearly scoped specialist review is useful.
+Use subagents only when the user explicitly asks to delegate or split work.
 
 | Agent            | Use for                                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------------------------- |
 | `go-backend-dev` | Go backend implementation: services, repositories, API handlers, migrations, payment, caching, backend tests. |
-| `frontend-dev`   | Server-rendered web UI: `html/template`, `internal/web`, forms, CSS, role dashboards, web routes.             |
+| `frontend-dev`   | Current MPA work; future WebLab#7 design and WebLab#8 SPA only when those tasks are requested.                   |
 | `architecture`   | Clean Architecture review/design, dependency-boundary analysis, cross-layer refactors, ownership decisions.   |
 
 Do not delegate work only because a matching agent exists. When using agents, keep tasks scoped and make each agent follow this `AGENTS.md` plus the relevant docs above.
@@ -100,6 +267,12 @@ The service layer does not depend on repository implementations. Service exports
 | `cmd/api`              | API + web server entry point                                     |
 | `cmd/seed`             | Seed data command                                                |
 | `cmd/techui`           | Console UI driving service-layer use cases without HTTP          |
+| `migrations/`          | Goose schema and database role changes                           |
+| `config/`, `docker-compose.yml` | Current local configuration and PostgreSQL/Redis dependencies |
+| `diagrams/src/`        | Editable PPO diagrams and DBML for review in WebLab#1            |
+| `WEB_labs/`            | WebLabs 2026 assignment; requirements rather than code           |
+| `docs/`, `README.md`   | Current PPO documentation and future WebLab design context       |
+| `.codex/`             | Codex defaults and scoped specialist definitions                 |
 
 ## Dependency Rules
 
@@ -184,7 +357,7 @@ var _ service.ProductRepo = (*ProductRepository)(nil)
 
 ## Web UI Layer
 
-- The web UI is a server-rendered MPA, not a SPA. Do not introduce npm/pnpm/yarn/Vite/React/Vue unless the user explicitly asks.
+- The current web UI is a server-rendered MPA. Preserve its conventions for MPA changes. WebLab#8 requires a separate SPA, JavaScript package/build workflow, and generated API client; design those only when that lab is in scope.
 - Templates live in `internal/web/templates/*.html`. Each page defines `title` and `content`, then renders through `templates/layout.html`.
 - Shared CSS lives in `internal/web/static/css/style.css`.
 - Web handlers live in `internal/web/web_handler.go`; routes live in `internal/web/router.go`.
@@ -196,12 +369,12 @@ var _ service.ProductRepo = (*ProductRepository)(nil)
 
 Handlers must not perform cache invalidation. Redis/key mechanics belong in `internal/cache`. Cache-aside behavior should be implemented behind cache abstractions or service decorators. Service/usecase code or a cache-aware decorator should trigger invalidation as part of mutations. Keep [docs/cache.md](docs/cache.md) synchronized with the implemented keys.
 
-| Key                         | TTL              | Invalidation                               |
-| --------------------------- | ---------------- | ------------------------------------------ |
-| `products:catalog:page:{n}` | `5m`             | Any product change                         |
-| `products:{id}`             | `5m`             | PATCH/DELETE product; create/update review |
-| `categories:tree`           | `1h`             | Category CRUD                              |
-| `sessions:{token}`          | Session lifetime | Logout                                     |
+The only current runtime key is `products:{id}` (5m in `cmd/api`), invalidated
+after product update/delete. Stock and review changes can leave this value stale
+until TTL. Catalog, category, and session keys remain unimplemented conventions;
+the student intends to implement later cache work personally. Do not restore
+these keys as incidental cleanup; see [docs/cache.md](docs/cache.md) before
+changing cache behavior.
 
 Cache failures should not break core business behavior unless the operation explicitly requires cache consistency.
 
@@ -218,7 +391,7 @@ Cache failures should not break core business behavior unless the operation expl
 - Seller can access only own products and own relevant orders.
 - Buyer can access only own addresses and reviews.
 - A user can leave only one review per product: `UNIQUE(user_id, product_id)`.
-- Buyer can review only products bought in `paid`/`shipped`/`delivered` orders.
+- Buyer can review only products from `delivered` orders.
 - An order can contain a product only once; quantity changes update the existing item.
 - `price_at_purchase` is fixed when draft becomes `pending`.
 - Product price history may be enforced by a database trigger as an audit/data-integrity guarantee.
@@ -265,7 +438,8 @@ For code tasks, focus on:
 - `go.mod`
 - `go.sum`
 
-Do not inspect these unless explicitly requested:
+Do not inspect these for ordinary code tasks unless relevant to the request.
+WebLab#1 explicitly uses PPO materials and editable diagram sources as inputs:
 
 - `DBCourseWork/`
 - `PPO_labs/`

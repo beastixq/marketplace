@@ -1,6 +1,8 @@
-# Project Codex CLI defaults for this repository.
+# Project Codex CLI defaults. AGENTS.md is the canonical WebLabs 2026 AI-track
+# context; these settings and specialist agents do not define lab completion.
 
 model = "gpt-5.6-sol"
+project_doc_max_bytes = 65536
 
 # Safer default for local coding.
 approval_policy = "on-request"
@@ -13,6 +15,8 @@ sandbox_mode = "workspace-write"
 web_search = "live"
 
 [mcp_servers.chrome_devtools]
+# Browser tooling for later browser checks; npx here is not an application
+# frontend dependency. The current application remains a Go-rendered MPA.
 command = "npx"
 args = [
     "-y",
@@ -39,6 +43,5 @@ hooks = true
 skill_mcp_dependency_install = true
 
 [agents]
-max_threads = 6
-max_depth = 1
-job_max_runtime_seconds = 1800
+enabled = true
+max_concurrent_threads_per_session = 6

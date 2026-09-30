@@ -16,7 +16,9 @@ handler -> service <- repository implementation
 
 The service layer does not depend on repository implementations. Service exports the repository interfaces it needs, accepts those interfaces through constructors, and calls through them. Repository implementations depend on service-defined interfaces and satisfy them. This distinction is a hard project rule, not wording preference.
 
-Prefer the current repository instructions in AGENTS.md over older Claude-specific wording.
+Follow the current repository AGENTS.md and WebLabs assignment. The existing Go
+API is a PPO starting point; WebLab#2 OpenAPI and WebLab#3 contract compliance
+must be produced and checked before claiming those labs are complete.
 
 ## Core Architecture
 
@@ -91,10 +93,12 @@ Handlers must not perform cache invalidation.
 
 Redis/key mechanics belong in `internal/cache`. Cache-aside behavior should be implemented behind cache abstractions or service decorators. Service/usecase code or a cache-aware decorator should trigger invalidation as part of mutations.
 
-Use these cache key conventions and TTLs:
+Only `products:{id}` is currently implemented in runtime (5m, product
+update/delete invalidation). The student plans later cache work personally; do
+not restore additional keys as incidental cleanup. The following are historical
+target conventions, not implemented behavior:
 
 - `products:catalog:page:{n}`: 5m TTL, invalidate on product changes.
-- `products:{id}`: 5m TTL, invalidate on PATCH/DELETE product or create/update review.
 - `categories:tree`: 1h TTL, invalidate on category CRUD.
 - `sessions:{token}`: session lifetime, invalidate on logout.
 
@@ -162,5 +166,5 @@ Cache failures should not break core business behavior unless the operation expl
 - Do not use raw SQL string concatenation.
 - Do not ignore error returns.
 - Do not create god objects or mega-functions.
-- Do not update persistent Claude agent memory; this Codex agent should rely on current files instead.
+- Use only the current Codex project guidance and task-specific source files.
 '''
