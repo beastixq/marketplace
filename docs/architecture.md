@@ -71,7 +71,7 @@ Business rules belong in service code:
 - Cancellation is allowed only before `shipped`.
 - Seller access is limited to own products and own relevant orders.
 - Buyer access is limited to own addresses, orders, and reviews.
-- A buyer can leave one review per product, and only after buying that product in a paid, shipped, or delivered order.
+- A buyer can leave one review per product, and only for a product in a `delivered` order. The seller sets this status; buyer confirmation or carrier integration is not implemented.
 - An order can contain a product only once; quantity changes update the existing item.
 - `price_at_purchase` is fixed when draft becomes pending.
 - Product price history can be backed by a DB trigger, but service code still enforces business rules explicitly.
@@ -100,7 +100,8 @@ Currently implemented runtime keys:
 | --- | --- | --- |
 | `products:{id}` | `5m` | Product update/delete only |
 
-Target key conventions that are not implemented unless `docs/cache.md` says otherwise:
+Historical PPO key conventions that are not implemented unless `docs/cache.md`
+says otherwise (later cache work is student-owned):
 
 | Key | TTL | Intended Invalidation |
 | --- | --- | --- |

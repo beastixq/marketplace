@@ -72,6 +72,8 @@ Current staleness caveats:
 ## Documented But Not Implemented
 
 These keys are architectural conventions, not current runtime behavior:
+Their later implementation is student-owned; do not restore them as an
+incidental change to another lab.
 
 | Key | Intended TTL | Intended Invalidation |
 | --- | --- | --- |

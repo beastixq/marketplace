@@ -118,7 +118,7 @@ ordering to avoid deadlocks across checkout/cancel/expire/ship.
 - Sellers can read/ship/deliver orders whose `seller_id` matches their seller
   profile.
 - Admin can read orders and can cancel pending/paid orders through the service.
-- Review purchase checks count only `paid`, `shipped`, and `delivered` orders.
+- Review eligibility requires an order in `delivered` status containing the product.
 
 Handlers and web controllers delegate these rules to services. Do not duplicate
 or bypass lifecycle policy in transport code.

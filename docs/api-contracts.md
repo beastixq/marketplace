@@ -1,5 +1,11 @@
 # API Contracts
 
+This is the current PPO implementation inventory, checked against
+`internal/handler/router.go`. It is not the approved OpenAPI 3.1+ YAML required
+by WebLab#2, nor evidence of contract-test coverage from WebLab#3. Design the
+external REST contract from accepted WebLab#1 scenarios and decisions; update
+this inventory when the implementation changes.
+
 ## Base Contract
 
 The JSON API is mounted under:
@@ -35,7 +41,7 @@ Use `net/http` constants in code.
 | `401 Unauthorized` | Missing/invalid auth or wrong password. |
 | `403 Forbidden` | Role/ownership/permission failure. |
 | `404 Not Found` | Missing resource. |
-| `409 Conflict` | Domain conflict such as duplicate email/review, review before purchase, invalid order state, stock conflict. |
+| `409 Conflict` | Domain conflict such as duplicate email/review, review before delivery, invalid order state, stock conflict. |
 | `410 Gone` | Expired payment. |
 | `422 Unprocessable Entity` | Payment declined or amount mismatch. |
 | `500 Internal Server Error` | Unexpected internal failure. |
@@ -85,7 +91,7 @@ Service error mapping lives in `internal/handler/service_error.go`.
 | `POST` | `/api/v1/orders` | Checkout cart. |
 | `POST` | `/api/v1/orders/{id}/payment-link` | Create payment link. |
 | `POST` | `/api/v1/orders/{id}/cancel` | Cancel order before shipped. |
-| `POST` | `/api/v1/reviews` | Create review for product bought by current buyer. |
+| `POST` | `/api/v1/reviews` | Create review for product in the current buyer's delivered order. |
 | `PATCH` | `/api/v1/reviews/{id}` | Update own review. |
 
 ## Seller Routes

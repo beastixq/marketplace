@@ -50,7 +50,8 @@
 
 ## Web UI Style
 
-- This project is a server-rendered MPA, not a SPA.
+- The current web UI is a server-rendered MPA. WebLab#8 requires a separate SPA
+  later; apply these template rules to the existing MPA, not that future client.
 - Templates live in `internal/web/templates`.
 - Shared CSS lives in `internal/web/static/css/style.css`.
 - Pages should define `title` and `content` templates and render through `layout.html`.
@@ -72,3 +73,13 @@
 - Update docs when changing contracts, architecture boundaries, setup steps, migrations, or test workflow.
 - Prefer short, actionable docs over exhaustive prose.
 - If docs and code conflict, trust current code and update docs.
+
+## Git Commits
+
+- Заголовок и текст коммита пишутся на русском; технические имена и пути сохраняются.
+- Описывается сделанное, а не план или инструкция: «Актуализирована диаграмма»,
+  «Разделены текущий PPO и будущие лабораторные», а не «Актуализировать»/«Разделить».
+- Короткий заголовок дополняется конкретным описанием изменений и существенных
+  ограничений. Несвязанные области разделяются; исходник диаграммы и экспорты
+  фиксируются вместе.
+- Состав файлов согласуется перед коммитом; чужие изменения не включаются молча.
