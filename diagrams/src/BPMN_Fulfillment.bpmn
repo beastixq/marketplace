@@ -1,0 +1,835 @@
+<?xml version='1.0' encoding='utf-8'?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_Fulfillment" targetNamespace="urn:marketplace:weblab1:fulfillment" exporter="marketplace diagram generator" exporterVersion="2.0.2">
+  <bpmn:itemDefinition id="Item_OrderContext">
+    <bpmn:documentation>Контекст выбранного заказа и инициатора запроса.</bpmn:documentation>
+  </bpmn:itemDefinition>
+  <bpmn:itemDefinition id="Item_ActionResult">
+    <bpmn:documentation>Результат действия: success и описание отказа. Не внешний API-контракт.</bpmn:documentation>
+  </bpmn:itemDefinition>
+  <bpmn:message id="Request_Cancel" name="Request_Cancel" itemRef="Item_OrderContext" />
+  <bpmn:message id="Request_Deliver" name="Request_Deliver" itemRef="Item_OrderContext" />
+  <bpmn:message id="Request_Ship" name="Request_Ship" itemRef="Item_OrderContext" />
+  <bpmn:message id="Response_Cancel" name="Response_Cancel" itemRef="Item_ActionResult" />
+  <bpmn:message id="Response_Deliver" name="Response_Deliver" itemRef="Item_ActionResult" />
+  <bpmn:message id="Response_Ship" name="Response_Ship" itemRef="Item_ActionResult" />
+  <bpmn:dataStore id="Store_Orders" name="Заказы" isUnlimited="true" />
+  <bpmn:dataStore id="Store_Products" name="Товары" isUnlimited="true" />
+  <bpmn:collaboration id="Collaboration_Fulfillment">
+    <bpmn:documentation>Исполнение оплаченного заказа. Три логических участника, не три сервиса. Покупатель запрашивает отмену до отправки; продавец запрашивает отправку и затем вручную выставляет delivered. Проверяются роль, владелец и исходный статус. Отправка/отмена меняют остатки/резерв в одной транзакции. Каждый запрос запускает отдельный экземпляр обработки в пуле маркетплейса. Ответ содержит успех или отказ; шлюзы проверяют результат действия, не физическую доставку. Отказ завершает попытку, не отменяет заказ. Сценарий начинается с paid; отмена pending вне этой диаграммы. Сообщения — запросы/ответы приложения, не очередь и не push-уведомления.</bpmn:documentation>
+    <bpmn:participant id="Participant_seller" name="Продавец" processRef="Process_seller" />
+    <bpmn:participant id="Participant_marketplace" name="Маркетплейс" processRef="Process_marketplace" />
+    <bpmn:participant id="Participant_buyer" name="Покупатель" processRef="Process_buyer" />
+    <bpmn:messageFlow id="Message_Request_ship" sourceRef="send_ship" targetRef="start_ship" messageRef="Request_Ship" />
+    <bpmn:messageFlow id="Message_Response_ship" sourceRef="result_ship" targetRef="receive_ship" messageRef="Response_Ship" />
+    <bpmn:messageFlow id="Message_Request_deliver" sourceRef="send_deliver" targetRef="start_deliver" messageRef="Request_Deliver" />
+    <bpmn:messageFlow id="Message_Response_deliver" sourceRef="result_deliver" targetRef="receive_deliver" messageRef="Response_Deliver" />
+    <bpmn:messageFlow id="Message_Request_cancel" sourceRef="send_cancel" targetRef="start_cancel" messageRef="Request_Cancel" />
+    <bpmn:messageFlow id="Message_Response_cancel" sourceRef="result_cancel" targetRef="receive_cancel" messageRef="Response_Cancel" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_seller" name="Продавец" isExecutable="false" definitionalCollaborationRef="Collaboration_Fulfillment">
+    <bpmn:documentation>Контекст оплаченного заказа известен при начале сценария. Каждое сообщение-запрос создаёт отдельный экземпляр серверной обработки.</bpmn:documentation>
+    <bpmn:property id="seller_order" name="orderContext" itemSubjectRef="Item_OrderContext" />
+    <bpmn:property id="ship_response" name="ship_response" itemSubjectRef="Item_ActionResult" />
+    <bpmn:property id="deliver_response" name="deliver_response" itemSubjectRef="Item_ActionResult" />
+    <bpmn:startEvent id="seller_start" name="Заказ оплачен (paid)">
+      <bpmn:outgoing>Sequence_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="seller_ship" name="Подготовить заказ; нажать «Отправить»">
+      <bpmn:incoming>Sequence_1</bpmn:incoming>
+      <bpmn:outgoing>Sequence_2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sendTask id="send_ship" name="Отправить запрос отправки" messageRef="Request_Ship" implementation="##unspecified">
+      <bpmn:incoming>Sequence_2</bpmn:incoming>
+      <bpmn:outgoing>Sequence_3</bpmn:outgoing>
+      <bpmn:ioSpecification id="IO_send_ship">
+        <bpmn:dataInput id="Payload_send_ship" name="Запрос" itemSubjectRef="Item_OrderContext" />
+        <bpmn:inputSet id="InputSet_send_ship">
+          <bpmn:dataInputRefs>Payload_send_ship</bpmn:dataInputRefs>
+        </bpmn:inputSet>
+        <bpmn:outputSet id="OutputSet_send_ship" />
+      </bpmn:ioSpecification>
+      <bpmn:dataInputAssociation id="Bind_send_ship">
+        <bpmn:sourceRef>seller_order</bpmn:sourceRef>
+        <bpmn:targetRef>Payload_send_ship</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+    </bpmn:sendTask>
+    <bpmn:receiveTask id="receive_ship" name="Получить результат отправки" messageRef="Response_Ship" implementation="##unspecified">
+      <bpmn:incoming>Sequence_3</bpmn:incoming>
+      <bpmn:outgoing>Sequence_4</bpmn:outgoing>
+      <bpmn:ioSpecification id="IO_receive_ship">
+        <bpmn:dataOutput id="Payload_receive_ship" name="Результат" itemSubjectRef="Item_ActionResult" />
+        <bpmn:inputSet id="InputSet_receive_ship" />
+        <bpmn:outputSet id="OutputSet_receive_ship">
+          <bpmn:dataOutputRefs>Payload_receive_ship</bpmn:dataOutputRefs>
+        </bpmn:outputSet>
+      </bpmn:ioSpecification>
+      <bpmn:dataOutputAssociation id="Bind_receive_ship">
+        <bpmn:sourceRef>Payload_receive_ship</bpmn:sourceRef>
+        <bpmn:targetRef>ship_response</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:receiveTask>
+    <bpmn:exclusiveGateway id="ship_ok" name="Отправка выполнена?" gatewayDirection="Diverging">
+      <bpmn:incoming>Sequence_4</bpmn:incoming>
+      <bpmn:outgoing>Sequence_12</bpmn:outgoing>
+      <bpmn:outgoing>Sequence_13</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="seller_deliver" name="Продавец нажимает «Доставлен»">
+      <bpmn:incoming>Sequence_12</bpmn:incoming>
+      <bpmn:outgoing>Sequence_5</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sendTask id="send_deliver" name="Отправить запрос доставки" messageRef="Request_Deliver" implementation="##unspecified">
+      <bpmn:incoming>Sequence_5</bpmn:incoming>
+      <bpmn:outgoing>Sequence_6</bpmn:outgoing>
+      <bpmn:ioSpecification id="IO_send_deliver">
+        <bpmn:dataInput id="Payload_send_deliver" name="Запрос" itemSubjectRef="Item_OrderContext" />
+        <bpmn:inputSet id="InputSet_send_deliver">
+          <bpmn:dataInputRefs>Payload_send_deliver</bpmn:dataInputRefs>
+        </bpmn:inputSet>
+        <bpmn:outputSet id="OutputSet_send_deliver" />
+      </bpmn:ioSpecification>
+      <bpmn:dataInputAssociation id="Bind_send_deliver">
+        <bpmn:sourceRef>seller_order</bpmn:sourceRef>
+        <bpmn:targetRef>Payload_send_deliver</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+    </bpmn:sendTask>
+    <bpmn:receiveTask id="receive_deliver" name="Получить результат доставки" messageRef="Response_Deliver" implementation="##unspecified">
+      <bpmn:incoming>Sequence_6</bpmn:incoming>
+      <bpmn:outgoing>Sequence_7</bpmn:outgoing>
+      <bpmn:ioSpecification id="IO_receive_deliver">
+        <bpmn:dataOutput id="Payload_receive_deliver" name="Результат" itemSubjectRef="Item_ActionResult" />
+        <bpmn:inputSet id="InputSet_receive_deliver" />
+        <bpmn:outputSet id="OutputSet_receive_deliver">
+          <bpmn:dataOutputRefs>Payload_receive_deliver</bpmn:dataOutputRefs>
+        </bpmn:outputSet>
+      </bpmn:ioSpecification>
+      <bpmn:dataOutputAssociation id="Bind_receive_deliver">
+        <bpmn:sourceRef>Payload_receive_deliver</bpmn:sourceRef>
+        <bpmn:targetRef>deliver_response</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:receiveTask>
+    <bpmn:exclusiveGateway id="deliver_ok" name="Доставка выполнена?" gatewayDirection="Diverging">
+      <bpmn:incoming>Sequence_7</bpmn:incoming>
+      <bpmn:outgoing>Sequence_18</bpmn:outgoing>
+      <bpmn:outgoing>Sequence_19</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="seller_done" name="Заказ исполнен">
+      <bpmn:incoming>Sequence_18</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="ship_rejected" name="Отправка отклонена">
+      <bpmn:incoming>Sequence_13</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="deliver_rejected" name="Статус не обновлён">
+      <bpmn:incoming>Sequence_19</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Sequence_1" sourceRef="seller_start" targetRef="seller_ship" />
+    <bpmn:sequenceFlow id="Sequence_2" sourceRef="seller_ship" targetRef="send_ship" />
+    <bpmn:sequenceFlow id="Sequence_3" sourceRef="send_ship" targetRef="receive_ship" />
+    <bpmn:sequenceFlow id="Sequence_4" sourceRef="receive_ship" targetRef="ship_ok" />
+    <bpmn:sequenceFlow id="Sequence_5" sourceRef="seller_deliver" targetRef="send_deliver" />
+    <bpmn:sequenceFlow id="Sequence_6" sourceRef="send_deliver" targetRef="receive_deliver" />
+    <bpmn:sequenceFlow id="Sequence_7" sourceRef="receive_deliver" targetRef="deliver_ok" />
+    <bpmn:sequenceFlow id="Sequence_12" sourceRef="ship_ok" targetRef="seller_deliver" name="Да">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">$ship_response/success = 'true'</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Sequence_13" sourceRef="ship_ok" targetRef="ship_rejected" name="Нет">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">not($ship_response/success = 'true')</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Sequence_18" sourceRef="deliver_ok" targetRef="seller_done" name="Да">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">$deliver_response/success = 'true'</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Sequence_19" sourceRef="deliver_ok" targetRef="deliver_rejected" name="Нет">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">not($deliver_response/success = 'true')</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+  </bpmn:process>
+  <bpmn:process id="Process_marketplace" name="Маркетплейс" isExecutable="false" definitionalCollaborationRef="Collaboration_Fulfillment">
+    <bpmn:documentation>Контекст оплаченного заказа известен при начале сценария. Каждое сообщение-запрос создаёт отдельный экземпляр серверной обработки.</bpmn:documentation>
+    <bpmn:property id="marketplace_order" name="orderContext" itemSubjectRef="Item_OrderContext" />
+    <bpmn:property id="marketplace_result" name="actionResult" itemSubjectRef="Item_ActionResult" />
+    <bpmn:laneSet id="Lanes_marketplace">
+      <bpmn:lane id="Lane_marketplace_0" name="Отправка">
+        <bpmn:flowNodeRef>start_ship</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>process_ship</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>result_ship</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_marketplace_1" name="Доставка">
+        <bpmn:flowNodeRef>start_deliver</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>process_deliver</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>result_deliver</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_marketplace_2" name="Отмена">
+        <bpmn:flowNodeRef>start_cancel</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>process_cancel</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>result_cancel</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="start_ship" name="Запрос отправки">
+      <bpmn:outgoing>Sequence_14</bpmn:outgoing>
+      <bpmn:dataOutput id="Payload_start_ship" name="Запрос" itemSubjectRef="Item_OrderContext" />
+      <bpmn:dataOutputAssociation id="Bind_start_ship">
+        <bpmn:sourceRef>Payload_start_ship</bpmn:sourceRef>
+        <bpmn:targetRef>marketplace_order</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+      <bpmn:outputSet id="Set_start_ship">
+        <bpmn:dataOutputRefs>Payload_start_ship</bpmn:dataOutputRefs>
+      </bpmn:outputSet>
+      <bpmn:messageEventDefinition id="EventDefinition_start_ship" messageRef="Request_Ship" />
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="process_ship" name="Проверить права и paid; paid -&gt; shipped; списать остаток и резерв в одной транзакции" implementation="##unspecified">
+      <bpmn:documentation>Операция возвращает успех или отказ после проверки роли, владельца и статуса. Отправка/отмена атомарны.</bpmn:documentation>
+      <bpmn:incoming>Sequence_14</bpmn:incoming>
+      <bpmn:outgoing>Sequence_15</bpmn:outgoing>
+      <bpmn:ioSpecification id="IO_process_ship">
+        <bpmn:dataInput id="Input_Read_ship_orders" name="Заказы" />
+        <bpmn:dataInput id="Input_Read_ship_products" name="Товары" />
+        <bpmn:dataInput id="Input_Request_process_ship" name="Запрос" itemSubjectRef="Item_OrderContext" />
+        <bpmn:dataOutput id="Output_Write_ship_orders" name="Заказы" />
+        <bpmn:dataOutput id="Output_Write_ship_products" name="Товары" />
+        <bpmn:dataOutput id="Output_Result_process_ship" name="Результат действия" itemSubjectRef="Item_ActionResult" />
+        <bpmn:inputSet id="InputSet_process_ship">
+          <bpmn:dataInputRefs>Input_Read_ship_orders</bpmn:dataInputRefs>
+          <bpmn:dataInputRefs>Input_Read_ship_products</bpmn:dataInputRefs>
+          <bpmn:dataInputRefs>Input_Request_process_ship</bpmn:dataInputRefs>
+        </bpmn:inputSet>
+        <bpmn:outputSet id="OutputSet_process_ship">
+          <bpmn:dataOutputRefs>Output_Write_ship_orders</bpmn:dataOutputRefs>
+          <bpmn:dataOutputRefs>Output_Write_ship_products</bpmn:dataOutputRefs>
+          <bpmn:dataOutputRefs>Output_Result_process_ship</bpmn:dataOutputRefs>
+        </bpmn:outputSet>
+      </bpmn:ioSpecification>
+      <bpmn:dataInputAssociation id="Read_ship_orders">
+        <bpmn:sourceRef>ship_orders</bpmn:sourceRef>
+        <bpmn:targetRef>Input_Read_ship_orders</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataInputAssociation id="Read_ship_products">
+        <bpmn:sourceRef>ship_products</bpmn:sourceRef>
+        <bpmn:targetRef>Input_Read_ship_products</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataInputAssociation id="Bind_Request_process_ship">
+        <bpmn:sourceRef>marketplace_order</bpmn:sourceRef>
+        <bpmn:targetRef>Input_Request_process_ship</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataOutputAssociation id="Write_ship_orders">
+        <bpmn:sourceRef>Output_Write_ship_orders</bpmn:sourceRef>
+        <bpmn:targetRef>ship_orders</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+      <bpmn:dataOutputAssociation id="Write_ship_products">
+        <bpmn:sourceRef>Output_Write_ship_products</bpmn:sourceRef>
+        <bpmn:targetRef>ship_products</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+      <bpmn:dataOutputAssociation id="Bind_Result_process_ship">
+        <bpmn:sourceRef>Output_Result_process_ship</bpmn:sourceRef>
+        <bpmn:targetRef>marketplace_result</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="result_ship" name="Результат отправки">
+      <bpmn:incoming>Sequence_15</bpmn:incoming>
+      <bpmn:dataInput id="Payload_result_ship" name="Результат" itemSubjectRef="Item_ActionResult" />
+      <bpmn:dataInputAssociation id="Bind_result_ship">
+        <bpmn:sourceRef>marketplace_result</bpmn:sourceRef>
+        <bpmn:targetRef>Payload_result_ship</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:inputSet id="Set_result_ship">
+        <bpmn:dataInputRefs>Payload_result_ship</bpmn:dataInputRefs>
+      </bpmn:inputSet>
+      <bpmn:messageEventDefinition id="EventDefinition_result_ship" messageRef="Response_Ship" />
+    </bpmn:endEvent>
+    <bpmn:dataStoreReference id="ship_orders" name="Заказы" dataStoreRef="Store_Orders" />
+    <bpmn:dataStoreReference id="ship_products" name="Товары" dataStoreRef="Store_Products" />
+    <bpmn:startEvent id="start_deliver" name="Запрос доставки">
+      <bpmn:outgoing>Sequence_20</bpmn:outgoing>
+      <bpmn:dataOutput id="Payload_start_deliver" name="Запрос" itemSubjectRef="Item_OrderContext" />
+      <bpmn:dataOutputAssociation id="Bind_start_deliver">
+        <bpmn:sourceRef>Payload_start_deliver</bpmn:sourceRef>
+        <bpmn:targetRef>marketplace_order</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+      <bpmn:outputSet id="Set_start_deliver">
+        <bpmn:dataOutputRefs>Payload_start_deliver</bpmn:dataOutputRefs>
+      </bpmn:outputSet>
+      <bpmn:messageEventDefinition id="EventDefinition_start_deliver" messageRef="Request_Deliver" />
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="process_deliver" name="Проверить права и shipped; shipped -&gt; delivered" implementation="##unspecified">
+      <bpmn:documentation>Операция возвращает успех или отказ после проверки роли, владельца и статуса. Отправка/отмена атомарны.</bpmn:documentation>
+      <bpmn:incoming>Sequence_20</bpmn:incoming>
+      <bpmn:outgoing>Sequence_21</bpmn:outgoing>
+      <bpmn:ioSpecification id="IO_process_deliver">
+        <bpmn:dataInput id="Input_Read_deliver_orders" name="Заказы" />
+        <bpmn:dataInput id="Input_Request_process_deliver" name="Запрос" itemSubjectRef="Item_OrderContext" />
+        <bpmn:dataOutput id="Output_Write_deliver_orders" name="Заказы" />
+        <bpmn:dataOutput id="Output_Result_process_deliver" name="Результат действия" itemSubjectRef="Item_ActionResult" />
+        <bpmn:inputSet id="InputSet_process_deliver">
+          <bpmn:dataInputRefs>Input_Read_deliver_orders</bpmn:dataInputRefs>
+          <bpmn:dataInputRefs>Input_Request_process_deliver</bpmn:dataInputRefs>
+        </bpmn:inputSet>
+        <bpmn:outputSet id="OutputSet_process_deliver">
+          <bpmn:dataOutputRefs>Output_Write_deliver_orders</bpmn:dataOutputRefs>
+          <bpmn:dataOutputRefs>Output_Result_process_deliver</bpmn:dataOutputRefs>
+        </bpmn:outputSet>
+      </bpmn:ioSpecification>
+      <bpmn:dataInputAssociation id="Read_deliver_orders">
+        <bpmn:sourceRef>deliver_orders</bpmn:sourceRef>
+        <bpmn:targetRef>Input_Read_deliver_orders</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataInputAssociation id="Bind_Request_process_deliver">
+        <bpmn:sourceRef>marketplace_order</bpmn:sourceRef>
+        <bpmn:targetRef>Input_Request_process_deliver</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataOutputAssociation id="Write_deliver_orders">
+        <bpmn:sourceRef>Output_Write_deliver_orders</bpmn:sourceRef>
+        <bpmn:targetRef>deliver_orders</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+      <bpmn:dataOutputAssociation id="Bind_Result_process_deliver">
+        <bpmn:sourceRef>Output_Result_process_deliver</bpmn:sourceRef>
+        <bpmn:targetRef>marketplace_result</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="result_deliver" name="Результат доставки">
+      <bpmn:incoming>Sequence_21</bpmn:incoming>
+      <bpmn:dataInput id="Payload_result_deliver" name="Результат" itemSubjectRef="Item_ActionResult" />
+      <bpmn:dataInputAssociation id="Bind_result_deliver">
+        <bpmn:sourceRef>marketplace_result</bpmn:sourceRef>
+        <bpmn:targetRef>Payload_result_deliver</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:inputSet id="Set_result_deliver">
+        <bpmn:dataInputRefs>Payload_result_deliver</bpmn:dataInputRefs>
+      </bpmn:inputSet>
+      <bpmn:messageEventDefinition id="EventDefinition_result_deliver" messageRef="Response_Deliver" />
+    </bpmn:endEvent>
+    <bpmn:dataStoreReference id="deliver_orders" name="Заказы" dataStoreRef="Store_Orders" />
+    <bpmn:startEvent id="start_cancel" name="Запрос отмены">
+      <bpmn:outgoing>Sequence_26</bpmn:outgoing>
+      <bpmn:dataOutput id="Payload_start_cancel" name="Запрос" itemSubjectRef="Item_OrderContext" />
+      <bpmn:dataOutputAssociation id="Bind_start_cancel">
+        <bpmn:sourceRef>Payload_start_cancel</bpmn:sourceRef>
+        <bpmn:targetRef>marketplace_order</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+      <bpmn:outputSet id="Set_start_cancel">
+        <bpmn:dataOutputRefs>Payload_start_cancel</bpmn:dataOutputRefs>
+      </bpmn:outputSet>
+      <bpmn:messageEventDefinition id="EventDefinition_start_cancel" messageRef="Request_Cancel" />
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="process_cancel" name="Проверить права и paid; paid -&gt; cancelled; освободить резерв в одной транзакции" implementation="##unspecified">
+      <bpmn:documentation>Операция возвращает успех или отказ после проверки роли, владельца и статуса. Отправка/отмена атомарны.</bpmn:documentation>
+      <bpmn:incoming>Sequence_26</bpmn:incoming>
+      <bpmn:outgoing>Sequence_27</bpmn:outgoing>
+      <bpmn:ioSpecification id="IO_process_cancel">
+        <bpmn:dataInput id="Input_Read_cancel_orders" name="Заказы" />
+        <bpmn:dataInput id="Input_Read_cancel_products" name="Товары" />
+        <bpmn:dataInput id="Input_Request_process_cancel" name="Запрос" itemSubjectRef="Item_OrderContext" />
+        <bpmn:dataOutput id="Output_Write_cancel_orders" name="Заказы" />
+        <bpmn:dataOutput id="Output_Write_cancel_products" name="Товары" />
+        <bpmn:dataOutput id="Output_Result_process_cancel" name="Результат действия" itemSubjectRef="Item_ActionResult" />
+        <bpmn:inputSet id="InputSet_process_cancel">
+          <bpmn:dataInputRefs>Input_Read_cancel_orders</bpmn:dataInputRefs>
+          <bpmn:dataInputRefs>Input_Read_cancel_products</bpmn:dataInputRefs>
+          <bpmn:dataInputRefs>Input_Request_process_cancel</bpmn:dataInputRefs>
+        </bpmn:inputSet>
+        <bpmn:outputSet id="OutputSet_process_cancel">
+          <bpmn:dataOutputRefs>Output_Write_cancel_orders</bpmn:dataOutputRefs>
+          <bpmn:dataOutputRefs>Output_Write_cancel_products</bpmn:dataOutputRefs>
+          <bpmn:dataOutputRefs>Output_Result_process_cancel</bpmn:dataOutputRefs>
+        </bpmn:outputSet>
+      </bpmn:ioSpecification>
+      <bpmn:dataInputAssociation id="Read_cancel_orders">
+        <bpmn:sourceRef>cancel_orders</bpmn:sourceRef>
+        <bpmn:targetRef>Input_Read_cancel_orders</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataInputAssociation id="Read_cancel_products">
+        <bpmn:sourceRef>cancel_products</bpmn:sourceRef>
+        <bpmn:targetRef>Input_Read_cancel_products</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataInputAssociation id="Bind_Request_process_cancel">
+        <bpmn:sourceRef>marketplace_order</bpmn:sourceRef>
+        <bpmn:targetRef>Input_Request_process_cancel</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataOutputAssociation id="Write_cancel_orders">
+        <bpmn:sourceRef>Output_Write_cancel_orders</bpmn:sourceRef>
+        <bpmn:targetRef>cancel_orders</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+      <bpmn:dataOutputAssociation id="Write_cancel_products">
+        <bpmn:sourceRef>Output_Write_cancel_products</bpmn:sourceRef>
+        <bpmn:targetRef>cancel_products</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+      <bpmn:dataOutputAssociation id="Bind_Result_process_cancel">
+        <bpmn:sourceRef>Output_Result_process_cancel</bpmn:sourceRef>
+        <bpmn:targetRef>marketplace_result</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="result_cancel" name="Результат отмены">
+      <bpmn:incoming>Sequence_27</bpmn:incoming>
+      <bpmn:dataInput id="Payload_result_cancel" name="Результат" itemSubjectRef="Item_ActionResult" />
+      <bpmn:dataInputAssociation id="Bind_result_cancel">
+        <bpmn:sourceRef>marketplace_result</bpmn:sourceRef>
+        <bpmn:targetRef>Payload_result_cancel</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:inputSet id="Set_result_cancel">
+        <bpmn:dataInputRefs>Payload_result_cancel</bpmn:dataInputRefs>
+      </bpmn:inputSet>
+      <bpmn:messageEventDefinition id="EventDefinition_result_cancel" messageRef="Response_Cancel" />
+    </bpmn:endEvent>
+    <bpmn:dataStoreReference id="cancel_orders" name="Заказы" dataStoreRef="Store_Orders" />
+    <bpmn:dataStoreReference id="cancel_products" name="Товары" dataStoreRef="Store_Products" />
+    <bpmn:sequenceFlow id="Sequence_14" sourceRef="start_ship" targetRef="process_ship" />
+    <bpmn:sequenceFlow id="Sequence_15" sourceRef="process_ship" targetRef="result_ship" />
+    <bpmn:sequenceFlow id="Sequence_20" sourceRef="start_deliver" targetRef="process_deliver" />
+    <bpmn:sequenceFlow id="Sequence_21" sourceRef="process_deliver" targetRef="result_deliver" />
+    <bpmn:sequenceFlow id="Sequence_26" sourceRef="start_cancel" targetRef="process_cancel" />
+    <bpmn:sequenceFlow id="Sequence_27" sourceRef="process_cancel" targetRef="result_cancel" />
+  </bpmn:process>
+  <bpmn:process id="Process_buyer" name="Покупатель" isExecutable="false" definitionalCollaborationRef="Collaboration_Fulfillment">
+    <bpmn:documentation>Контекст оплаченного заказа известен при начале сценария. Каждое сообщение-запрос создаёт отдельный экземпляр серверной обработки.</bpmn:documentation>
+    <bpmn:property id="buyer_order" name="orderContext" itemSubjectRef="Item_OrderContext" />
+    <bpmn:property id="cancel_response" name="cancel_response" itemSubjectRef="Item_ActionResult" />
+    <bpmn:startEvent id="buyer_start" name="Заказ оплачен (paid)">
+      <bpmn:outgoing>Sequence_8</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="buyer_cancel" name="Нажать «Отменить» до отправки">
+      <bpmn:incoming>Sequence_8</bpmn:incoming>
+      <bpmn:outgoing>Sequence_9</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sendTask id="send_cancel" name="Отправить запрос отмены" messageRef="Request_Cancel" implementation="##unspecified">
+      <bpmn:incoming>Sequence_9</bpmn:incoming>
+      <bpmn:outgoing>Sequence_10</bpmn:outgoing>
+      <bpmn:ioSpecification id="IO_send_cancel">
+        <bpmn:dataInput id="Payload_send_cancel" name="Запрос" itemSubjectRef="Item_OrderContext" />
+        <bpmn:inputSet id="InputSet_send_cancel">
+          <bpmn:dataInputRefs>Payload_send_cancel</bpmn:dataInputRefs>
+        </bpmn:inputSet>
+        <bpmn:outputSet id="OutputSet_send_cancel" />
+      </bpmn:ioSpecification>
+      <bpmn:dataInputAssociation id="Bind_send_cancel">
+        <bpmn:sourceRef>buyer_order</bpmn:sourceRef>
+        <bpmn:targetRef>Payload_send_cancel</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+    </bpmn:sendTask>
+    <bpmn:receiveTask id="receive_cancel" name="Получить результат отмены" messageRef="Response_Cancel" implementation="##unspecified">
+      <bpmn:incoming>Sequence_10</bpmn:incoming>
+      <bpmn:outgoing>Sequence_11</bpmn:outgoing>
+      <bpmn:ioSpecification id="IO_receive_cancel">
+        <bpmn:dataOutput id="Payload_receive_cancel" name="Результат" itemSubjectRef="Item_ActionResult" />
+        <bpmn:inputSet id="InputSet_receive_cancel" />
+        <bpmn:outputSet id="OutputSet_receive_cancel">
+          <bpmn:dataOutputRefs>Payload_receive_cancel</bpmn:dataOutputRefs>
+        </bpmn:outputSet>
+      </bpmn:ioSpecification>
+      <bpmn:dataOutputAssociation id="Bind_receive_cancel">
+        <bpmn:sourceRef>Payload_receive_cancel</bpmn:sourceRef>
+        <bpmn:targetRef>cancel_response</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:receiveTask>
+    <bpmn:exclusiveGateway id="cancel_ok" name="Отмена выполнена?" gatewayDirection="Diverging">
+      <bpmn:incoming>Sequence_11</bpmn:incoming>
+      <bpmn:outgoing>Sequence_24</bpmn:outgoing>
+      <bpmn:outgoing>Sequence_25</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="buyer_done" name="Заказ отменён">
+      <bpmn:incoming>Sequence_24</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="cancel_rejected" name="Отмена отклонена">
+      <bpmn:incoming>Sequence_25</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Sequence_8" sourceRef="buyer_start" targetRef="buyer_cancel" />
+    <bpmn:sequenceFlow id="Sequence_9" sourceRef="buyer_cancel" targetRef="send_cancel" />
+    <bpmn:sequenceFlow id="Sequence_10" sourceRef="send_cancel" targetRef="receive_cancel" />
+    <bpmn:sequenceFlow id="Sequence_11" sourceRef="receive_cancel" targetRef="cancel_ok" />
+    <bpmn:sequenceFlow id="Sequence_24" sourceRef="cancel_ok" targetRef="buyer_done" name="Да">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">$cancel_response/success = 'true'</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Sequence_25" sourceRef="cancel_ok" targetRef="cancel_rejected" name="Нет">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">not($cancel_response/success = 'true')</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_Fulfillment">
+    <bpmndi:BPMNPlane id="Plane_Fulfillment" bpmnElement="Collaboration_Fulfillment">
+      <bpmndi:BPMNShape id="Shape_Participant_seller" bpmnElement="Participant_seller" isHorizontal="true">
+        <dc:Bounds x="30" y="80" width="2680" height="363" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Participant_marketplace" bpmnElement="Participant_marketplace" isHorizontal="true">
+        <dc:Bounds x="30" y="520" width="2680" height="713" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_marketplace_0" bpmnElement="Lane_marketplace_0" isHorizontal="true">
+        <dc:Bounds x="60" y="540" width="2650" height="230" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_marketplace_1" bpmnElement="Lane_marketplace_1" isHorizontal="true">
+        <dc:Bounds x="60" y="770" width="2650" height="230" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_marketplace_2" bpmnElement="Lane_marketplace_2" isHorizontal="true">
+        <dc:Bounds x="60" y="1000" width="2650" height="230" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Participant_buyer" bpmnElement="Participant_buyer" isHorizontal="true">
+        <dc:Bounds x="30" y="1310" width="2680" height="363" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_seller_start" bpmnElement="seller_start">
+        <dc:Bounds x="113.0" y="193.0" width="34" height="34" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="78.55000000000001" y="249.0" width="102.89999999999999" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_seller_ship" bpmnElement="seller_ship">
+        <dc:Bounds x="185.0" y="166.0" width="200" height="88" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="215.3" y="198.0" width="139.4" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_send_ship" bpmnElement="send_ship">
+        <dc:Bounds x="445.0" y="170.0" width="150" height="80" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="457.6" y="198.0" width="124.8" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_receive_ship" bpmnElement="receive_ship">
+        <dc:Bounds x="875.0" y="170.0" width="170" height="80" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="890.3" y="198.0" width="139.4" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_ship_ok" bpmnElement="ship_ok" isMarkerVisible="true">
+        <dc:Bounds x="1145.0" y="185.0" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1129.5" y="125.0" width="81.0" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_seller_deliver" bpmnElement="seller_deliver">
+        <dc:Bounds x="1280.0" y="166.0" width="200" height="88" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1313.95" y="198.0" width="132.1" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_send_deliver" bpmnElement="send_deliver">
+        <dc:Bounds x="1535.0" y="170.0" width="150" height="80" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1547.6" y="198.0" width="124.8" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_receive_deliver" bpmnElement="receive_deliver">
+        <dc:Bounds x="1975.0" y="170.0" width="170" height="80" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1990.3" y="198.0" width="139.4" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_deliver_ok" bpmnElement="deliver_ok" isMarkerVisible="true">
+        <dc:Bounds x="2265.0" y="185.0" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2249.5" y="125.0" width="81.0" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_seller_done" bpmnElement="seller_done">
+        <dc:Bounds x="2493.0" y="193.0" width="34" height="34" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2454.9" y="249.0" width="110.2" height="22" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_ship_rejected" bpmnElement="ship_rejected">
+        <dc:Bounds x="1153.0" y="333.0" width="34" height="34" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1100.3" y="389.0" width="139.4" height="22" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_deliver_rejected" bpmnElement="deliver_rejected">
+        <dc:Bounds x="2273.0" y="333.0" width="34" height="34" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2220.3" y="389.0" width="139.4" height="22" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_start_ship" bpmnElement="start_ship">
+        <dc:Bounds x="503.0" y="593.0" width="34" height="34" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="486.8" y="649.0" width="66.4" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_process_ship" bpmnElement="process_ship">
+        <dc:Bounds x="585.0" y="555.0" width="310" height="110" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="648.4" y="580.0" width="183.2" height="76" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_result_ship" bpmnElement="result_ship">
+        <dc:Bounds x="943.0" y="593.0" width="34" height="34" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="923.15" y="649.0" width="73.7" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_ship_orders" bpmnElement="ship_orders">
+        <dc:Bounds x="610.0" y="690.0" width="80" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="624.1" y="707.0" width="51.8" height="22" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_ship_products" bpmnElement="ship_products">
+        <dc:Bounds x="785.0" y="690.0" width="80" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="799.1" y="707.0" width="51.8" height="22" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_start_deliver" bpmnElement="start_deliver">
+        <dc:Bounds x="1593.0" y="818.0" width="34" height="34" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1576.8" y="874.0" width="66.4" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_process_deliver" bpmnElement="process_deliver">
+        <dc:Bounds x="1680.0" y="785.0" width="310" height="100" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1736.1" y="823.0" width="197.79999999999998" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_result_deliver" bpmnElement="result_deliver">
+        <dc:Bounds x="2043.0" y="818.0" width="34" height="34" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2023.15" y="874.0" width="73.7" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_deliver_orders" bpmnElement="deliver_orders">
+        <dc:Bounds x="1795.0" y="920.0" width="80" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1809.1" y="937.0" width="51.8" height="22" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_start_cancel" bpmnElement="start_cancel">
+        <dc:Bounds x="503.0" y="1053.0" width="34" height="34" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="494.1" y="1109.0" width="51.8" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_process_cancel" bpmnElement="process_cancel">
+        <dc:Bounds x="585.0" y="1015.0" width="310" height="110" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="652.05" y="1040.0" width="175.9" height="76" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_result_cancel" bpmnElement="result_cancel">
+        <dc:Bounds x="943.0" y="1053.0" width="34" height="34" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="923.15" y="1109.0" width="73.7" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_cancel_orders" bpmnElement="cancel_orders">
+        <dc:Bounds x="610.0" y="1150.0" width="80" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="624.1" y="1167.0" width="51.8" height="22" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_cancel_products" bpmnElement="cancel_products">
+        <dc:Bounds x="785.0" y="1150.0" width="80" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="799.1" y="1167.0" width="51.8" height="22" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_buyer_start" bpmnElement="buyer_start">
+        <dc:Bounds x="113.0" y="1423.0" width="34" height="34" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="78.55000000000001" y="1479.0" width="102.89999999999999" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_buyer_cancel" bpmnElement="buyer_cancel">
+        <dc:Bounds x="185.0" y="1396.0" width="200" height="88" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="218.95" y="1428.0" width="132.1" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_send_cancel" bpmnElement="send_cancel">
+        <dc:Bounds x="445.0" y="1400.0" width="150" height="80" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="457.6" y="1428.0" width="124.8" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_receive_cancel" bpmnElement="receive_cancel">
+        <dc:Bounds x="875.0" y="1400.0" width="170" height="80" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="890.3" y="1428.0" width="139.4" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_cancel_ok" bpmnElement="cancel_ok" isMarkerVisible="true">
+        <dc:Bounds x="1145.0" y="1415.0" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1129.5" y="1355.0" width="81.0" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_buyer_done" bpmnElement="buyer_done">
+        <dc:Bounds x="1373.0" y="1423.0" width="34" height="34" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1338.55" y="1479.0" width="102.89999999999999" height="22" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_cancel_rejected" bpmnElement="cancel_rejected">
+        <dc:Bounds x="1153.0" y="1563.0" width="34" height="34" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1107.6" y="1619.0" width="124.8" height="22" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_Sequence_1" bpmnElement="Sequence_1">
+        <di:waypoint x="147.0" y="210" />
+        <di:waypoint x="185.0" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_2" bpmnElement="Sequence_2">
+        <di:waypoint x="385.0" y="210" />
+        <di:waypoint x="445.0" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_3" bpmnElement="Sequence_3">
+        <di:waypoint x="595.0" y="210" />
+        <di:waypoint x="875.0" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_4" bpmnElement="Sequence_4">
+        <di:waypoint x="1045.0" y="210" />
+        <di:waypoint x="1145.0" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_5" bpmnElement="Sequence_5">
+        <di:waypoint x="1480.0" y="210" />
+        <di:waypoint x="1535.0" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_6" bpmnElement="Sequence_6">
+        <di:waypoint x="1685.0" y="210" />
+        <di:waypoint x="1975.0" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_7" bpmnElement="Sequence_7">
+        <di:waypoint x="2145.0" y="210" />
+        <di:waypoint x="2265.0" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_8" bpmnElement="Sequence_8">
+        <di:waypoint x="147.0" y="1440" />
+        <di:waypoint x="185.0" y="1440" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_9" bpmnElement="Sequence_9">
+        <di:waypoint x="385.0" y="1440" />
+        <di:waypoint x="445.0" y="1440" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_10" bpmnElement="Sequence_10">
+        <di:waypoint x="595.0" y="1440" />
+        <di:waypoint x="875.0" y="1440" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_11" bpmnElement="Sequence_11">
+        <di:waypoint x="1045.0" y="1440" />
+        <di:waypoint x="1145.0" y="1440" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_12" bpmnElement="Sequence_12">
+        <di:waypoint x="1195.0" y="210" />
+        <di:waypoint x="1280.0" y="210" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1222.5" y="182.0" width="30" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_13" bpmnElement="Sequence_13">
+        <di:waypoint x="1170" y="235.0" />
+        <di:waypoint x="1170" y="333.0" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1177.0" y="272.0" width="30" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_14" bpmnElement="Sequence_14">
+        <di:waypoint x="537.0" y="610" />
+        <di:waypoint x="585.0" y="610" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_15" bpmnElement="Sequence_15">
+        <di:waypoint x="895.0" y="610" />
+        <di:waypoint x="943.0" y="610" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Message_Request_ship" bpmnElement="Message_Request_ship">
+        <di:waypoint x="520" y="250.0" />
+        <di:waypoint x="520" y="593.0" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Message_Response_ship" bpmnElement="Message_Response_ship">
+        <di:waypoint x="960" y="593.0" />
+        <di:waypoint x="960" y="250.0" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_18" bpmnElement="Sequence_18">
+        <di:waypoint x="2315.0" y="210" />
+        <di:waypoint x="2493.0" y="210" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2389.0" y="182.0" width="30" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_19" bpmnElement="Sequence_19">
+        <di:waypoint x="2290" y="235.0" />
+        <di:waypoint x="2290" y="333.0" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2297.0" y="272.0" width="30" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_20" bpmnElement="Sequence_20">
+        <di:waypoint x="1627.0" y="835" />
+        <di:waypoint x="1680.0" y="835" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_21" bpmnElement="Sequence_21">
+        <di:waypoint x="1990.0" y="835" />
+        <di:waypoint x="2043.0" y="835" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Message_Request_deliver" bpmnElement="Message_Request_deliver">
+        <di:waypoint x="1610" y="250.0" />
+        <di:waypoint x="1610" y="818.0" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Message_Response_deliver" bpmnElement="Message_Response_deliver">
+        <di:waypoint x="2060" y="818.0" />
+        <di:waypoint x="2060" y="250.0" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_24" bpmnElement="Sequence_24">
+        <di:waypoint x="1195.0" y="1440" />
+        <di:waypoint x="1373.0" y="1440" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1269.0" y="1412.0" width="30" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_25" bpmnElement="Sequence_25">
+        <di:waypoint x="1170" y="1465.0" />
+        <di:waypoint x="1170" y="1563.0" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1177.0" y="1502.0" width="30" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_26" bpmnElement="Sequence_26">
+        <di:waypoint x="537.0" y="1070" />
+        <di:waypoint x="585.0" y="1070" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Sequence_27" bpmnElement="Sequence_27">
+        <di:waypoint x="895.0" y="1070" />
+        <di:waypoint x="943.0" y="1070" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Message_Request_cancel" bpmnElement="Message_Request_cancel">
+        <di:waypoint x="520" y="1400.0" />
+        <di:waypoint x="520" y="1087.0" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Message_Response_cancel" bpmnElement="Message_Response_cancel">
+        <di:waypoint x="960" y="1087.0" />
+        <di:waypoint x="960" y="1400.0" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Read_ship_orders" bpmnElement="Read_ship_orders">
+        <di:waypoint x="642" y="690.0" />
+        <di:waypoint x="642" y="665.0" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Write_ship_orders" bpmnElement="Write_ship_orders">
+        <di:waypoint x="658" y="665.0" />
+        <di:waypoint x="658" y="690.0" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Read_ship_products" bpmnElement="Read_ship_products">
+        <di:waypoint x="817" y="690.0" />
+        <di:waypoint x="817" y="665.0" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Write_ship_products" bpmnElement="Write_ship_products">
+        <di:waypoint x="833" y="665.0" />
+        <di:waypoint x="833" y="690.0" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Read_deliver_orders" bpmnElement="Read_deliver_orders">
+        <di:waypoint x="1827" y="920.0" />
+        <di:waypoint x="1827" y="885.0" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Write_deliver_orders" bpmnElement="Write_deliver_orders">
+        <di:waypoint x="1843" y="885.0" />
+        <di:waypoint x="1843" y="920.0" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Read_cancel_orders" bpmnElement="Read_cancel_orders">
+        <di:waypoint x="642" y="1150.0" />
+        <di:waypoint x="642" y="1125.0" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Write_cancel_orders" bpmnElement="Write_cancel_orders">
+        <di:waypoint x="658" y="1125.0" />
+        <di:waypoint x="658" y="1150.0" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Read_cancel_products" bpmnElement="Read_cancel_products">
+        <di:waypoint x="817" y="1150.0" />
+        <di:waypoint x="817" y="1125.0" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Write_cancel_products" bpmnElement="Write_cancel_products">
+        <di:waypoint x="833" y="1125.0" />
+        <di:waypoint x="833" y="1150.0" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
