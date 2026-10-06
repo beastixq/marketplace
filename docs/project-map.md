@@ -10,6 +10,7 @@ document conflicts with code, trust code after checking it directly.
 | `cmd/api/main.go` | Main HTTP server. | Loads config, connects PostgreSQL, optionally connects Redis, wires repositories/services/handlers/web, starts the order expiration worker, and serves API plus web UI. |
 | `cmd/techui/main.go` | Console technical UI. | Uses the same service layer through component packages. It bypasses HTTP handlers and starts the order expiration worker. |
 | `cmd/seed/main.go` | Local data generator. | Inserts synthetic users, sellers, products, orders, reviews, and price history in one transaction. |
+| `cmd/testreport/main.go` | Local report renderer. | Converts Go test JSONL into standalone, browser-readable HTML; used by `make test-report`. |
 
 The API server mounts both surfaces on one `http.ServeMux`:
 

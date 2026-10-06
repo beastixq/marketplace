@@ -54,9 +54,7 @@ func assertSellerStats(t *testing.T, got, want m.SellerStats) {
 	}
 }
 
-func TestGetSellerByID(t *testing.T) {
-	mock := mock_service.NewMockSellerRepo(gomock.NewController(t))
-	svc := service.NewSellerService(mock)
+func TestSellerService_GetSellerByID(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -90,6 +88,9 @@ func TestGetSellerByID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockSellerRepo(gomock.NewController(t))
+			svc := service.NewSellerService(mock)
+
 			mock.EXPECT().GetSellerByID(ctx, tCase.SellerID).Return(tCase.MockReturn.Seller, tCase.MockReturn.Error)
 			seller, err := svc.GetSellerByID(ctx, tCase.SellerID)
 			assertError(t, err, tCase.ExpectedErr)
@@ -98,9 +99,7 @@ func TestGetSellerByID(t *testing.T) {
 	}
 }
 
-func TestGetSellerByUserID(t *testing.T) {
-	mock := mock_service.NewMockSellerRepo(gomock.NewController(t))
-	svc := service.NewSellerService(mock)
+func TestSellerService_GetSellerByUserID(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -134,6 +133,9 @@ func TestGetSellerByUserID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockSellerRepo(gomock.NewController(t))
+			svc := service.NewSellerService(mock)
+
 			mock.EXPECT().GetSellerByUserID(ctx, tCase.UserID).Return(tCase.MockReturn.Seller, tCase.MockReturn.Error)
 			seller, err := svc.GetSellerByUserID(ctx, testActor(tCase.UserID, m.RoleSeller))
 			assertError(t, err, tCase.ExpectedErr)
@@ -142,9 +144,14 @@ func TestGetSellerByUserID(t *testing.T) {
 	}
 }
 
-func TestCreateSeller(t *testing.T) {
-	mock := mock_service.NewMockSellerRepo(gomock.NewController(t))
-	svc := service.NewSellerService(mock)
+func TestSellerService_CreateSeller(t *testing.T) {
+	t.Run("admin is forbidden", func(t *testing.T) {
+		svc := service.NewSellerService(mock_service.NewMockSellerRepo(gomock.NewController(t)))
+
+		_, err := svc.CreateSeller(context.Background(), testActor(someID, m.RoleAdmin), m.SellerCreate{CompanyName: "Acme"})
+
+		assertError(t, err, service.ErrPermissionDenied)
+	})
 	ctx := context.Background()
 
 	someSellerCreate := m.SellerCreate{
@@ -178,6 +185,9 @@ func TestCreateSeller(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockSellerRepo(gomock.NewController(t))
+			svc := service.NewSellerService(mock)
+
 			mock.EXPECT().CreateSeller(ctx, tCase.Create).Return(tCase.MockReturn.ID, tCase.MockReturn.Error)
 			id, err := svc.CreateSeller(ctx, testActor(tCase.Create.UserID, m.RoleSeller), tCase.Create)
 			assertError(t, err, tCase.ExpectedErr)
@@ -188,9 +198,7 @@ func TestCreateSeller(t *testing.T) {
 	}
 }
 
-func TestUpdateSeller(t *testing.T) {
-	mock := mock_service.NewMockSellerRepo(gomock.NewController(t))
-	svc := service.NewSellerService(mock)
+func TestSellerService_UpdateSeller(t *testing.T) {
 	ctx := context.Background()
 
 	newCompanyName := "New Company"
@@ -219,7 +227,6 @@ func TestUpdateSeller(t *testing.T) {
 	}
 
 	tCases := []testCase{
-		// positives
 		{
 			Description:    "Success",
 			UserID:         someSellerUserID,
@@ -229,7 +236,7 @@ func TestUpdateSeller(t *testing.T) {
 			MockUpdate:     &MockSellerReturn{Seller: updatedSeller},
 			ExpectedSeller: updatedSeller,
 		},
-		// negatives
+
 		{
 			Description: "Seller not found",
 			UserID:      someSellerUserID,
@@ -267,6 +274,9 @@ func TestUpdateSeller(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockSellerRepo(gomock.NewController(t))
+			svc := service.NewSellerService(mock)
+
 			mock.EXPECT().GetSellerByID(ctx, tCase.SellerID).Return(tCase.MockGetByID.Seller, tCase.MockGetByID.Error)
 			if tCase.MockUpdate != nil {
 				mock.EXPECT().UpdateSeller(ctx, tCase.SellerID, tCase.Update).Return(tCase.MockUpdate.Seller, tCase.MockUpdate.Error)
@@ -278,9 +288,7 @@ func TestUpdateSeller(t *testing.T) {
 	}
 }
 
-func TestDeleteSellerByID(t *testing.T) {
-	mock := mock_service.NewMockSellerRepo(gomock.NewController(t))
-	svc := service.NewSellerService(mock)
+func TestSellerService_DeleteSellerByID(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -333,6 +341,9 @@ func TestDeleteSellerByID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockSellerRepo(gomock.NewController(t))
+			svc := service.NewSellerService(mock)
+
 			mock.EXPECT().GetSellerByID(ctx, tCase.SellerID).Return(tCase.MockGetByID.Seller, tCase.MockGetByID.Error)
 			if tCase.MockDelete != nil {
 				mock.EXPECT().DeleteSellerByID(ctx, tCase.SellerID).Return(*tCase.MockDelete)
@@ -343,9 +354,7 @@ func TestDeleteSellerByID(t *testing.T) {
 	}
 }
 
-func TestGetSellerStats(t *testing.T) {
-	mock := mock_service.NewMockSellerRepo(gomock.NewController(t))
-	svc := service.NewSellerService(mock)
+func TestSellerService_GetSellerStats(t *testing.T) {
 	ctx := context.Background()
 
 	dateFrom := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
@@ -371,7 +380,6 @@ func TestGetSellerStats(t *testing.T) {
 	}
 
 	tCases := []testCase{
-		// positives
 		{
 			Description:   "Success",
 			UserID:        someSellerUserID,
@@ -382,7 +390,7 @@ func TestGetSellerStats(t *testing.T) {
 			MockStats:     &MockSellerStatsReturn{Stats: someStats},
 			ExpectedStats: someStats,
 		},
-		// negatives
+
 		{
 			Description: "Seller not found",
 			UserID:      someSellerUserID,
@@ -415,6 +423,9 @@ func TestGetSellerStats(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockSellerRepo(gomock.NewController(t))
+			svc := service.NewSellerService(mock)
+
 			mock.EXPECT().GetSellerByID(ctx, tCase.SellerID).Return(tCase.MockGetByID.Seller, tCase.MockGetByID.Error)
 			if tCase.MockStats != nil {
 				mock.EXPECT().GetSellerStats(ctx, tCase.SellerID, tCase.DateFrom, tCase.DateTo).Return(tCase.MockStats.Stats, tCase.MockStats.Error)

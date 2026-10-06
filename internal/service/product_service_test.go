@@ -64,9 +64,108 @@ func newProductService(ctrl *gomock.Controller) (service.ProductService, *mock_s
 	return svc, productMock, reviewMock, sellerMock
 }
 
-func TestGetProducts(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, productMock, _, _ := newProductService(ctrl)
+type productRepositoryMock struct {
+	*mock_service.MockProductRepo
+	*mock_service.MockProductCategoryRepo
+}
+
+func newProductServiceWithCategories(ctrl *gomock.Controller) (service.ProductService, *mock_service.MockProductRepo, *mock_service.MockProductCategoryRepo, *mock_service.MockSellerRepo) {
+	products := mock_service.NewMockProductRepo(ctrl)
+	categories := mock_service.NewMockProductCategoryRepo(ctrl)
+	sellers := mock_service.NewMockSellerRepo(ctrl)
+	repo := productRepositoryMock{MockProductRepo: products, MockProductCategoryRepo: categories}
+	svc := service.NewProductService(repo, mock_service.NewMockReviewRepo(ctrl), sellers, testsupport.PassThroughTxManager{})
+	return svc, products, categories, sellers
+}
+
+func TestProductService_GetProductCategories(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name       string
+		categories []m.Category
+		repoErr    error
+		wantErr    error
+	}{
+		{name: "success", categories: []m.Category{someCategory}},
+		{name: "product has no categories", categories: []m.Category{}},
+		{name: "repository failure", repoErr: errors.New("query failed"), wantErr: service.ErrGetProductCategories},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, _, categories, _ := newProductServiceWithCategories(gomock.NewController(t))
+			categories.EXPECT().GetProductCategories(ctx, someID).Return(tc.categories, tc.repoErr)
+
+			got, err := svc.GetProductCategories(ctx, someID)
+
+			assertError(t, err, tc.wantErr)
+			if tc.wantErr == nil && !reflect.DeepEqual(got, tc.categories) {
+				t.Fatalf("unexpected categories: got %+v, want %+v", got, tc.categories)
+			}
+		})
+	}
+	t.Run("repository lacks category support", func(t *testing.T) {
+		svc, _, _, _ := newProductService(gomock.NewController(t))
+
+		_, err := svc.GetProductCategories(ctx, someID)
+
+		assertError(t, err, service.ErrGetProductCategories)
+	})
+}
+
+func TestProductService_ReplaceProductCategories(t *testing.T) {
+	ctx := context.Background()
+	product := newProductBuilder().withID(10).withSellerID(20).build()
+	seller := m.Seller{ID: product.SellerID, UserID: someSellerUserID}
+	deleted := product
+	deleted.DeletedAt = &someTime
+	categoryIDs := []int64{1, 2}
+	tests := []struct {
+		name       string
+		actor      service.Actor
+		product    MockProductReturn
+		seller     *MockSellerReturn
+		replaceErr *error
+		wantErr    error
+	}{
+		{name: "seller replaces own product categories", actor: testActor(seller.UserID, m.RoleSeller), product: MockProductReturn{Product: product}, seller: &MockSellerReturn{Seller: seller}, replaceErr: ptrErr(nil)},
+		{name: "admin replaces another seller's categories", actor: testActor(otherUserID, m.RoleAdmin), product: MockProductReturn{Product: product}, seller: &MockSellerReturn{Seller: seller}, replaceErr: ptrErr(nil)},
+		{name: "buyer is forbidden", actor: testActor(seller.UserID, m.RoleBuyer), wantErr: service.ErrPermissionDenied},
+		{name: "product not found", actor: testActor(seller.UserID, m.RoleSeller), product: MockProductReturn{Error: service.ErrNotFound}, wantErr: service.ErrProductNotFound},
+		{name: "product lookup failure", actor: testActor(seller.UserID, m.RoleSeller), product: MockProductReturn{Error: errors.New("lookup failed")}, wantErr: service.ErrGetProductByID},
+		{name: "deleted product", actor: testActor(seller.UserID, m.RoleSeller), product: MockProductReturn{Product: deleted}, wantErr: service.ErrProductDeleted},
+		{name: "seller not found", actor: testActor(seller.UserID, m.RoleSeller), product: MockProductReturn{Product: product}, seller: &MockSellerReturn{Error: service.ErrNotFound}, wantErr: service.ErrSellerNotFound},
+		{name: "seller lookup failure", actor: testActor(seller.UserID, m.RoleSeller), product: MockProductReturn{Product: product}, seller: &MockSellerReturn{Error: errors.New("lookup failed")}, wantErr: service.ErrGetSellerByID},
+		{name: "another seller's product", actor: testActor(otherUserID, m.RoleSeller), product: MockProductReturn{Product: product}, seller: &MockSellerReturn{Seller: seller}, wantErr: service.ErrNotYourSeller},
+		{name: "category replacement failure", actor: testActor(seller.UserID, m.RoleSeller), product: MockProductReturn{Product: product}, seller: &MockSellerReturn{Seller: seller}, replaceErr: ptrErr(errors.New("update failed")), wantErr: service.ErrUpdateProductCategories},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, products, categories, sellers := newProductServiceWithCategories(gomock.NewController(t))
+			if tc.actor.Role != m.RoleBuyer {
+				products.EXPECT().GetProductByIDForUpdate(ctx, product.ID).Return(tc.product.Product, tc.product.Error)
+			}
+			if tc.seller != nil {
+				sellers.EXPECT().GetSellerByID(ctx, product.SellerID).Return(tc.seller.Seller, tc.seller.Error)
+			}
+			if tc.replaceErr != nil {
+				categories.EXPECT().ReplaceProductCategories(ctx, product.ID, categoryIDs).Return(*tc.replaceErr)
+			}
+
+			err := svc.ReplaceProductCategories(ctx, tc.actor, product.ID, categoryIDs)
+
+			assertError(t, err, tc.wantErr)
+		})
+	}
+	t.Run("repository lacks category support", func(t *testing.T) {
+		svc, _, _, _ := newProductService(gomock.NewController(t))
+
+		err := svc.ReplaceProductCategories(ctx, testActor(seller.UserID, m.RoleSeller), product.ID, categoryIDs)
+
+		assertError(t, err, service.ErrUpdateProductCategories)
+	})
+}
+
+func TestProductService_GetProducts(t *testing.T) {
 	ctx := context.Background()
 
 	catalogOpts := m.CatalogOptions{}
@@ -97,6 +196,9 @@ func TestGetProducts(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, productMock, _, _ := newProductService(ctrl)
+
 			productMock.EXPECT().GetProducts(ctx, catalogOpts).Return(tCase.MockReturn.Products, tCase.MockReturn.Error)
 
 			products, err := svc.GetProducts(ctx, catalogOpts)
@@ -108,9 +210,7 @@ func TestGetProducts(t *testing.T) {
 	}
 }
 
-func TestGetProductByID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, productMock, _, _ := newProductService(ctrl)
+func TestProductService_GetProductByID(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -138,6 +238,9 @@ func TestGetProductByID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, productMock, _, _ := newProductService(ctrl)
+
 			productMock.EXPECT().GetProductByID(ctx, someID).Return(tCase.MockReturn.Product, tCase.MockReturn.Error)
 
 			product, err := svc.GetProductByID(ctx, someID)
@@ -149,9 +252,7 @@ func TestGetProductByID(t *testing.T) {
 	}
 }
 
-func TestGetProductPriceHistory(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, productMock, _, _ := newProductService(ctrl)
+func TestProductService_GetProductPriceHistory(t *testing.T) {
 	ctx := context.Background()
 
 	dateFrom := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -201,6 +302,9 @@ func TestGetProductPriceHistory(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, productMock, _, _ := newProductService(ctrl)
+
 			productMock.EXPECT().GetProductByID(ctx, someID).Return(tCase.MockGetByID.Product, tCase.MockGetByID.Error)
 			if tCase.MockPriceHistory != nil {
 				productMock.EXPECT().GetProductPriceHistory(ctx, someID, dateFrom, dateTo).Return(tCase.MockPriceHistory.History, tCase.MockPriceHistory.Error)
@@ -215,9 +319,7 @@ func TestGetProductPriceHistory(t *testing.T) {
 	}
 }
 
-func TestGetReviewsByProductID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, productMock, reviewMock, _ := newProductService(ctrl)
+func TestProductService_GetReviewsByProductID(t *testing.T) {
 	ctx := context.Background()
 
 	opts := m.PaginationOpts{Page: 1, Limit: 10}
@@ -256,6 +358,9 @@ func TestGetReviewsByProductID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, productMock, reviewMock, _ := newProductService(ctrl)
+
 			productMock.EXPECT().GetProductByID(ctx, someID).Return(tCase.MockGetByID.Product, tCase.MockGetByID.Error)
 			if tCase.MockReviews != nil {
 				reviewMock.EXPECT().GetReviewsByProductID(ctx, someID, opts).Return(tCase.MockReviews.Reviews, tCase.MockReviews.Error)
@@ -270,9 +375,14 @@ func TestGetReviewsByProductID(t *testing.T) {
 	}
 }
 
-func TestCreateProduct(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, productMock, _, sellerMock := newProductService(ctrl)
+func TestProductService_CreateProduct(t *testing.T) {
+	t.Run("buyer is forbidden", func(t *testing.T) {
+		svc, _, _, _ := newProductService(gomock.NewController(t))
+
+		_, err := svc.CreateProduct(context.Background(), testActor(someID, m.RoleBuyer), m.ProductCreate{SellerID: someSellerID})
+
+		assertError(t, err, service.ErrPermissionDenied)
+	})
 	ctx := context.Background()
 
 	productCreate := m.ProductCreate{
@@ -327,6 +437,9 @@ func TestCreateProduct(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, productMock, _, sellerMock := newProductService(ctrl)
+
 			sellerMock.EXPECT().GetSellerByID(ctx, productCreate.SellerID).Return(tCase.MockSeller.Seller, tCase.MockSeller.Error)
 			if tCase.MockCreate != nil {
 				productMock.EXPECT().CreateProduct(ctx, productCreate).Return(tCase.MockCreate.ID, tCase.MockCreate.Error)
@@ -341,9 +454,7 @@ func TestCreateProduct(t *testing.T) {
 	}
 }
 
-func TestUpdateProduct(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, productMock, _, sellerMock := newProductService(ctrl)
+func TestProductService_UpdateProduct(t *testing.T) {
 	ctx := context.Background()
 
 	newName := "Updated Product"
@@ -413,13 +524,17 @@ func TestUpdateProduct(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
-			productMock.EXPECT().GetProductByIDForUpdate(ctx, someID).Return(tCase.MockLock.Product, tCase.MockLock.Error)
+			ctrl := gomock.NewController(t)
+			svc, productMock, _, sellerMock := newProductService(ctrl)
+
+			calls := []any{productMock.EXPECT().GetProductByIDForUpdate(ctx, someID).Return(tCase.MockLock.Product, tCase.MockLock.Error)}
 			if tCase.MockSeller != nil {
-				sellerMock.EXPECT().GetSellerByID(ctx, someProduct.SellerID).Return(tCase.MockSeller.Seller, tCase.MockSeller.Error)
+				calls = append(calls, sellerMock.EXPECT().GetSellerByID(ctx, someProduct.SellerID).Return(tCase.MockSeller.Seller, tCase.MockSeller.Error))
 			}
 			if tCase.MockUpdate != nil {
-				productMock.EXPECT().UpdateProduct(ctx, someID, productUpdate).Return(tCase.MockUpdate.Product, tCase.MockUpdate.Error)
+				calls = append(calls, productMock.EXPECT().UpdateProduct(ctx, someID, productUpdate).Return(tCase.MockUpdate.Product, tCase.MockUpdate.Error))
 			}
+			gomock.InOrder(calls...)
 
 			product, err := svc.UpdateProduct(ctx, testActor(tCase.UserID, m.RoleSeller), someID, productUpdate)
 			assertError(t, err, tCase.ExpectedErr)
@@ -430,30 +545,7 @@ func TestUpdateProduct(t *testing.T) {
 	}
 }
 
-func TestUpdateProductLockFires(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, productMock, _, sellerMock := newProductService(ctrl)
-	ctx := context.Background()
-
-	newName := "Lock test product"
-	productUpdate := m.ProductUpdate{Name: &newName}
-	updatedProduct := someProduct
-	updatedProduct.Name = newName
-
-	productMock.EXPECT().GetProductByIDForUpdate(ctx, someID).Return(someProduct, nil)
-	sellerMock.EXPECT().GetSellerByID(ctx, someProduct.SellerID).Return(someSeller, nil)
-	productMock.EXPECT().UpdateProduct(ctx, someID, productUpdate).Return(updatedProduct, nil)
-
-	got, err := svc.UpdateProduct(ctx, testActor(someSellerUserID, m.RoleSeller), someID, productUpdate)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	assertProduct(t, got, updatedProduct)
-}
-
-func TestDeleteProduct(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, productMock, _, sellerMock := newProductService(ctrl)
+func TestProductService_DeleteProductByID(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -518,6 +610,9 @@ func TestDeleteProduct(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, productMock, _, sellerMock := newProductService(ctrl)
+
 			productMock.EXPECT().GetProductByID(ctx, someID).Return(tCase.MockGetByID.Product, tCase.MockGetByID.Error)
 			if tCase.MockSeller != nil {
 				sellerMock.EXPECT().GetSellerByID(ctx, someProduct.SellerID).Return(tCase.MockSeller.Seller, tCase.MockSeller.Error)

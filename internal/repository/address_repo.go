@@ -9,14 +9,13 @@ import (
 	m "github.com/beastixq/marketplace/internal/model"
 	"github.com/beastixq/marketplace/internal/service"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type AddressRepoImpl struct {
-	pool *pgxpool.Pool
+	pool Database
 }
 
-func NewAddressRepo(pool *pgxpool.Pool) AddressRepoImpl {
+func NewAddressRepo(pool Database) AddressRepoImpl {
 	return AddressRepoImpl{pool: pool}
 }
 

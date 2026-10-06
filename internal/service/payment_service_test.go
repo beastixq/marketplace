@@ -32,9 +32,14 @@ func newPaymentService(ctrl *gomock.Controller, clock service.Clock) (
 	return ps, orderMock, gwMock
 }
 
-// ==================== GetOrderPaymentURL ====================
+func TestPaymentService_GetOrderPaymentURL(t *testing.T) {
+	t.Run("admin is forbidden", func(t *testing.T) {
+		svc, _, _ := newPaymentService(gomock.NewController(t), fakeClock{now: someTime})
 
-func TestGetOrderPaymentURL(t *testing.T) {
+		_, _, err := svc.GetOrderPaymentURL(context.Background(), testActor(someID, m.RoleAdmin), someOrderID)
+
+		assertError(t, err, service.ErrPermissionDenied)
+	})
 	ctx := context.Background()
 	createdAt := someTime
 	clock := fakeClock{now: createdAt.Add(5 * time.Minute)} // 5 min after creation, within TTL
@@ -164,9 +169,7 @@ func TestGetOrderPaymentURL(t *testing.T) {
 	}
 }
 
-// ==================== ProcessOrderPayment ====================
-
-func TestProcessOrderPayment(t *testing.T) {
+func TestPaymentService_ProcessOrderPayment(t *testing.T) {
 	ctx := context.Background()
 	createdAt := someTime
 	clock := fakeClock{now: createdAt.Add(5 * time.Minute)}

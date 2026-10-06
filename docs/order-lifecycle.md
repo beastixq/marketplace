@@ -1,8 +1,8 @@
 # Order Lifecycle
 
-Current lifecycle behavior is implemented in `internal/service/order_service.go`
-and `internal/service/order_state.go`. PostgreSQL stores status in
-`orders.status`; service code owns business policy.
+Current lifecycle behavior is implemented in `internal/service/order_service.go`,
+`internal/service/payment_service.go`, and `internal/service/order_state.go`.
+PostgreSQL stores status in `orders.status`; service code owns business policy.
 
 ## Statuses
 
@@ -16,6 +16,15 @@ and `internal/service/order_state.go`. PostgreSQL stores status in
 | `cancelled` | Pending/paid order was cancelled or an expired pending order was closed by the worker. | Reserved quantity is released for `pending` and `paid` cancellations/expiration. |
 
 ## State Machine
+
+The rendered diagram is embedded in [README.md](../README.md#жизненный-цикл-заказа).
+Its source is [OrderLifecycle.puml](../diagrams/src/OrderLifecycle.puml).
+When changing lifecycle rules, update the diagram to match `orderTransitionRules`
+and the service entrypoints. Regenerate both formats with a local `plantuml.jar`:
+
+```bash
+make diagrams/out/OrderLifecycle.svg diagrams/out/OrderLifecycle.png
+```
 
 ```text
 draft --checkout--> pending --payment--> paid --ship--> shipped --deliver--> delivered

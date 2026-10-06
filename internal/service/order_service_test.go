@@ -92,11 +92,7 @@ func assertOrder(t *testing.T, got, want m.Order) {
 	}
 }
 
-// ==================== GetOrderByID ====================
-
-func TestGetOrderByID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, orderMock, _, _, _, _ := newOrderService(ctrl)
+func TestOrderService_GetOrderByID(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -124,6 +120,9 @@ func TestGetOrderByID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, orderMock, _, _, _, _ := newOrderService(ctrl)
+
 			orderMock.EXPECT().GetOrderByID(ctx, someOrderID).Return(tCase.MockReturn.Order, tCase.MockReturn.Error)
 
 			order, err := svc.GetOrderByID(ctx, testActor(someID, m.RoleBuyer), someOrderID)
@@ -135,11 +134,7 @@ func TestGetOrderByID(t *testing.T) {
 	}
 }
 
-// ==================== GetOrdersByUserID ====================
-
-func TestGetOrdersByUserID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, orderMock, _, _, _, _ := newOrderService(ctrl)
+func TestOrderService_GetOrdersByUserID(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -169,6 +164,9 @@ func TestGetOrdersByUserID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, orderMock, _, _, _, _ := newOrderService(ctrl)
+
 			orderMock.EXPECT().GetOrdersByUserID(ctx, someID, m.PaginationOpts{}).Return(tCase.MockReturn.Orders, tCase.MockReturn.Error)
 
 			orders, err := svc.GetOrdersByUserID(ctx, testActor(someID, m.RoleBuyer), m.PaginationOpts{})
@@ -180,11 +178,7 @@ func TestGetOrdersByUserID(t *testing.T) {
 	}
 }
 
-// ==================== GetOrderItemsByOrderID ====================
-
-func TestGetOrderItemsByOrderID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, orderMock, itemMock, _, _, _ := newOrderService(ctrl)
+func TestOrderService_GetOrderItemsByOrderID(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -214,6 +208,9 @@ func TestGetOrderItemsByOrderID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, orderMock, itemMock, _, _, _ := newOrderService(ctrl)
+
 			orderMock.EXPECT().GetOrderByID(ctx, someOrderID).Return(someOrder, nil)
 			itemMock.EXPECT().GetOrderItemsByOrderID(ctx, someOrderID).Return(tCase.MockReturn.Items, tCase.MockReturn.Error)
 
@@ -226,9 +223,7 @@ func TestGetOrderItemsByOrderID(t *testing.T) {
 	}
 }
 
-// ==================== GetSellerOrdersByUserID ====================
-
-func TestGetSellerOrdersByUserID(t *testing.T) {
+func TestOrderService_GetSellerOrdersByUserID(t *testing.T) {
 	ctx := context.Background()
 
 	seller := m.Seller{ID: someSellerID, UserID: someID}
@@ -294,9 +289,7 @@ func TestGetSellerOrdersByUserID(t *testing.T) {
 	}
 }
 
-// ==================== GetCart ====================
-
-func TestGetCart(t *testing.T) {
+func TestOrderService_GetCart(t *testing.T) {
 	ctx := context.Background()
 
 	olderDraft := m.Order{
@@ -405,9 +398,14 @@ func TestGetCart(t *testing.T) {
 	}
 }
 
-// ==================== AddItemToCart ====================
+func TestOrderService_AddItemToCart(t *testing.T) {
+	t.Run("seller is forbidden", func(t *testing.T) {
+		svc, _, _, _, _, _ := newOrderService(gomock.NewController(t))
 
-func TestAddItemToCart(t *testing.T) {
+		err := svc.AddItemToCart(context.Background(), testActor(someID, m.RoleSeller), someProductID, 1)
+
+		assertError(t, err, service.ErrPermissionDenied)
+	})
 	ctx := context.Background()
 
 	quantity := 2
@@ -553,9 +551,7 @@ func TestAddItemToCart(t *testing.T) {
 	}
 }
 
-// ==================== ChangeQuantityCartItem ====================
-
-func TestChangeQuantityCartItem(t *testing.T) {
+func TestOrderService_ChangeQuantityCartItem(t *testing.T) {
 	ctx := context.Background()
 
 	newQuantity := 3
@@ -656,9 +652,7 @@ func TestChangeQuantityCartItem(t *testing.T) {
 	}
 }
 
-// ==================== DeleteCartItem ====================
-
-func TestDeleteCartItem(t *testing.T) {
+func TestOrderService_DeleteCartItem(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -711,9 +705,7 @@ func TestDeleteCartItem(t *testing.T) {
 	}
 }
 
-// ==================== Checkout ====================
-
-func TestCheckout(t *testing.T) {
+func TestOrderService_Checkout(t *testing.T) {
 	ctx := context.Background()
 
 	product1 := m.Product{ID: 200, SellerID: 10, Price: decimal.NewFromFloat(50.00), StockQuantity: 10}
@@ -955,11 +947,14 @@ func TestCheckout(t *testing.T) {
 	}
 }
 
-// ==================== PayOrder ====================
+func TestOrderService_PayOrder(t *testing.T) {
+	t.Run("admin is forbidden", func(t *testing.T) {
+		svc, _, _, _, _, _ := newOrderService(gomock.NewController(t))
 
-func TestPayOrder(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, orderMock, _, _, _, _ := newOrderService(ctrl)
+		err := svc.PayOrder(context.Background(), testActor(someID, m.RoleAdmin), someOrderID)
+
+		assertError(t, err, service.ErrPermissionDenied)
+	})
 	ctx := context.Background()
 
 	pendingOrder := someOrder // StatusPending, UserID = someID
@@ -1020,6 +1015,9 @@ func TestPayOrder(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, orderMock, _, _, _, _ := newOrderService(ctrl)
+
 			orderMock.EXPECT().GetOrderByID(ctx, someOrderID).Return(tCase.MockGet.Order, tCase.MockGet.Error)
 
 			if tCase.MockUpdateStatus != nil {
@@ -1033,13 +1031,17 @@ func TestPayOrder(t *testing.T) {
 	}
 }
 
-// ==================== CancelOrder ====================
+func TestOrderService_CancelOrder(t *testing.T) {
+	t.Run("seller is forbidden", func(t *testing.T) {
+		svc, _, _, _, _, _ := newOrderService(gomock.NewController(t))
 
-func TestCancelOrder(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, orderMock, itemMock, productMock, _, _ := newOrderService(ctrl)
+		err := svc.CancelOrder(context.Background(), testActor(someID, m.RoleSeller), someOrderID)
+
+		assertError(t, err, service.ErrPermissionDenied)
+	})
 	ctx := context.Background()
 
+	draftOrder := m.Order{ID: someOrderID, UserID: someID, Status: m.StatusDraft}
 	pendingOrder := someOrder
 	paidOrder := m.Order{ID: someOrderID, UserID: someID, Status: m.StatusPaid}
 	shippedOrder := m.Order{ID: someOrderID, UserID: someID, Status: m.StatusShipped}
@@ -1093,6 +1095,11 @@ func TestCancelOrder(t *testing.T) {
 			ExpectedErr: service.ErrNotYourOrder,
 		},
 		{
+			Description: "Cannot cancel draft",
+			MockGet:     MockOrderReturn{Order: draftOrder},
+			ExpectedErr: service.ErrOrderStatusInvalid,
+		},
+		{
 			Description: "Cannot cancel shipped",
 			MockGet:     MockOrderReturn{Order: shippedOrder},
 			ExpectedErr: service.ErrOrderStatusInvalid,
@@ -1125,20 +1132,25 @@ func TestCancelOrder(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
-			orderMock.EXPECT().GetOrderByID(ctx, someOrderID).Return(tCase.MockGet.Order, tCase.MockGet.Error)
+			ctrl := gomock.NewController(t)
+			svc, orderMock, itemMock, productMock, _, _ := newOrderService(ctrl)
+
+			calls := []any{orderMock.EXPECT().GetOrderByID(ctx, someOrderID).Return(tCase.MockGet.Order, tCase.MockGet.Error)}
 
 			if tCase.MockGetItems {
-				itemMock.EXPECT().GetOrderItemsByOrderID(ctx, someOrderID).Return(cancelItems, nil)
+				calls = append(calls, itemMock.EXPECT().GetOrderItemsByOrderID(ctx, someOrderID).Return(cancelItems, nil))
 			}
 			if tCase.MockUpdateStatus != nil {
-				orderMock.EXPECT().UpdateOrderStatus(ctx, someOrderID, gomock.Any(), m.StatusCancelled).Return(*tCase.MockUpdateStatus)
+				calls = append(calls, orderMock.EXPECT().UpdateOrderStatus(ctx, someOrderID,
+					[]m.OrderStatus{m.StatusPending, m.StatusPaid}, m.StatusCancelled).Return(*tCase.MockUpdateStatus))
 			}
 			if tCase.MockLock {
-				productMock.EXPECT().GetProductByIDForUpdate(ctx, someProductID).Return(m.Product{}, nil)
+				calls = append(calls, productMock.EXPECT().GetProductByIDForUpdate(ctx, someProductID).Return(m.Product{}, nil))
 			}
 			if tCase.MockRelease {
-				productMock.EXPECT().ChangeStockAndReserved(ctx, someProductID, 0, -cancelItems[0].Quantity).Return(nil)
+				calls = append(calls, productMock.EXPECT().ChangeStockAndReserved(ctx, someProductID, 0, -cancelItems[0].Quantity).Return(nil))
 			}
+			gomock.InOrder(calls...)
 
 			err := svc.CancelOrder(ctx, testActor(someID, m.RoleBuyer), someOrderID)
 			assertError(t, err, tCase.ExpectedErr)
@@ -1146,41 +1158,157 @@ func TestCancelOrder(t *testing.T) {
 	}
 }
 
-func TestCancelOrderLockFires(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, orderMock, itemMock, productMock, _, _ := newOrderService(ctrl)
-	ctx := context.Background()
+type txManagerFunc func(context.Context, func(context.Context) error) error
 
-	pendingOrder := someOrder
-	cancelItems := []m.OrderItem{
-		{ID: 1, OrderID: someOrderID, ProductID: someProductID, Quantity: 3},
-	}
-
-	orderMock.EXPECT().GetOrderByID(ctx, someOrderID).Return(pendingOrder, nil)
-	itemMock.EXPECT().GetOrderItemsByOrderID(ctx, someOrderID).Return(cancelItems, nil)
-	orderMock.EXPECT().UpdateOrderStatus(ctx, someOrderID, gomock.Any(), m.StatusCancelled).Return(nil)
-	// lock must fire for the product ID before the stock is released
-	productMock.EXPECT().GetProductByIDForUpdate(ctx, someProductID).Return(m.Product{}, nil)
-	productMock.EXPECT().ChangeStockAndReserved(ctx, someProductID, 0, -cancelItems[0].Quantity).Return(nil)
-
-	err := svc.CancelOrder(ctx, testActor(someID, m.RoleBuyer), someOrderID)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+func (f txManagerFunc) WithTransaction(ctx context.Context, callback func(context.Context) error) error {
+	return f(ctx, callback)
 }
 
-// ==================== ShipOrder ====================
+func TestOrderService_ExpireOrders(t *testing.T) {
+	ctx := context.Background()
+	deadline := someTime.Add(-15 * time.Minute)
+	order := someOrder
+	smallID, largeID := int64(10), int64(30)
+	products := map[int64]m.Product{
+		smallID: newProductBuilder().withID(smallID).withStock(10, 3).build(),
+		largeID: newProductBuilder().withID(largeID).withStock(10, 5).build(),
+	}
+	items := []m.OrderItem{
+		{ID: 1, OrderID: order.ID, ProductID: largeID, Quantity: 2},
+		{ID: 2, OrderID: order.ID, ProductID: smallID, Quantity: 3},
+	}
+	tests := []struct {
+		name         string
+		empty        bool
+		selectionErr error
+		itemsErr     error
+		statusErr    error
+		lockErr      error
+		releaseErr   error
+		wantErr      error
+		wantDetails  *service.ExpireOrderError
+	}{
+		{name: "no expired orders", empty: true},
+		{name: "cancels order and releases reservations after sorted locks"},
+		{name: "concurrent payment skips order", statusErr: service.ErrNotFound},
+		{name: "selection failure", selectionErr: errors.New("query failed"), wantErr: service.ErrGetOrdersByUserID},
+		{name: "item lookup failure", itemsErr: errors.New("query failed"), wantErr: service.ErrGetOrderItemsByOrderID, wantDetails: &service.ExpireOrderError{OrderID: order.ID, Stage: service.ExpireStageGetItems}},
+		{name: "status update failure", statusErr: errors.New("update failed"), wantErr: service.ErrUpdateOrder, wantDetails: &service.ExpireOrderError{OrderID: order.ID, Stage: service.ExpireStageUpdateStatus}},
+		{name: "locked product not found", lockErr: service.ErrNotFound, wantErr: service.ErrProductNotFound, wantDetails: &service.ExpireOrderError{OrderID: order.ID, ProductID: smallID, Stage: service.ExpireStageLockProduct}},
+		{name: "product lock failure", lockErr: errors.New("lock failed"), wantErr: service.ErrGetProductByID, wantDetails: &service.ExpireOrderError{OrderID: order.ID, ProductID: smallID, Stage: service.ExpireStageLockProduct}},
+		{name: "release product not found", releaseErr: service.ErrNotFound, wantErr: service.ErrProductNotFound, wantDetails: &service.ExpireOrderError{OrderID: order.ID, ProductID: largeID, Quantity: 2, ReservedQuantity: 5, Stage: service.ExpireStageReleaseStock}},
+		{name: "reservation invariant failure", releaseErr: service.ErrStockInvariantViolated, wantErr: service.ErrInsufficientStock, wantDetails: &service.ExpireOrderError{OrderID: order.ID, ProductID: largeID, Quantity: 2, ReservedQuantity: 5, Stage: service.ExpireStageReleaseStock}},
+		{name: "reservation release failure", releaseErr: errors.New("update failed"), wantErr: service.ErrChangeStockAndReserved, wantDetails: &service.ExpireOrderError{OrderID: order.ID, ProductID: largeID, Quantity: 2, ReservedQuantity: 5, Stage: service.ExpireStageReleaseStock}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, orders, orderItems, productRepo, _, _ := newOrderService(gomock.NewController(t))
+			found := []m.Order{order}
+			if tc.empty {
+				found = nil
+			}
+			calls := []any{orders.EXPECT().GetExpiredPendingOrders(ctx, deadline).Return(found, tc.selectionErr)}
+			if !tc.empty && tc.selectionErr == nil {
+				calls = append(calls, orderItems.EXPECT().GetOrderItemsByOrderID(ctx, order.ID).Return(items, tc.itemsErr))
+				if tc.itemsErr == nil {
+					calls = append(calls, orders.EXPECT().UpdateOrderStatus(ctx, order.ID, []m.OrderStatus{m.StatusPending}, m.StatusCancelled).Return(tc.statusErr))
+					if tc.statusErr == nil {
+						calls = append(calls, productRepo.EXPECT().GetProductByIDForUpdate(ctx, smallID).Return(products[smallID], tc.lockErr))
+						if tc.lockErr == nil {
+							calls = append(calls, productRepo.EXPECT().GetProductByIDForUpdate(ctx, largeID).Return(products[largeID], nil))
+							calls = append(calls, productRepo.EXPECT().ChangeStockAndReserved(ctx, largeID, 0, -2).Return(tc.releaseErr))
+							if tc.releaseErr == nil {
+								calls = append(calls, productRepo.EXPECT().ChangeStockAndReserved(ctx, smallID, 0, -3).Return(nil))
+							}
+						}
+					}
+				}
+			}
+			gomock.InOrder(calls...)
 
-func TestShipOrder(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, orderMock, itemMock, productMock, sellerMock, _ := newOrderService(ctrl)
+			err := svc.ExpireOrders(ctx, deadline)
+
+			assertError(t, err, tc.wantErr)
+			if tc.wantDetails != nil {
+				var details *service.ExpireOrderError
+				if !errors.As(err, &details) {
+					t.Fatalf("expected structured expiration error, got %v", err)
+				}
+				got, want := *details, *tc.wantDetails
+				got.Cause = nil
+				if got != want {
+					t.Fatalf("unexpected error details: got %+v, want %+v", got, want)
+				}
+			}
+		})
+	}
+	t.Run("transaction failure retains order context", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		orders := mock_service.NewMockOrderRepo(ctrl)
+		orderItems := mock_service.NewMockOrderItemRepo(ctrl)
+		failure := errors.New("transaction unavailable")
+		tx := txManagerFunc(func(context.Context, func(context.Context) error) error { return failure })
+		svc := service.NewOrderService(orders, orderItems, mock_service.NewMockProductRepo(ctrl), mock_service.NewMockAddressRepo(ctrl), mock_service.NewMockSellerGetter(ctrl), tx)
+		orders.EXPECT().GetExpiredPendingOrders(ctx, deadline).Return([]m.Order{order}, nil)
+		orderItems.EXPECT().GetOrderItemsByOrderID(ctx, order.ID).Return(items, nil)
+
+		err := svc.ExpireOrders(ctx, deadline)
+
+		assertError(t, err, failure)
+		var details *service.ExpireOrderError
+		if !errors.As(err, &details) || details.OrderID != order.ID || details.Stage != "tx" {
+			t.Fatalf("unexpected transaction error context: %+v", details)
+		}
+	})
+	t.Run("continues after failures and joins errors", func(t *testing.T) {
+		svc, orders, orderItems, productRepo, _, _ := newOrderService(gomock.NewController(t))
+		failedItemsOrder, failedStatusOrder, successfulOrder := someOrder, someOrder, someOrder
+		failedItemsOrder.ID, failedStatusOrder.ID, successfulOrder.ID = 1, 2, 3
+		gomock.InOrder(
+			orders.EXPECT().GetExpiredPendingOrders(ctx, deadline).Return([]m.Order{failedItemsOrder, failedStatusOrder, successfulOrder}, nil),
+			orderItems.EXPECT().GetOrderItemsByOrderID(ctx, failedItemsOrder.ID).Return(nil, errors.New("items unavailable")),
+			orderItems.EXPECT().GetOrderItemsByOrderID(ctx, failedStatusOrder.ID).Return(items[:1], nil),
+			orders.EXPECT().UpdateOrderStatus(ctx, failedStatusOrder.ID, []m.OrderStatus{m.StatusPending}, m.StatusCancelled).Return(errors.New("status unavailable")),
+			orderItems.EXPECT().GetOrderItemsByOrderID(ctx, successfulOrder.ID).Return(items[:1], nil),
+			orders.EXPECT().UpdateOrderStatus(ctx, successfulOrder.ID, []m.OrderStatus{m.StatusPending}, m.StatusCancelled).Return(nil),
+			productRepo.EXPECT().GetProductByIDForUpdate(ctx, largeID).Return(products[largeID], nil),
+			productRepo.EXPECT().ChangeStockAndReserved(ctx, largeID, 0, -2).Return(nil),
+		)
+
+		err := svc.ExpireOrders(ctx, deadline)
+
+		assertError(t, err, service.ErrGetOrderItemsByOrderID)
+		assertError(t, err, service.ErrUpdateOrder)
+		var joined interface{ Unwrap() []error }
+		if !errors.As(err, &joined) || len(joined.Unwrap()) != 2 {
+			t.Fatalf("expected two accumulated failures, got %v", err)
+		}
+		for i, failure := range joined.Unwrap() {
+			var details *service.ExpireOrderError
+			if !errors.As(failure, &details) || details.OrderID != int64(i+1) {
+				t.Fatalf("unexpected failure context: %+v", details)
+			}
+		}
+	})
+}
+
+func TestOrderService_ShipOrder(t *testing.T) {
+	t.Run("buyer is forbidden", func(t *testing.T) {
+		svc, _, _, _, _, _ := newOrderService(gomock.NewController(t))
+
+		err := svc.ShipOrder(context.Background(), testActor(someID, m.RoleBuyer), someOrderID)
+
+		assertError(t, err, service.ErrPermissionDenied)
+	})
 	ctx := context.Background()
 
 	seller := m.Seller{ID: someSellerID, UserID: someID}
+	draftOrder := m.Order{ID: someOrderID, UserID: otherUserID, SellerID: &someSellerID, Status: m.StatusDraft}
 	paidOrderWithSeller := m.Order{ID: someOrderID, UserID: otherUserID, SellerID: &someSellerID, Status: m.StatusPaid}
 	pendingOrder := m.Order{ID: someOrderID, UserID: otherUserID, SellerID: &someSellerID, Status: m.StatusPending}
 	alreadyShippedOrder := m.Order{ID: someOrderID, UserID: otherUserID, SellerID: &someSellerID, Status: m.StatusShipped}
 	deliveredOrder := m.Order{ID: someOrderID, UserID: otherUserID, SellerID: &someSellerID, Status: m.StatusDelivered}
+	cancelledOrder := m.Order{ID: someOrderID, UserID: otherUserID, SellerID: &someSellerID, Status: m.StatusCancelled}
 	otherSellerID := int64(999)
 	otherSellersOrder := m.Order{ID: someOrderID, UserID: otherUserID, SellerID: &otherSellerID, Status: m.StatusPaid}
 	orderNoSeller := m.Order{ID: someOrderID, UserID: otherUserID, SellerID: nil, Status: m.StatusPaid}
@@ -1244,6 +1372,12 @@ func TestShipOrder(t *testing.T) {
 			ExpectedErr: service.ErrNotYourOrder,
 		},
 		{
+			Description: "Wrong status - draft",
+			MockSeller:  &MockSellerReturn{Seller: seller},
+			MockGet:     &MockOrderReturn{Order: draftOrder},
+			ExpectedErr: service.ErrOrderStatusInvalid,
+		},
+		{
 			Description: "Wrong status - pending",
 			MockSeller:  &MockSellerReturn{Seller: seller},
 			MockGet:     &MockOrderReturn{Order: pendingOrder},
@@ -1259,6 +1393,12 @@ func TestShipOrder(t *testing.T) {
 			Description: "Wrong status - delivered",
 			MockSeller:  &MockSellerReturn{Seller: seller},
 			MockGet:     &MockOrderReturn{Order: deliveredOrder},
+			ExpectedErr: service.ErrOrderStatusInvalid,
+		},
+		{
+			Description: "Wrong status - cancelled",
+			MockSeller:  &MockSellerReturn{Seller: seller},
+			MockGet:     &MockOrderReturn{Order: cancelledOrder},
 			ExpectedErr: service.ErrOrderStatusInvalid,
 		},
 		{
@@ -1279,6 +1419,9 @@ func TestShipOrder(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, orderMock, itemMock, productMock, sellerMock, _ := newOrderService(ctrl)
+
 			if tCase.MockSeller != nil {
 				sellerMock.EXPECT().GetSellerByUserID(ctx, someID).Return(tCase.MockSeller.Seller, tCase.MockSeller.Error)
 			}
@@ -1286,7 +1429,8 @@ func TestShipOrder(t *testing.T) {
 				orderMock.EXPECT().GetOrderByID(ctx, someOrderID).Return(tCase.MockGet.Order, tCase.MockGet.Error)
 			}
 			if tCase.MockUpdateStatus != nil {
-				orderMock.EXPECT().UpdateOrderStatus(ctx, someOrderID, gomock.Any(), m.StatusShipped).Return(*tCase.MockUpdateStatus)
+				orderMock.EXPECT().UpdateOrderStatus(ctx, someOrderID, []m.OrderStatus{m.StatusPaid}, m.StatusShipped).
+					Return(*tCase.MockUpdateStatus)
 			}
 			if tCase.MockItems {
 				itemMock.EXPECT().GetOrderItemsByOrderID(ctx, someOrderID).Return(someOrderItems, nil)
@@ -1304,11 +1448,7 @@ func TestShipOrder(t *testing.T) {
 	}
 }
 
-// ==================== DeliverOrder ====================
-
-func TestDeliverOrder(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, orderMock, _, _, sellerMock, _ := newOrderService(ctrl)
+func TestOrderService_DeliverOrder(t *testing.T) {
 	ctx := context.Background()
 
 	seller := m.Seller{ID: someSellerID, UserID: someID}
@@ -1405,6 +1545,9 @@ func TestDeliverOrder(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, orderMock, _, _, sellerMock, _ := newOrderService(ctrl)
+
 			if tCase.MockSeller != nil {
 				sellerMock.EXPECT().GetSellerByUserID(ctx, someID).Return(tCase.MockSeller.Seller, tCase.MockSeller.Error)
 			}

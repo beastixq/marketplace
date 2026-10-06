@@ -98,6 +98,24 @@
 
 **Альтернативный поток (шаг 4):** Если покупатель уже оставлял отзыв на этот товар, система отклоняет повторную попытку и предлагает отредактировать существующий отзыв.
 
+## Жизненный цикл заказа
+
+![Переходы статусов заказа](diagrams/out/OrderLifecycle.svg)
+
+Диаграмма отражает переходы из `orderTransitionRules` в
+`internal/service/order_state.go`. Переходы выполняют методы `OrderService`;
+платёжный callback обрабатывает `PaymentService.ProcessOrderPayment`.
+Повторный callback для `paid` или `cancelled` не меняет статус.
+
+[Исходник PlantUML](diagrams/src/OrderLifecycle.puml) ·
+[Правила, резервы товаров и разделение корзины](docs/order-lifecycle.md)
+
+Перегенерация SVG и PNG с локальным `plantuml.jar`:
+
+```bash
+make diagrams/out/OrderLifecycle.svg diagrams/out/OrderLifecycle.png
+```
+
 ## BPMN-диаграммы
 
 ### Оформление заказа

@@ -34,9 +34,7 @@ func assertCategory(t *testing.T, got, want m.Category) {
 	}
 }
 
-func TestGetCategories(t *testing.T) {
-	mock := mock_service.NewMockCategoryRepo(gomock.NewController(t))
-	svc := service.NewCategoryService(mock)
+func TestCategoryService_GetCategories(t *testing.T) {
 	ctx := context.Background()
 
 	categories := []m.Category{someCategory}
@@ -72,6 +70,9 @@ func TestGetCategories(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockCategoryRepo(gomock.NewController(t))
+			svc := service.NewCategoryService(mock)
+
 			mock.EXPECT().GetCategories(ctx, tCase.Opts).Return(tCase.MockCategories, tCase.MockError)
 			cats, err := svc.GetCategories(ctx, tCase.Opts)
 			assertError(t, err, tCase.ExpectedErr)
@@ -82,9 +83,7 @@ func TestGetCategories(t *testing.T) {
 	}
 }
 
-func TestGetCategoryByID(t *testing.T) {
-	mock := mock_service.NewMockCategoryRepo(gomock.NewController(t))
-	svc := service.NewCategoryService(mock)
+func TestCategoryService_GetCategoryByID(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -118,6 +117,9 @@ func TestGetCategoryByID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockCategoryRepo(gomock.NewController(t))
+			svc := service.NewCategoryService(mock)
+
 			mock.EXPECT().GetCategoryByID(ctx, tCase.CategoryID).Return(tCase.MockReturn.Category, tCase.MockReturn.Error)
 			cat, err := svc.GetCategoryByID(ctx, tCase.CategoryID)
 			assertError(t, err, tCase.ExpectedErr)
@@ -126,9 +128,14 @@ func TestGetCategoryByID(t *testing.T) {
 	}
 }
 
-func TestCreateCategory(t *testing.T) {
-	mock := mock_service.NewMockCategoryRepo(gomock.NewController(t))
-	svc := service.NewCategoryService(mock)
+func TestCategoryService_CreateCategory(t *testing.T) {
+	t.Run("seller is forbidden", func(t *testing.T) {
+		svc := service.NewCategoryService(mock_service.NewMockCategoryRepo(gomock.NewController(t)))
+
+		_, err := svc.CreateCategory(context.Background(), testActor(someID, m.RoleSeller), m.CategoryCreate{Name: "Electronics"})
+
+		assertError(t, err, service.ErrPermissionDenied)
+	})
 	ctx := context.Background()
 
 	someCategoryCreate := m.CategoryCreate{
@@ -162,6 +169,9 @@ func TestCreateCategory(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockCategoryRepo(gomock.NewController(t))
+			svc := service.NewCategoryService(mock)
+
 			mock.EXPECT().CreateCategory(ctx, tCase.Create).Return(tCase.MockReturn.ID, tCase.MockReturn.Error)
 			id, err := svc.CreateCategory(ctx, testActor(someID, m.RoleAdmin), tCase.Create)
 			assertError(t, err, tCase.ExpectedErr)
@@ -172,9 +182,7 @@ func TestCreateCategory(t *testing.T) {
 	}
 }
 
-func TestUpdateCategory(t *testing.T) {
-	mock := mock_service.NewMockCategoryRepo(gomock.NewController(t))
-	svc := service.NewCategoryService(mock)
+func TestCategoryService_UpdateCategory(t *testing.T) {
 	ctx := context.Background()
 
 	newName := "Tablets"
@@ -217,6 +225,9 @@ func TestUpdateCategory(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockCategoryRepo(gomock.NewController(t))
+			svc := service.NewCategoryService(mock)
+
 			mock.EXPECT().UpdateCategory(ctx, tCase.CategoryID, tCase.Update).Return(tCase.MockReturn.Category, tCase.MockReturn.Error)
 			cat, err := svc.UpdateCategory(ctx, testActor(someID, m.RoleAdmin), tCase.CategoryID, tCase.Update)
 			assertError(t, err, tCase.ExpectedErr)
@@ -225,9 +236,7 @@ func TestUpdateCategory(t *testing.T) {
 	}
 }
 
-func TestDeleteCategoryByID(t *testing.T) {
-	mock := mock_service.NewMockCategoryRepo(gomock.NewController(t))
-	svc := service.NewCategoryService(mock)
+func TestCategoryService_DeleteCategoryByID(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -252,6 +261,9 @@ func TestDeleteCategoryByID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockCategoryRepo(gomock.NewController(t))
+			svc := service.NewCategoryService(mock)
+
 			mock.EXPECT().DeleteCategoryByID(ctx, tCase.CategoryID).Return(tCase.MockError)
 			err := svc.DeleteCategoryByID(ctx, testActor(someID, m.RoleAdmin), tCase.CategoryID)
 			assertError(t, err, tCase.ExpectedErr)

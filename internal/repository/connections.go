@@ -5,7 +5,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type DBTX interface {
@@ -14,9 +13,16 @@ type DBTX interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-func getConn(ctx context.Context, pool *pgxpool.Pool) DBTX {
+// Database is the minimal PostgreSQL connection contract used by repository
+// implementations. Both pgxpool.Pool and pgxmock pools satisfy it.
+type Database interface {
+	DBTX
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
+func getConn(ctx context.Context, db DBTX) DBTX {
 	if tx, ok := GetTxFromCtx(ctx); ok {
 		return tx
 	}
-	return pool
+	return db
 }

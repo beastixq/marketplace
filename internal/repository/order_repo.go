@@ -11,14 +11,13 @@ import (
 	"github.com/beastixq/marketplace/internal/service"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type OrderRepoImpl struct {
-	pool *pgxpool.Pool
+	pool Database
 }
 
-func NewOrderRepo(pool *pgxpool.Pool) OrderRepoImpl {
+func NewOrderRepo(pool Database) OrderRepoImpl {
 	return OrderRepoImpl{pool: pool}
 }
 

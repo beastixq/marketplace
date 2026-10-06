@@ -26,9 +26,7 @@ func newAuthService(ctrl *gomock.Controller) (service.AuthService, *mock_service
 	return svc, userMock, blMock
 }
 
-func TestRegister(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, userMock, _ := newAuthService(ctrl)
+func TestAuthService_Register(t *testing.T) {
 	ctx := context.Background()
 
 	userCreate := m.UserCreate{
@@ -86,6 +84,9 @@ func TestRegister(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, userMock, _ := newAuthService(ctrl)
+
 			userMock.EXPECT().CreateUser(ctx, tCase.Create).Return(tCase.MockCreate.ID, tCase.MockCreate.Error)
 			if tCase.MockGetByID != nil {
 				userMock.EXPECT().GetAuthUserByID(ctx, someID).Return(tCase.MockGetByID.User, tCase.MockGetByID.Error)
@@ -102,9 +103,7 @@ func TestRegister(t *testing.T) {
 	}
 }
 
-func TestAuthLogin(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, userMock, _ := newAuthService(ctrl)
+func TestAuthService_Login(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -159,6 +158,9 @@ func TestAuthLogin(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, userMock, _ := newAuthService(ctrl)
+
 			userMock.EXPECT().GetAuthUserByEmail(ctx, tCase.Email).Return(tCase.MockReturn.User, tCase.MockReturn.Error)
 
 			token, err := svc.Login(ctx, tCase.Email, tCase.Password)
@@ -172,9 +174,7 @@ func TestAuthLogin(t *testing.T) {
 	}
 }
 
-func TestLogout(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, _, blMock := newAuthService(ctrl)
+func TestAuthService_Logout(t *testing.T) {
 	ctx := context.Background()
 
 	validJTI := uuid.New()
@@ -219,6 +219,9 @@ func TestLogout(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, _, blMock := newAuthService(ctrl)
+
 			if tCase.MockAddError != nil {
 				expectedTTL := time.Until(tCase.Claims.Exp)
 				blMock.EXPECT().Add(ctx, tCase.Claims.JTI.String(), approxDuration{expected: expectedTTL, tolerance: 5 * time.Second}).Return(*tCase.MockAddError)
@@ -229,9 +232,7 @@ func TestLogout(t *testing.T) {
 	}
 }
 
-func TestValidateToken(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	svc, userMock, blMock := newAuthService(ctrl)
+func TestAuthService_ValidateToken(t *testing.T) {
 	ctx := context.Background()
 
 	makeToken := func(claims jwt.MapClaims, secret string, method jwt.SigningMethod) string {
@@ -347,6 +348,9 @@ func TestValidateToken(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc, userMock, blMock := newAuthService(ctrl)
+
 			if tCase.MockContains != nil {
 				blMock.EXPECT().Contains(ctx, tCase.ExpectedJTI).Return(*tCase.MockContains, nil)
 			} else if tCase.MockContainsErr != nil {

@@ -12,14 +12,13 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type ReviewRepoImpl struct {
-	pool *pgxpool.Pool
+	pool Database
 }
 
-func NewReviewRepo(pool *pgxpool.Pool) ReviewRepoImpl {
+func NewReviewRepo(pool Database) ReviewRepoImpl {
 	return ReviewRepoImpl{pool: pool}
 }
 

@@ -1,0 +1,36 @@
+@startuml OrderLifecycle
+title Жизненный цикл заказа
+
+hide empty description
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam ArrowColor #475569
+skinparam ArrowFontColor #334155
+skinparam defaultFontName SansSerif
+skinparam state {
+    BackgroundColor #EFF6FF
+    BorderColor #60A5FA
+    FontColor #0F172A
+}
+
+state "draft\nКорзина" as draft
+state "pending\nОжидает оплаты" as pending
+state "paid\nОплачен" as paid
+state "shipped\nОтправлен" as shipped
+state "delivered\nДоставлен" as delivered #DCFCE7
+state "cancelled\nОтменён" as cancelled #FEE2E2
+
+draft --> pending : Checkout\nПокупатель
+pending --> paid : ProcessOrderPayment / PayOrder\nОплата
+paid --> shipped : ShipOrder\nПродавец
+shipped --> delivered : DeliverOrder\nПродавец
+
+pending --> cancelled : CancelOrder\nПокупатель-владелец / администратор
+paid --> cancelled : CancelOrder\nПокупатель-владелец / администратор
+pending --> cancelled : ExpireOrders\nИстёк срок оплаты
+
+legend bottom
+  Отмена разрешена только из pending и paid.
+  delivered и cancelled — конечные статусы.
+endlegend
+@enduml

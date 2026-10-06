@@ -13,14 +13,13 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type ProductRepoImpl struct {
-	pool *pgxpool.Pool
+	pool Database
 }
 
-func NewProductRepo(pool *pgxpool.Pool) ProductRepoImpl {
+func NewProductRepo(pool Database) ProductRepoImpl {
 	return ProductRepoImpl{pool: pool}
 }
 

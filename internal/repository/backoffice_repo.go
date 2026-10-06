@@ -6,15 +6,13 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	m "github.com/beastixq/marketplace/internal/model"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type BackofficeRepoImpl struct {
-	pool *pgxpool.Pool
+	pool Database
 }
 
-func NewBackofficeRepo(pool *pgxpool.Pool) BackofficeRepoImpl {
+func NewBackofficeRepo(pool Database) BackofficeRepoImpl {
 	return BackofficeRepoImpl{pool: pool}
 }
 

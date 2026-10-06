@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type txKeyType struct{}
@@ -21,10 +20,10 @@ func SetTxCtx(ctx context.Context, tx pgx.Tx) context.Context {
 }
 
 type PgxTxManager struct {
-	pool *pgxpool.Pool
+	pool Database
 }
 
-func NewPgxTxManager(pool *pgxpool.Pool) PgxTxManager {
+func NewPgxTxManager(pool Database) PgxTxManager {
 	return PgxTxManager{pool: pool}
 }
 

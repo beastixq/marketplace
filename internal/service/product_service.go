@@ -21,6 +21,7 @@ type ProductRepo interface {
 	DeleteProductByID(ctx context.Context, id int64) (err error)
 }
 
+//go:generate mockgen -package mock_service -destination ../mocks/service/mock_product_category_repo.go github.com/beastixq/marketplace/internal/service ProductCategoryRepo
 type ProductCategoryRepo interface {
 	GetProductCategories(ctx context.Context, productID int64) ([]m.Category, error)
 	ReplaceProductCategories(ctx context.Context, productID int64, categoryIDs []int64) error

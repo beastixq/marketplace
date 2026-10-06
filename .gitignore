@@ -7,9 +7,15 @@ requests.http
 .vscode
 problems.md
 prompts/
-internal/mocks
 reviews/
 caveman/
+
+# Generated test reports.
+artifacts/
+
+# Project documentation is tracked even if a user has a global docs/ ignore.
+!docs/
+!docs/*.md
 dist/
 logs/
 __pycache__/

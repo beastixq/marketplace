@@ -39,15 +39,16 @@ Common causes:
 
 For coursework/dev databases, recreating the Docker volume may be acceptable, but do not do this against shared or production data.
 
-## Repository Tests Are Skipped
+## Repository Integration Tests Do Not Run
 
-`internal/repository/testmain_test.go` skips repository integration tests when `DATABASE_URL` is unset.
+Default `go test` runs repository unit tests. Real PostgreSQL tests require the
+`integration` build tag and `DATABASE_URL`; the Make target checks the variable.
 
 Set it before running repository tests:
 
 ```bash
 export DATABASE_URL='postgres://postgres:postgres@localhost:5432/marketplace?sslmode=disable'
-go test ./internal/repository
+make test-repository-integration
 ```
 
 ## Go Build Cache Permission Errors

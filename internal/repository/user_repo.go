@@ -9,14 +9,13 @@ import (
 	m "github.com/beastixq/marketplace/internal/model"
 	"github.com/beastixq/marketplace/internal/service"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type UserRepoImpl struct {
-	pool *pgxpool.Pool
+	pool Database
 }
 
-func NewUserRepo(pool *pgxpool.Pool) UserRepoImpl {
+func NewUserRepo(pool Database) UserRepoImpl {
 	return UserRepoImpl{pool: pool}
 }
 

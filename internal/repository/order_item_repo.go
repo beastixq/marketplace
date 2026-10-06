@@ -12,14 +12,13 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type OrderItemRepoImpl struct {
-	pool *pgxpool.Pool
+	pool Database
 }
 
-func NewOrderItemRepo(pool *pgxpool.Pool) OrderItemRepoImpl {
+func NewOrderItemRepo(pool Database) OrderItemRepoImpl {
 	return OrderItemRepoImpl{pool: pool}
 }
 

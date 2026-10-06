@@ -9,14 +9,13 @@ import (
 	m "github.com/beastixq/marketplace/internal/model"
 	"github.com/beastixq/marketplace/internal/service"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type CategoryRepoImpl struct {
-	pool *pgxpool.Pool
+	pool Database
 }
 
-func NewCategoryRepo(pool *pgxpool.Pool) CategoryRepoImpl {
+func NewCategoryRepo(pool Database) CategoryRepoImpl {
 	return CategoryRepoImpl{pool: pool}
 }
 

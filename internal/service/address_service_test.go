@@ -42,9 +42,14 @@ func assertAddress(t *testing.T, got, want m.Address) {
 	}
 }
 
-func TestGetAddressesByUserID(t *testing.T) {
-	mock := mock_service.NewMockAddressRepo(gomock.NewController(t))
-	svc := service.NewAddressService(mock)
+func TestAddressService_GetAddressesByUserID(t *testing.T) {
+	t.Run("seller is forbidden", func(t *testing.T) {
+		svc := service.NewAddressService(mock_service.NewMockAddressRepo(gomock.NewController(t)))
+
+		_, err := svc.GetAddressesByUserID(context.Background(), testActor(someID, m.RoleSeller))
+
+		assertError(t, err, service.ErrPermissionDenied)
+	})
 	ctx := context.Background()
 
 	addresses := []m.Address{someAddress}
@@ -79,6 +84,9 @@ func TestGetAddressesByUserID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockAddressRepo(gomock.NewController(t))
+			svc := service.NewAddressService(mock)
+
 			mock.EXPECT().GetAddressesByUserID(ctx, tCase.UserID).Return(tCase.MockReturn.Addresses, tCase.MockReturn.Error)
 			addrs, err := svc.GetAddressesByUserID(ctx, testActor(tCase.UserID, m.RoleBuyer))
 			assertError(t, err, tCase.ExpectedErr)
@@ -89,9 +97,7 @@ func TestGetAddressesByUserID(t *testing.T) {
 	}
 }
 
-func TestCreateAddress(t *testing.T) {
-	mock := mock_service.NewMockAddressRepo(gomock.NewController(t))
-	svc := service.NewAddressService(mock)
+func TestAddressService_CreateAddress(t *testing.T) {
 	ctx := context.Background()
 
 	someAddressCreate := m.AddressCreate{
@@ -128,6 +134,9 @@ func TestCreateAddress(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockAddressRepo(gomock.NewController(t))
+			svc := service.NewAddressService(mock)
+
 			mock.EXPECT().CreateAddress(ctx, tCase.Create).Return(tCase.MockReturn.ID, tCase.MockReturn.Error)
 			id, err := svc.CreateAddress(ctx, testActor(tCase.Create.UserID, m.RoleBuyer), tCase.Create)
 			assertError(t, err, tCase.ExpectedErr)
@@ -138,9 +147,7 @@ func TestCreateAddress(t *testing.T) {
 	}
 }
 
-func TestUpdateAddress(t *testing.T) {
-	mock := mock_service.NewMockAddressRepo(gomock.NewController(t))
-	svc := service.NewAddressService(mock)
+func TestAddressService_UpdateAddress(t *testing.T) {
 	ctx := context.Background()
 
 	newCity := "Saint Petersburg"
@@ -171,7 +178,6 @@ func TestUpdateAddress(t *testing.T) {
 	}
 
 	tCases := []testCase{
-		// positives
 		{
 			Description:     "Success",
 			UserID:          someAddressUserID,
@@ -181,7 +187,7 @@ func TestUpdateAddress(t *testing.T) {
 			MockUpdate:      &MockAddressReturn{Address: updatedAddress},
 			ExpectedAddress: updatedAddress,
 		},
-		// negatives
+
 		{
 			Description: "Address not found",
 			UserID:      someAddressUserID,
@@ -219,6 +225,9 @@ func TestUpdateAddress(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockAddressRepo(gomock.NewController(t))
+			svc := service.NewAddressService(mock)
+
 			mock.EXPECT().GetAddressByID(ctx, tCase.AddressID).Return(tCase.MockGetByID.Address, tCase.MockGetByID.Error)
 			if tCase.MockUpdate != nil {
 				mock.EXPECT().UpdateAddress(ctx, tCase.AddressID, tCase.Update).Return(tCase.MockUpdate.Address, tCase.MockUpdate.Error)
@@ -230,9 +239,7 @@ func TestUpdateAddress(t *testing.T) {
 	}
 }
 
-func TestDeleteAddressByID(t *testing.T) {
-	mock := mock_service.NewMockAddressRepo(gomock.NewController(t))
-	svc := service.NewAddressService(mock)
+func TestAddressService_DeleteAddressByID(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -285,6 +292,9 @@ func TestDeleteAddressByID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockAddressRepo(gomock.NewController(t))
+			svc := service.NewAddressService(mock)
+
 			mock.EXPECT().GetAddressByID(ctx, tCase.AddressID).Return(tCase.MockGetByID.Address, tCase.MockGetByID.Error)
 			if tCase.MockDelete != nil {
 				mock.EXPECT().DeleteAddressByID(ctx, tCase.AddressID).Return(*tCase.MockDelete)

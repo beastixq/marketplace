@@ -11,14 +11,13 @@ import (
 	"github.com/beastixq/marketplace/internal/service"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type SellerRepoImpl struct {
-	pool *pgxpool.Pool
+	pool Database
 }
 
-func NewSellerRepo(pool *pgxpool.Pool) SellerRepoImpl {
+func NewSellerRepo(pool Database) SellerRepoImpl {
 	return SellerRepoImpl{pool: pool}
 }
 

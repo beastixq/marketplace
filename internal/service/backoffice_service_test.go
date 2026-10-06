@@ -42,7 +42,7 @@ func (r *fakeBackofficeRepo) GetSalesByCategory(_ context.Context, opts m.Report
 	return r.salesByCategory, r.err
 }
 
-func TestBackofficeGetAdminOrders(t *testing.T) {
+func TestBackofficeService_GetAdminOrders(t *testing.T) {
 	ctx := context.Background()
 
 	tCases := []struct {
@@ -91,7 +91,7 @@ func TestBackofficeGetAdminOrders(t *testing.T) {
 	}
 }
 
-func TestBackofficeGetPlatformStats(t *testing.T) {
+func TestBackofficeService_GetPlatformStats(t *testing.T) {
 	ctx := context.Background()
 
 	tCases := []struct {
@@ -138,7 +138,7 @@ func TestBackofficeGetPlatformStats(t *testing.T) {
 	}
 }
 
-func TestBackofficeGetOrderDynamics(t *testing.T) {
+func TestBackofficeService_GetOrderDynamics(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 	earlier := now.Add(-24 * time.Hour)
@@ -209,7 +209,7 @@ func TestBackofficeGetOrderDynamics(t *testing.T) {
 	}
 }
 
-func TestBackofficeGetSalesByCategory(t *testing.T) {
+func TestBackofficeService_GetSalesByCategory(t *testing.T) {
 	ctx := context.Background()
 
 	tCases := []struct {

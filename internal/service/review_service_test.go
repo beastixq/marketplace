@@ -45,10 +45,7 @@ func assertReview(t *testing.T, got, want m.Review) {
 	}
 }
 
-func TestGetReviewByID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mock := mock_service.NewMockReviewRepo(ctrl)
-	svc := service.NewReviewService(mock, fakeReviewPurchaseChecker{}, mock_service.NewMockProductRepo(ctrl))
+func TestReviewService_GetReviewByID(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -82,6 +79,10 @@ func TestGetReviewByID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mock := mock_service.NewMockReviewRepo(ctrl)
+			svc := service.NewReviewService(mock, fakeReviewPurchaseChecker{}, mock_service.NewMockProductRepo(ctrl))
+
 			mock.EXPECT().GetReviewByID(ctx, tCase.ReviewID).Return(tCase.MockReturn.Review, tCase.MockReturn.Error)
 			r, err := svc.GetReviewByID(ctx, tCase.ReviewID)
 			assertError(t, err, tCase.ExpectedErr)
@@ -90,10 +91,15 @@ func TestGetReviewByID(t *testing.T) {
 	}
 }
 
-func TestCreateReview(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	reviewMock := mock_service.NewMockReviewRepo(ctrl)
-	productMock := mock_service.NewMockProductRepo(ctrl)
+func TestReviewService_CreateReview(t *testing.T) {
+	t.Run("seller is forbidden", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		svc := service.NewReviewService(mock_service.NewMockReviewRepo(ctrl), fakeReviewPurchaseChecker{}, mock_service.NewMockProductRepo(ctrl))
+
+		_, err := svc.CreateReview(context.Background(), testActor(someID, m.RoleSeller), m.ReviewCreate{ProductID: someProductID, Rating: 5})
+
+		assertError(t, err, service.ErrPermissionDenied)
+	})
 	ctx := context.Background()
 
 	reviewCreate := m.ReviewCreate{
@@ -170,6 +176,10 @@ func TestCreateReview(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			reviewMock := mock_service.NewMockReviewRepo(ctrl)
+			productMock := mock_service.NewMockProductRepo(ctrl)
+
 			svc := service.NewReviewService(reviewMock, fakeReviewPurchaseChecker{
 				purchased: tCase.MockPurchased,
 				err:       tCase.MockPurchaseErr,
@@ -189,10 +199,15 @@ func TestCreateReview(t *testing.T) {
 	}
 }
 
-func TestUpdateReview(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mock := mock_service.NewMockReviewRepo(ctrl)
-	svc := service.NewReviewService(mock, fakeReviewPurchaseChecker{}, mock_service.NewMockProductRepo(ctrl))
+func TestReviewService_UpdateReview(t *testing.T) {
+	t.Run("admin is forbidden", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		svc := service.NewReviewService(mock_service.NewMockReviewRepo(ctrl), fakeReviewPurchaseChecker{}, mock_service.NewMockProductRepo(ctrl))
+
+		_, err := svc.UpdateReview(context.Background(), testActor(someID, m.RoleAdmin), someID, m.ReviewUpdate{})
+
+		assertError(t, err, service.ErrPermissionDenied)
+	})
 	ctx := context.Background()
 
 	newRating := int8(3)
@@ -269,6 +284,10 @@ func TestUpdateReview(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mock := mock_service.NewMockReviewRepo(ctrl)
+			svc := service.NewReviewService(mock, fakeReviewPurchaseChecker{}, mock_service.NewMockProductRepo(ctrl))
+
 			mock.EXPECT().GetReviewByID(ctx, tCase.ReviewID).Return(tCase.MockGet.Review, tCase.MockGet.Error)
 			if tCase.MockUpdate != nil {
 				mock.EXPECT().UpdateReview(ctx, tCase.ReviewID, tCase.Update).Return(tCase.MockUpdate.Review, tCase.MockUpdate.Error)
@@ -280,10 +299,7 @@ func TestUpdateReview(t *testing.T) {
 	}
 }
 
-func TestDeleteReviewByID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mock := mock_service.NewMockReviewRepo(ctrl)
-	svc := service.NewReviewService(mock, fakeReviewPurchaseChecker{}, mock_service.NewMockProductRepo(ctrl))
+func TestReviewService_DeleteReviewByID(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -336,6 +352,10 @@ func TestDeleteReviewByID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mock := mock_service.NewMockReviewRepo(ctrl)
+			svc := service.NewReviewService(mock, fakeReviewPurchaseChecker{}, mock_service.NewMockProductRepo(ctrl))
+
 			mock.EXPECT().GetReviewByID(ctx, tCase.ReviewID).Return(tCase.MockGet.Review, tCase.MockGet.Error)
 			if tCase.MockDelete != nil {
 				mock.EXPECT().DeleteReviewByID(ctx, tCase.ReviewID).Return(*tCase.MockDelete)

@@ -56,7 +56,7 @@ If repository behavior changed, run repository tests with a real database:
 
 ```bash
 export DATABASE_URL='postgres://postgres:postgres@localhost:5432/marketplace?sslmode=disable'
-go test ./internal/repository
+make test-repository-integration
 ```
 
 Check whitespace:

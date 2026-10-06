@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -60,110 +61,145 @@ func assertUser(t *testing.T, got, want m.User) {
 	}
 }
 
-func TestGetUserByID(t *testing.T) {
-	mock := mock_service.NewMockUserRepo(gomock.NewController(t))
-	svc := service.NewUserService(mock, bcrypt.MinCost)
-	ctx := context.Background()
-
-	type testCase struct {
-		Description  string
-		UserID       int64
-		MockReturn   MockUserReturn
-		ExpectedUser m.User
-		ExpectedErr  error
+func assertPasswordHash(t *testing.T, hash, password string) {
+	t.Helper()
+	if hash == password {
+		t.Fatal("repository received plaintext password")
 	}
-
-	tCases := []testCase{
-		// positives
-		{
-			Description:  "Success",
-			UserID:       someID,
-			MockReturn:   MockUserReturn{User: someUser},
-			ExpectedUser: someUser,
-		},
-		// negatives
-		{
-			Description: "User not found",
-			UserID:      123,
-			MockReturn:  MockUserReturn{Error: service.ErrNotFound},
-			ExpectedErr: service.ErrUserNotFound,
-		},
-		{
-			Description: "Repo error",
-			UserID:      999,
-			MockReturn:  MockUserReturn{Error: errors.New("some repo error")},
-			ExpectedErr: service.ErrGetUserByID,
-		},
+	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
+		t.Fatalf("stored hash does not match password: %v", err)
 	}
+}
 
-	for _, tCase := range tCases {
-		t.Run(tCase.Description, func(t *testing.T) {
-			mock.EXPECT().GetUserByID(ctx, tCase.UserID).Return(tCase.MockReturn.User, tCase.MockReturn.Error)
-			user, err := svc.GetUserByID(ctx, testActor(tCase.UserID, m.RoleBuyer), tCase.UserID)
-			assertError(t, err, tCase.ExpectedErr)
-			assertUser(t, user, tCase.ExpectedUser)
+func testUserLookup(t *testing.T, byEmail bool, lookup func(service.UserService) (m.User, error)) {
+	t.Helper()
+	user := buyerMother()
+	wantRepoErr := service.ErrGetUserByID
+	if byEmail {
+		wantRepoErr = service.ErrGetUserByEmail
+	}
+	tests := []struct {
+		name    string
+		result  m.User
+		repoErr error
+		wantErr error
+	}{
+		{name: "success", result: user},
+		{name: "user not found", repoErr: service.ErrNotFound, wantErr: service.ErrUserNotFound},
+		{name: "repository failure", repoErr: errors.New("lookup failed"), wantErr: wantRepoErr},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := mock_service.NewMockUserRepo(gomock.NewController(t))
+			svc := service.NewUserService(repo, bcrypt.MinCost)
+			if byEmail {
+				repo.EXPECT().GetUserByEmail(context.Background(), user.Email).Return(tc.result, tc.repoErr)
+			} else {
+				repo.EXPECT().GetUserByID(context.Background(), user.ID).Return(tc.result, tc.repoErr)
+			}
+
+			got, err := lookup(svc)
+
+			assertError(t, err, tc.wantErr)
+			assertUser(t, got, tc.result)
 		})
 	}
 }
 
-func TestGetUserByEmail(t *testing.T) {
-	mock := mock_service.NewMockUserRepo(gomock.NewController(t))
-	svc := service.NewUserService(mock, bcrypt.MinCost)
+func TestUserService_GetUserByID(t *testing.T) {
+	testUserLookup(t, false, func(svc service.UserService) (m.User, error) {
+		return svc.GetUserByID(context.Background(), testActor(someID, m.RoleBuyer), someID)
+	})
+	t.Run("cannot read another user's account", func(t *testing.T) {
+		repo := mock_service.NewMockUserRepo(gomock.NewController(t))
+		svc := service.NewUserService(repo, bcrypt.MinCost)
+
+		_, err := svc.GetUserByID(context.Background(), testActor(someID, m.RoleBuyer), someID+1)
+
+		assertError(t, err, service.ErrNotYourUser)
+	})
+}
+
+func TestUserService_GetAuthUserByID(t *testing.T) {
+	testUserLookup(t, false, func(svc service.UserService) (m.User, error) {
+		return svc.GetAuthUserByID(context.Background(), someID)
+	})
+}
+
+func TestUserService_GetUserByEmail(t *testing.T) {
+	testUserLookup(t, true, func(svc service.UserService) (m.User, error) {
+		return svc.GetUserByEmail(context.Background(), testActor(someID, m.RoleAdmin), someEmail)
+	})
+	t.Run("non-admin is forbidden", func(t *testing.T) {
+		repo := mock_service.NewMockUserRepo(gomock.NewController(t))
+		svc := service.NewUserService(repo, bcrypt.MinCost)
+
+		_, err := svc.GetUserByEmail(context.Background(), testActor(someID, m.RoleAnalyst), someEmail)
+
+		assertError(t, err, service.ErrPermissionDenied)
+	})
+}
+
+func TestUserService_GetAuthUserByEmail(t *testing.T) {
+	testUserLookup(t, true, func(svc service.UserService) (m.User, error) {
+		return svc.GetAuthUserByEmail(context.Background(), someEmail)
+	})
+}
+
+func TestUserService_GetUsers(t *testing.T) {
+	tests := []struct {
+		name    string
+		role    m.UserRole
+		repoErr error
+		wantErr error
+	}{
+		{name: "admin lists users", role: m.RoleAdmin},
+		{name: "repository failure", role: m.RoleAdmin, repoErr: errors.New("query failed"), wantErr: service.ErrGetUsers},
+		{name: "buyer is forbidden", role: m.RoleBuyer, wantErr: service.ErrPermissionDenied},
+		{name: "analyst is forbidden", role: m.RoleAnalyst, wantErr: service.ErrPermissionDenied},
+	}
 	ctx := context.Background()
+	opts := m.UserListOptions{Pagination: m.PaginationOpts{Page: 2, Limit: 10}}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := mock_service.NewMockUserRepo(gomock.NewController(t))
+			svc := service.NewUserService(repo, bcrypt.MinCost)
+			users := []m.User{buyerMother()}
+			if tc.role == m.RoleAdmin {
+				repo.EXPECT().GetUsers(ctx, opts).Return(users, tc.repoErr)
+			}
 
-	type testCase struct {
-		Description  string
-		Email        string
-		MockReturn   MockUserReturn
-		ExpectedUser m.User
-		ExpectedErr  error
-	}
+			got, err := svc.GetUsers(ctx, testActor(someID, tc.role), opts)
 
-	tCases := []testCase{
-		// positives
-		{
-			Description:  "Success",
-			Email:        someEmail,
-			MockReturn:   MockUserReturn{User: someUser},
-			ExpectedUser: someUser,
-		},
-		// negatives
-		{
-			Description: "User not found",
-			Email:       someEmail,
-			MockReturn:  MockUserReturn{Error: service.ErrNotFound},
-			ExpectedErr: service.ErrUserNotFound,
-		},
-		{
-			Description: "Repo error",
-			Email:       someEmail,
-			MockReturn:  MockUserReturn{Error: errors.New("some repo error")},
-			ExpectedErr: service.ErrGetUserByEmail,
-		},
-	}
-
-	for _, tCase := range tCases {
-		t.Run(tCase.Description, func(t *testing.T) {
-			mock.EXPECT().GetUserByEmail(ctx, tCase.Email).Return(tCase.MockReturn.User, tCase.MockReturn.Error)
-			user, err := svc.GetUserByEmail(ctx, testActor(someID, m.RoleAdmin), tCase.Email)
-			assertError(t, err, tCase.ExpectedErr)
-			assertUser(t, user, tCase.ExpectedUser)
+			assertError(t, err, tc.wantErr)
+			if tc.wantErr == nil && !reflect.DeepEqual(got, users) {
+				t.Fatalf("unexpected users: got %+v, want %+v", got, users)
+			}
 		})
 	}
 }
 
-func TestCreateUser(t *testing.T) {
-	mock := mock_service.NewMockUserRepo(gomock.NewController(t))
-	svc := service.NewUserService(mock, bcrypt.MinCost)
+func TestUserService_CreateUser(t *testing.T) {
+	t.Run("admin registration is forbidden", func(t *testing.T) {
+		svc := service.NewUserService(mock_service.NewMockUserRepo(gomock.NewController(t)), bcrypt.MinCost)
+
+		_, err := svc.CreateUser(context.Background(), m.UserCreate{
+			Email: someEmail, Password: someStrongPassword, FullName: someFullName, Role: m.RoleAdmin,
+		})
+
+		assertError(t, err, service.ErrPermissionDenied)
+	})
 	ctx := context.Background()
 
 	someUserCreate := m.UserCreate{
-		Password: someStrongPasswordHash,
+		Password: someStrongPassword,
 		Email:    someEmail,
 		FullName: someFullName,
 		Phone:    &testPhone,
 		Role:     someRole,
 	}
+	tooLongPassword := someUserCreate
+	tooLongPassword.Password = strings.Repeat("a", 73)
 
 	type testCase struct {
 		Description    string
@@ -175,7 +211,6 @@ func TestCreateUser(t *testing.T) {
 	}
 
 	tCases := []testCase{
-		// positives
 		{
 			Description:    "Success",
 			Create:         someUserCreate,
@@ -183,7 +218,7 @@ func TestCreateUser(t *testing.T) {
 			MockCreate:     &MockCreateReturn{ID: someID},
 			ExpectedID:     someID,
 		},
-		// negatives
+
 		{
 			Description:    "User already exists",
 			Create:         someUserCreate,
@@ -203,13 +238,30 @@ func TestCreateUser(t *testing.T) {
 			MockCreate:     &MockCreateReturn{Error: errors.New("some error")},
 			ExpectedErr:    service.ErrCreateUser,
 		},
+		{
+			Description:    "password exceeds bcrypt input limit",
+			Create:         tooLongPassword,
+			MockGetByEmail: MockUserReturn{Error: service.ErrNotFound},
+			ExpectedErr:    service.ErrHashingPassword,
+		},
 	}
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockUserRepo(gomock.NewController(t))
+			svc := service.NewUserService(mock, bcrypt.MinCost)
+
 			mock.EXPECT().GetUserByEmail(ctx, tCase.Create.Email).Return(tCase.MockGetByEmail.User, tCase.MockGetByEmail.Error)
 			if tCase.MockCreate != nil {
-				mock.EXPECT().CreateUser(ctx, gomock.Any()).Return(tCase.MockCreate.ID, tCase.MockCreate.Error)
+				mock.EXPECT().CreateUser(ctx, gomock.Any()).DoAndReturn(func(_ context.Context, create m.UserCreate) (int64, error) {
+					assertPasswordHash(t, create.Password, tCase.Create.Password)
+					want := tCase.Create
+					want.Password = create.Password
+					if !reflect.DeepEqual(create, want) {
+						t.Fatalf("unexpected create fields: got %+v, want %+v", create, want)
+					}
+					return tCase.MockCreate.ID, tCase.MockCreate.Error
+				})
 			}
 			id, err := svc.CreateUser(ctx, tCase.Create)
 			assertError(t, err, tCase.ExpectedErr)
@@ -220,9 +272,7 @@ func TestCreateUser(t *testing.T) {
 	}
 }
 
-func TestUpdateUser(t *testing.T) {
-	mock := mock_service.NewMockUserRepo(gomock.NewController(t))
-	svc := service.NewUserService(mock, bcrypt.MinCost)
+func TestUserService_UpdateUser(t *testing.T) {
 	ctx := context.Background()
 
 	newEmail := "newemail@gmail.com"
@@ -274,7 +324,6 @@ func TestUpdateUser(t *testing.T) {
 	}
 
 	tCases := []testCase{
-		// positives
 		{
 			Description:  "Success full update",
 			UserID:       someUser.ID,
@@ -291,7 +340,7 @@ func TestUpdateUser(t *testing.T) {
 			MockUpdate:   &MockUserReturn{User: partiallyUpdated},
 			ExpectedUser: partiallyUpdated,
 		},
-		// negatives
+
 		{
 			Description: "No changes in update",
 			UserID:      someUser.ID,
@@ -326,6 +375,9 @@ func TestUpdateUser(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockUserRepo(gomock.NewController(t))
+			svc := service.NewUserService(mock, bcrypt.MinCost)
+
 			mock.EXPECT().GetUserByID(ctx, tCase.UserID).Return(tCase.MockGetByID.User, tCase.MockGetByID.Error)
 			if tCase.MockUpdate != nil {
 				mock.EXPECT().UpdateUser(ctx, tCase.UserID, tCase.Update).Return(tCase.MockUpdate.User, tCase.MockUpdate.Error)
@@ -337,9 +389,7 @@ func TestUpdateUser(t *testing.T) {
 	}
 }
 
-func TestChangePasswordUser(t *testing.T) {
-	mock := mock_service.NewMockUserRepo(gomock.NewController(t))
-	svc := service.NewUserService(mock, bcrypt.MinCost)
+func TestUserService_ChangePasswordUser(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -353,7 +403,6 @@ func TestChangePasswordUser(t *testing.T) {
 	}
 
 	tCases := []testCase{
-		// positives
 		{
 			Description:    "Success",
 			UserID:         someID,
@@ -362,7 +411,7 @@ func TestChangePasswordUser(t *testing.T) {
 			MockGetByID:    MockUserReturn{User: someUser},
 			MockChangePass: ptrErr(nil),
 		},
-		// negatives
+
 		{
 			Description: "User not found",
 			UserID:      999,
@@ -396,13 +445,27 @@ func TestChangePasswordUser(t *testing.T) {
 			MockChangePass: ptrErr(errors.New("some repo error")),
 			ExpectedErr:    service.ErrChangePasswordUser,
 		},
+		{
+			Description: "password exceeds bcrypt input limit",
+			UserID:      someID,
+			OldPassword: someStrongPassword,
+			NewPassword: strings.Repeat("a", 73),
+			MockGetByID: MockUserReturn{User: someUser},
+			ExpectedErr: service.ErrHashingPassword,
+		},
 	}
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockUserRepo(gomock.NewController(t))
+			svc := service.NewUserService(mock, bcrypt.MinCost)
+
 			mock.EXPECT().GetUserByID(ctx, tCase.UserID).Return(tCase.MockGetByID.User, tCase.MockGetByID.Error)
 			if tCase.MockChangePass != nil {
-				mock.EXPECT().ChangePasswordUser(ctx, tCase.UserID, gomock.Any()).Return(*tCase.MockChangePass)
+				mock.EXPECT().ChangePasswordUser(ctx, tCase.UserID, gomock.Any()).DoAndReturn(func(_ context.Context, _ int64, hash string) error {
+					assertPasswordHash(t, hash, tCase.NewPassword)
+					return *tCase.MockChangePass
+				})
 			}
 			err := svc.ChangePasswordUser(ctx, testActor(tCase.UserID, m.RoleBuyer), tCase.OldPassword, tCase.NewPassword)
 			assertError(t, err, tCase.ExpectedErr)
@@ -410,9 +473,7 @@ func TestChangePasswordUser(t *testing.T) {
 	}
 }
 
-func TestDeleteUserByID(t *testing.T) {
-	mock := mock_service.NewMockUserRepo(gomock.NewController(t))
-	svc := service.NewUserService(mock, bcrypt.MinCost)
+func TestUserService_DeleteUserByID(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
@@ -437,6 +498,9 @@ func TestDeleteUserByID(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.Description, func(t *testing.T) {
+			mock := mock_service.NewMockUserRepo(gomock.NewController(t))
+			svc := service.NewUserService(mock, bcrypt.MinCost)
+
 			mock.EXPECT().DeleteUserByID(ctx, tCase.UserID).Return(tCase.MockError)
 			err := svc.DeleteUserByID(ctx, testActor(tCase.UserID, m.RoleBuyer), tCase.UserID)
 			assertError(t, err, tCase.ExpectedErr)
