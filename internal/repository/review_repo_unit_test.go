@@ -82,7 +82,7 @@ func TestReviewRepo_UserPurchasedProduct(t *testing.T) {
 
 	t.Run("purchased", func(t *testing.T) {
 		db := newMockPool(t)
-		db.ExpectQuery("(?s)SELECT EXISTS (.+)").WithArgs(int64(2), int64(3)).WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(true))
+		db.ExpectQuery("(?s)SELECT EXISTS \\(.+o\\.status = 'delivered'.+\\)").WithArgs(int64(2), int64(3)).WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(true))
 		got, err := repository.NewReviewRepo(db).UserPurchasedProduct(ctx, 2, 3)
 		requireErrorIs(t, err, nil)
 		if !got {
@@ -91,7 +91,7 @@ func TestReviewRepo_UserPurchasedProduct(t *testing.T) {
 	})
 	t.Run("scan failure", func(t *testing.T) {
 		db := newMockPool(t)
-		db.ExpectQuery("(?s)SELECT EXISTS (.+)").WithArgs(int64(2), int64(3)).WillReturnError(unitErr)
+		db.ExpectQuery("(?s)SELECT EXISTS \\(.+o\\.status = 'delivered'.+\\)").WithArgs(int64(2), int64(3)).WillReturnError(unitErr)
 		_, err := repository.NewReviewRepo(db).UserPurchasedProduct(ctx, 2, 3)
 		requireErrorIs(t, err, repository.ErrToScan)
 	})

@@ -145,7 +145,7 @@ var (
 	ErrNotYourReview          = errors.New("It's not your review")
 	ErrReviewNotFound         = errors.New("Review not found")
 	ErrReviewAlreadyExists    = errors.New("You have already reviewed this product")
-	ErrReviewPurchaseRequired = errors.New("You can review only products you have purchased")
+	ErrReviewPurchaseRequired = errors.New("You can review only products from delivered orders")
 
 	// backoffice
 	ErrGetPlatformStats     = errors.New("Failed to get platform stats")

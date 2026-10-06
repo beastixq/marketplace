@@ -22,12 +22,11 @@ rectangle "Онлайн-маркетплейс" {
   usecase "Просмотр истории\nизменения цены" as viewPriceHistory
   usecase "Просмотр отзывов" as viewReviews
   usecase "Оформление заказа" as placeOrder
+  usecase "Оплата заказа" as payOrder
+  usecase "Отмена заказа" as cancelOrder
   usecase "Оставление отзыва" as leaveReview
-  usecase "Управление избранным" as manageFavorites
-  usecase "Добавление в избранное" as addFavorite
-  usecase "Удаление из избранного" as removeFavorite
-  usecase "Просмотр избранного" as viewFavorites
   usecase "Управление товарами" as manageProducts
+  usecase "Управление своими заказами" as manageSellerOrders
   usecase "Добавление товара" as addProduct
   usecase "Редактирование товара" as editProduct
   usecase "Удаление товара" as deleteProduct
@@ -54,17 +53,17 @@ guest --> viewProduct
 
 ' --- Покупатель (+ всё от Гостя) ---
 buyer --> placeOrder
+buyer --> payOrder
+buyer --> cancelOrder
 buyer --> leaveReview
-buyer --> manageFavorites
 
 ' --- Продавец (+ всё от Гостя) ---
 seller --> manageProducts
+seller --> manageSellerOrders
 seller --> viewSellerStats
-seller --> manageFavorites
 
 ' --- Аналитик (+ всё от Гостя) ---
 analyst --> viewReports
-analyst --> manageFavorites
 
 ' --- Администратор (наследует от Гостя: авторизация, каталог, карточка товара) ---
 admin --> manageCategories
@@ -75,7 +74,6 @@ admin --> deleteReview
 admin --> viewAllOrders
 admin --> viewReports
 admin --> viewSellerStats
-admin --> manageFavorites
 
 ' --- Extend: Управление товарами ---
 manageProducts <.. addProduct
@@ -96,10 +94,5 @@ manageCategories <.. deleteCategory
 viewReports <.. reportTopProducts
 viewReports <.. reportOrdersDynamics
 viewReports <.. reportByCategory
-
-' --- Extend: Управление избранным ---
-manageFavorites <.. addFavorite
-manageFavorites <.. removeFavorite
-manageFavorites <.. viewFavorites
 
 @enduml

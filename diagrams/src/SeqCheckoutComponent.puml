@@ -1,205 +1,118 @@
-@startuml SeqCheckoutComponent
-title Оформление заказа (Checkout) — диаграмма последовательностей (уровень компонентов)
+@startuml SeqCheckout
+title Оформление заказа — текущая реализация
 
 skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 280
+skinparam sequenceMessageAlign center
 
 actor "Покупатель" as buyer
-
-box "Веб-приложение (Go, chi)" #E8F4FD
-    participant "OrderHandler" as handler
-    participant "OrderService" as svc
-    participant "OrderRepo" as orderRepo
-    participant "OrderItemRepo" as itemRepo
-    participant "ProductRepo" as productRepo
+box "Один Go HTTP-процесс" #E8F4FD
+    participant "HTTP API\nOrderHandler" as api
+    participant "OrderService" as orders
+    participant "PgxTxManager" as tx
+    participant "OrderRepo /\nOrderItemRepo" as storage
+    participant "AddressRepo" as addresses
+    participant "ProductRepo" as products
 end box
-
 database "PostgreSQL" as db
 
-== Добавление товаров в корзину ==
+note over api, orders
+  Маршрут защищён JWT и ролью buyer в middleware;
+  обработчик разбирает DTO, сервис получает Actor.
+  SQL выполняют реализации репозиториев, не обработчик.
+  OrderRepo / OrderItemRepo сгруппированы на одной линии.
+end note
 
-loop пока покупатель добавляет товары
-    buyer -> handler : POST /cart/items {product_id, qty}
-    activate handler
+== Оформление заказа: одна транзакция ==
 
-    handler -> handler : validate request
+buyer -> api : POST /api/v1/orders\n{address_id}
+api -> api : Checkout: разобрать JSON;\nпроверить address_id > 0
+api -> orders : Checkout(ctx, actor, addressID)
+orders -> orders : Проверить роль buyer
+orders -> tx : WithTransaction(ctx, fn)
+tx -> db : BEGIN
+tx -> orders : fn(ctx с pgx.Tx)
 
-    handler -> svc : AddItemToCart(ctx, userID, productID, qty)
-    activate svc
+alt Все проверки и записи fn успешны
+    orders -> storage : OrderRepo.LockUserCart(ctx, actor.UserID)
+    storage -> db : pg_advisory_xact_lock(cartLockKey)
+    orders -> addresses : GetAddressByID(ctx, addressID)
+    addresses --> orders : Address
+    orders -> orders : address.UserID == actor.UserID
 
-    svc -> svc : GetCart(ctx, userID)
-    note right : поиск draft-заказа\nсреди заказов пользователя
+    orders -> orders : GetCart(ctx, actor)
+    orders -> storage : OrderRepo.GetOrdersByUserID(ctx,\nactor.UserID, PaginationOpts{})
+    storage --> orders : []Order
+    orders -> orders : Найти последний draft
+    orders -> storage : OrderItemRepo.GetOrderItemsByOrderID(ctx, cart.ID)
+    storage --> orders : []OrderItem для суммы draft
 
-    svc -> orderRepo : GetOrdersByUserID(ctx, userID)
-    activate orderRepo
-    orderRepo -> db : SELECT * FROM orders WHERE user_id = $1
-    db --> orderRepo : rows
-    orderRepo --> svc : []Order
-    deactivate orderRepo
+    orders -> storage : OrderRepo.UpdateOrderStatus(ctx,\ncart.ID, {draft}, pending)
+    storage -> db : UPDATE orders WHERE id = cart.ID\nAND status = draft -> pending
+    storage --> orders : nil; 0 изменённых строк -> ErrNotFound
+    orders -> storage : OrderItemRepo.GetOrderItemsByOrderID(ctx, cart.ID)
+    storage --> orders : []OrderItem после захвата корзины
+    orders -> orders : Проверить непустую корзину;\nсуммировать qty по productID;\nотсортировать productID
 
-    svc -> svc : фильтрация status = 'draft',\nвыбор последнего по дате
-
-    opt корзина не найдена
-        svc -> orderRepo : CreateOrder(ctx, {userID, draft, 0})
-        activate orderRepo
-        orderRepo -> db : INSERT INTO orders (status='draft')
-        db --> orderRepo : cartID
-        orderRepo --> svc : cartID
-        deactivate orderRepo
+    loop Каждый productID по возрастанию
+        orders -> products : GetProductByIDForUpdate(ctx, productID)
+        products -> db : SELECT product FOR UPDATE
+        products --> orders : Product
+        orders -> orders : Проверить DeletedAt и\nstock_quantity - reserved_quantity >= qty
+        orders -> products : ChangeStockAndReserved(ctx,\nproductID, 0, +qty)
+        products -> db : UPDATE products:\nreserved_quantity += qty
     end
 
-    svc -> productRepo : GetProductByID(ctx, productID)
-    activate productRepo
-    productRepo -> db : SELECT * FROM products WHERE id = $1
-    db --> productRepo : row
-    productRepo --> svc : Product
-    deactivate productRepo
+    orders -> orders : price_at_purchase = текущая product.Price;\nгруппировать позиции по SellerID
 
-    break qty > product.StockQuantity
-        svc --> handler : ErrQuantityTooBig
-        handler --> buyer : 400 Bad Request
+    alt Один продавец
+        loop Каждая позиция корзины
+            orders -> storage : OrderItemRepo.UpdateOrderItem(ctx,\nitem.ID, {PriceAtPurchase})
+        end
+        orders -> orders : total = сумма quantity * price_at_purchase
+        orders -> storage : OrderRepo.UpdateOrder(ctx, cart.ID,\n{SellerID, AddressID, TotalAmount})
+        orders -> orders : orderIDs = [cart.ID]
+        note over orders, storage
+          pending-заказ сохраняет cart.ID и created_at.
+          Исходная строка корзины не удаляется.
+        end note
+    else Несколько продавцов
+        loop Каждый продавец
+            orders -> orders : Сумма позиций этого продавца
+            orders -> storage : OrderRepo.CreateOrder(ctx,\n{UserID, AddressID, SellerID, pending, TotalAmount})
+            storage --> orders : orderID
+            loop Каждая позиция продавца
+                orders -> storage : OrderItemRepo.CreateOrderItem(ctx,\n{orderID, ProductID, Quantity, PriceAtPurchase})
+            end
+        end
+        orders -> storage : OrderRepo.DeleteOrderByID(ctx, cart.ID)
+        storage -> db : DELETE исходного draft;\nпозиции удаляются через ON DELETE CASCADE
     end
 
-    svc -> itemRepo : CreateOrderItem(ctx, {cartID, productID, qty, price})
-    activate itemRepo
-    itemRepo -> db : INSERT INTO order_items
-    db --> itemRepo : id
-    itemRepo --> svc : id
-    deactivate itemRepo
+    orders --> tx : fn возвращает nil
+    tx -> db : COMMIT
+    db --> tx : Успешный COMMIT
+    tx --> orders : nil
+    orders --> api : orderIDs, nil
+    api --> buyer : 201 Created\n{order_ids: [...]}
 
-    svc --> handler : nil
-    deactivate svc
-
-    handler --> buyer : 204 No Content
-    deactivate handler
+else Первая ошибка проверки или записи в fn
+    ref over orders, db
+      Выполнение до первой ошибки, остальные шаги пропускаются:
+      нет/чужой адрес; нет draft; захват проиграл;
+      пустая корзина; нет/удалённый товар; недостаточный остаток;
+      ошибка репозитория при чтении/резерве/сохранении.
+    end ref
+    orders --> tx : fn возвращает ошибку
+    tx -> db : ROLLBACK всей транзакции
+    tx --> orders : ошибка
+    orders --> api : nil, ошибка
+    api --> buyer : writeServiceError:\n400 / 403 / 404 / 409 / 500 {error}
+    note over orders, db
+      Нет частично оформленных заказов и частичного резерва;
+      изменения этой транзакции отменены.
+      Ошибка BEGIN/COMMIT также не даёт 201.
+    end note
 end
-
-== Оформление заказа (Checkout) ==
-
-buyer -> handler : POST /api/v1/orders {address_id}
-activate handler
-
-handler -> handler : extract claims, validate address_id
-
-handler -> svc : Checkout(ctx, userID, addressID)
-activate svc
-
-svc -> svc : GetCart(ctx, userID)
-
-svc -> orderRepo : GetOrdersByUserID(ctx, userID)
-activate orderRepo
-orderRepo -> db : SELECT * FROM orders WHERE user_id = $1
-db --> orderRepo : rows
-orderRepo --> svc : []Order
-deactivate orderRepo
-
-svc -> svc : фильтрация status = 'draft'
-
-break корзина не найдена
-    svc --> handler : ErrCartNotFound
-    handler --> buyer : 404 Not Found
-end
-
-svc -> itemRepo : GetOrderItemsByOrderID(ctx, cart.ID)
-activate itemRepo
-itemRepo -> db : SELECT * FROM order_items WHERE order_id = $1
-db --> itemRepo : rows
-itemRepo --> svc : []OrderItem
-deactivate itemRepo
-
-break корзина пуста
-    svc --> handler : ErrEmptyCart
-    handler --> buyer : 400 Bad Request
-end
-
-loop для каждой позиции корзины
-    svc -> productRepo : GetProductByID(ctx, item.ProductID)
-    activate productRepo
-    productRepo -> db : SELECT * FROM products WHERE id = $1
-    db --> productRepo : row
-    productRepo --> svc : Product
-    deactivate productRepo
-
-    svc -> svc : группировка по product.SellerID
-end
-
-loop для каждого продавца (sellerID)
-    svc -> svc : подсчёт totalAmount\nпо позициям продавца
-
-    svc -> orderRepo : CreateOrder(ctx, {userID, addressID,\nsellerID, pending, totalAmount})
-    activate orderRepo
-    orderRepo -> db : INSERT INTO orders\n(status='pending', seller_id, total_amount)
-    db --> orderRepo : orderID
-    orderRepo --> svc : orderID
-    deactivate orderRepo
-
-    loop для каждой позиции этого продавца
-        svc -> itemRepo : CreateOrderItem(ctx,\n{orderID, productID, qty, priceAtPurchase})
-        activate itemRepo
-        itemRepo -> db : INSERT INTO order_items
-        db --> itemRepo : id
-        itemRepo --> svc : id
-        deactivate itemRepo
-    end
-end
-
-svc -> orderRepo : DeleteOrderByID(ctx, cart.ID)
-activate orderRepo
-orderRepo -> db : DELETE FROM orders WHERE id = $1
-db --> orderRepo : ok
-orderRepo --> svc : nil
-deactivate orderRepo
-
-svc --> handler : []orderIDs
-deactivate svc
-
-handler -> handler : конвертация в DTO
-
-handler --> buyer : 201 Created {order_ids: [...]}
-deactivate handler
-
-== Оплата заказа ==
-
-buyer -> handler : POST /api/v1/orders/:id/pay
-activate handler
-
-handler -> handler : extract claims, parse orderID
-
-handler -> svc : PayOrder(ctx, orderID, userID)
-activate svc
-
-svc -> orderRepo : GetOrderByID(ctx, orderID)
-activate orderRepo
-orderRepo -> db : SELECT * FROM orders WHERE id = $1
-db --> orderRepo : row
-orderRepo --> svc : Order
-deactivate orderRepo
-
-break заказ не найден
-    svc --> handler : ErrOrderNotFound
-    handler --> buyer : 404 Not Found
-end
-
-break userID != order.UserID
-    svc --> handler : ErrNotYourOrder
-    handler --> buyer : 403 Forbidden
-end
-
-break status != 'pending'
-    svc --> handler : ErrOrderStatusInvalid
-    handler --> buyer : 409 Conflict
-end
-
-svc -> orderRepo : UpdateOrder(ctx, orderID, {status: paid})
-activate orderRepo
-orderRepo -> db : UPDATE orders SET status='paid'\nWHERE id = $1
-db --> orderRepo : Order
-orderRepo --> svc : Order
-deactivate orderRepo
-
-svc --> handler : nil
-deactivate svc
-
-handler --> buyer : 204 No Content
-deactivate handler
 
 @enduml

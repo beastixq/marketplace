@@ -16,7 +16,11 @@ handler -> service <- repository implementation
 
 The service layer does not depend on repository implementations. Service exports the repository interfaces it needs, accepts those interfaces through constructors, and calls through them. Repository implementations depend on service-defined interfaces and satisfy them. This distinction is a hard project rule, not wording preference.
 
-Prefer the current repository instructions in AGENTS.md over older Claude-specific wording.
+Follow the current repository AGENTS.md and the assignment for the active task.
+Testing coursework on TAD-* branches is separate from WebLabs; read docs/testing.md
+before test work and do not create OpenAPI artifacts for a testing task. The Go
+API is a PPO starting point; WebLab#2 OpenAPI and WebLab#3 contract compliance
+must be produced and checked before claiming those labs are complete.
 
 ## Core Architecture
 
@@ -72,7 +76,9 @@ var _ service.ProductRepo = (*ProductRepository)(nil)
 - SQL, transactions, constraints, triggers, and PostgreSQL roles should be tested with integration tests against a real database.
 - Pure mapper/helper logic may be unit-tested separately.
 - Repository integration tests should generally use package `repository_test`.
-- Centralize integration test setup in `repository/testmain_test.go`.
+- Keep the test entrypoint in `repository/testmain_test.go`, the tagged database
+  setup in `repository/testmain_integration_test.go`, and follow docs/testing.md
+  for pgxmock unit tests versus PostgreSQL integration tests.
 
 ## Handler Layer
 
@@ -91,10 +97,12 @@ Handlers must not perform cache invalidation.
 
 Redis/key mechanics belong in `internal/cache`. Cache-aside behavior should be implemented behind cache abstractions or service decorators. Service/usecase code or a cache-aware decorator should trigger invalidation as part of mutations.
 
-Use these cache key conventions and TTLs:
+Only `products:{id}` is currently implemented in runtime (5m, product
+update/delete invalidation). The student plans later cache work personally; do
+not restore additional keys as incidental cleanup. The following are historical
+target conventions, not implemented behavior:
 
 - `products:catalog:page:{n}`: 5m TTL, invalidate on product changes.
-- `products:{id}`: 5m TTL, invalidate on PATCH/DELETE product or create/update review.
 - `categories:tree`: 1h TTL, invalidate on category CRUD.
 - `sessions:{token}`: session lifetime, invalidate on logout.
 
@@ -111,6 +119,7 @@ Cache failures should not break core business behavior unless the operation expl
 - Seller can access only own products and own relevant orders.
 - Buyer can access only own addresses and reviews.
 - A user can leave only one review per product: `UNIQUE(user_id, product_id)`.
+- A buyer can create a review only for a product in their delivered order.
 - `price_at_purchase` is fixed when draft becomes `pending`.
 - Product price history may be enforced by a database trigger as an audit/data-integrity guarantee.
 - Service logic must still explicitly enforce business rules such as fixing `price_at_purchase`.
@@ -162,5 +171,5 @@ Cache failures should not break core business behavior unless the operation expl
 - Do not use raw SQL string concatenation.
 - Do not ignore error returns.
 - Do not create god objects or mega-functions.
-- Do not update persistent Claude agent memory; this Codex agent should rely on current files instead.
+- Use only the current Codex project guidance and task-specific source files.
 '''

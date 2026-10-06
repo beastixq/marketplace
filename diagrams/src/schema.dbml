@@ -3,7 +3,7 @@ Table users {
   email varchar(255) [not null, unique]
   password_hash varchar(255) [not null]
   full_name varchar(255) [not null]
-  phone varchar(20) [unique]
+  phone varchar(20)
   role varchar(20) [not null, note: 'buyer | seller | admin | analyst']
   created_at timestamptz [not null, default: `now()`]
   deleted_at timestamptz
@@ -76,6 +76,10 @@ Table order_items {
   product_id bigint [not null]
   quantity integer [not null, note: '> 0']
   price_at_purchase "numeric(12,2)" [not null, note: '> 0']
+
+  indexes {
+    (order_id, product_id) [unique]
+  }
 }
 
 Table reviews {
@@ -117,7 +121,7 @@ Ref: orders.user_id > users.id [delete: restrict]
 Ref: orders.address_id > addresses.id [delete: restrict]
 Ref: orders.seller_id > sellers.id [delete: restrict]
 
-Ref: order_items.order_id > orders.id [delete: restrict]
+Ref: order_items.order_id > orders.id [delete: cascade]
 Ref: order_items.product_id > products.id [delete: restrict]
 
 Ref: reviews.user_id > users.id [delete: cascade]

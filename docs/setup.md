@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Go `1.24.4` or compatible Go `1.24.x`.
+- Go `1.25.0` or newer compatible toolchain (the module declares `go 1.25.0`).
 - Docker and Docker Compose for local PostgreSQL and Redis.
 - `goose` for database migrations.
 - `mockgen` only when regenerating mocks.
@@ -21,6 +21,10 @@ Default services:
 | --- | --- | --- |
 | PostgreSQL | `localhost:5432` | `postgres` / `postgres`, database `marketplace` |
 | Redis | `localhost:6379` | no password in local compose |
+
+The Compose file currently uses PostgreSQL `16.11-alpine` and Redis
+`8.6-alpine`. It starts dependencies only; the Go API/MPA process is started
+separately below. WebLab#4's web-server/SPA routing stand is not configured yet.
 
 Check containers:
 

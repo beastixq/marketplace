@@ -18,6 +18,7 @@ type ReviewRepo interface {
 }
 
 type ReviewPurchaseChecker interface {
+	// UserPurchasedProduct reports whether the buyer has this product in a delivered order.
 	UserPurchasedProduct(ctx context.Context, userID int64, productID int64) (bool, error)
 }
 
@@ -35,6 +36,14 @@ type ReviewService struct {
 
 func NewReviewService(reviewRepo ReviewRepo, purchaseChecker ReviewPurchaseChecker, productGetter ReviewProductGetter) ReviewService {
 	return ReviewService{reviewRepo: reviewRepo, purchaseChecker: purchaseChecker, productGetter: productGetter}
+}
+
+// CanReviewProduct reports whether a buyer has this product in an order marked delivered.
+func (rs ReviewService) CanReviewProduct(ctx context.Context, actor Actor, productID int64) (bool, error) {
+	if !actor.HasRole(m.RoleBuyer) {
+		return false, nil
+	}
+	return rs.purchaseChecker.UserPurchasedProduct(ctx, actor.UserID, productID)
 }
 
 func (rs ReviewService) GetReviewByID(ctx context.Context, id int64) (r m.Review, err error) {
@@ -69,7 +78,7 @@ func (rs ReviewService) CreateReview(ctx context.Context, actor Actor, rc m.Revi
 		return 0, ErrProductDeleted
 	}
 
-	purchased, err := rs.purchaseChecker.UserPurchasedProduct(ctx, actor.UserID, rc.ProductID)
+	purchased, err := rs.CanReviewProduct(ctx, actor, rc.ProductID)
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrCheckReviewPurchase, err)
 	}

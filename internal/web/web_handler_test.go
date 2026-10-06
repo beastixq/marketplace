@@ -106,6 +106,45 @@ func TestProductTemplateRendersAdminCategoryPicker(t *testing.T) {
 	}
 }
 
+func TestProductTemplateReviewEligibility(t *testing.T) {
+	handler := NewWebHandler(
+		service.ProductService{}, service.CategoryService{}, service.AuthService{},
+		service.UserService{}, service.OrderService{}, service.AddressService{},
+		service.SellerService{}, service.ReviewService{}, service.BackofficeService{}, nil,
+	)
+	tCases := []struct {
+		name       string
+		user       *userInfo
+		canReview  bool
+		wantForm   bool
+		wantNotice bool
+	}{
+		{name: "guest"},
+		{name: "buyer without delivered order", user: &userInfo{UserID: 7, Role: "buyer"}, wantNotice: true},
+		{name: "buyer with delivered order", user: &userInfo{UserID: 7, Role: "buyer"}, canReview: true, wantForm: true},
+		{name: "seller with eligibility flag", user: &userInfo{UserID: 7, Role: "seller"}, canReview: true},
+	}
+	for _, tCase := range tCases {
+		t.Run(tCase.name, func(t *testing.T) {
+			var out bytes.Buffer
+			if err := handler.templates["product"].ExecuteTemplate(&out, "layout", map[string]any{
+				"User":      tCase.user,
+				"Product":   model.Product{ID: 10, SellerID: 20, Name: "Product", Price: decimal.NewFromInt(100)},
+				"Seller":    model.Seller{ID: 20, CompanyName: "Seller"},
+				"CanReview": tCase.canReview,
+			}); err != nil {
+				t.Fatalf("render product template: %v", err)
+			}
+			if got := bytes.Contains(out.Bytes(), []byte(`action="/products/10/review"`)); got != tCase.wantForm {
+				t.Fatalf("review form visible = %v, want %v", got, tCase.wantForm)
+			}
+			if got := bytes.Contains(out.Bytes(), []byte("You can leave a review after your order is delivered.")); got != tCase.wantNotice {
+				t.Fatalf("delivery notice visible = %v, want %v", got, tCase.wantNotice)
+			}
+		})
+	}
+}
+
 func TestProfileTemplateRendersPasswordForm(t *testing.T) {
 	handler := NewWebHandler(
 		service.ProductService{},
