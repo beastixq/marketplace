@@ -9,6 +9,11 @@
 
 ## Local Services
 
+For the separate testing stand, only Docker/Compose (2.24.4+) and host Python 3
+with `make` are required; Go, pytest, Goose, Allure and traffic tools live inside
+the runner. Use `make test-stand-up`; see [testing stand](testing.md#container-test-stand).
+This does not change the normal application startup documented below.
+
 Start PostgreSQL and Redis:
 
 ```bash

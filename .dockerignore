@@ -1,0 +1,5 @@
+**
+!tests/
+!tests/Dockerfile
+!tests/requirements.txt
+!tests/runner.sh

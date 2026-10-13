@@ -90,7 +90,11 @@ queries and database guarantees work against PostgreSQL.
 
 ## Service Tests
 
-Service tests are unit tests around business rules. They should use test doubles or generated gomock mocks and generally live in package `service_test`.
+Service unit tests cover business rules with doubles or generated gomock mocks,
+generally in package `service_test`. Tagged `*_service_integration_test.go` suites
+compose real services, repositories, `PgxTxManager` and PostgreSQL. Their fixtures
+live with the service tests; only connection setup is shared with the repository
+suite through `internal/testsupport`. Production service imports remain unchanged.
 
 Use package `service` only when intentionally testing unexported helpers.
 
@@ -137,7 +141,7 @@ Regenerate mocks after changing a service interface or port interface, then run 
 
 - Test files belong to a component, not a coursework assignment or report.
 - Use `Test<Component>_<Method>` for a method suite and `t.Run` for its scenarios.
-  Repository integration suites add `_Integration` to avoid collisions when
+  Service/repository integration suites add `_Integration` to avoid collisions when
   both test types are compiled together.
 - Each scenario prepares data/doubles, calls one method, then checks the result.
   Blank lines express Arrange–Act–Assert; repetitive stage comments are not needed.
@@ -203,3 +207,164 @@ tool does not report true/false branch outcomes. The native percentage is
 statement coverage, not an exact physical-line percentage. No percentage gate
 is applied; add missing meaningful behaviors and reachable failure cases,
 rather than mocking query builders solely to execute defensive branches.
+
+## Container Test Stand
+
+Testing Lab2 is separate from WebLab#2. The stand reuses the current PostgreSQL
+16.11/Redis 8.6 services through `docker-compose.test.yml`, adds one API/MPA
+process and a separate test runner. The normal `docker-compose.yml` is unchanged.
+Go 1.25, pytest/requests, Allure 2.34.1, Goose and capture tools run in the image;
+Python packages are pinned in `tests/requirements.txt`. Host prerequisites are
+Linux, Docker/Compose 2.24.4+, Python 3 and make. First use downloads the image
+and dependencies; subsequent runs reuse image/module/build caches.
+
+```bash
+make test-stand-up                         # default STAND_ID=local; prints UI URL
+STAND_ID=local make test-e2e                # shared stand, only own API fixtures
+STAND_ID=local make test-integration        # exclusive; PostgreSQL repository + service
+STAND_ID=local make test-all                # unit → integration → E2E, with Lab1 coverage
+make test-infra-check                      # isolated acceptance stands, deliberate failures
+STAND_ID=local make test-traffic            # curl purchase + PCAP + tshark verification
+make test-restore RUN_ID=<interrupted-run>  # exclusive recovery, never use during manual writes
+```
+
+Every command gets a unique `RUN_ID`; an explicit ID must not already exist.
+`STAND_ID` defaults to `local` for all commands. The same pair server/DB serves
+manual and automated work, not two permanent deployments. Without an existing
+stand, a full/integration invocation creates its own and removes its containers
+and network after verified recovery. `test-stand-up` keeps the stand available.
+Shared E2E/traffic require an existing ready stand and never recreate the server.
+Local developers using the same Docker daemon choose different IDs, for example
+`STAND_ID=alice` and `STAND_ID=bob`; UI ports are allocated independently. The
+default UI binding is localhost; `UI_PORT` can select a port at first startup.
+
+Local runs archive tracked and non-ignored working-copy files, excluding `.serena`
+and reports. The runner extracts that snapshot. CI fetches the exact commit
+specified by `TEST_COMMIT_SHA` from `TEST_REPOSITORY_URL`. Uncommitted local runs
+are recorded as working-copy snapshots, not claimed to be checks of HEAD alone.
+Runtime DB directories and compilation caches use `/tmp/marketplace-test-runtime`
+(`TEST_RUNTIME_ROOT` can override it); reports/recovery snapshots are copied to
+`artifacts/lab2/<RUN_ID>/`. Do not remove runtime directories while a stand is in
+use. Bind-mounted runtime data is retained for diagnosis after container removal;
+there is no global Docker prune or automatic deletion of unrelated resources.
+
+### Data Ownership And Recovery
+
+`shared`: API fixtures register unique buyers/sellers, create seller profiles,
+products and addresses. The scenario itself creates cart, checkout and review.
+The fixture manifest is saved before any creation and updated after each response.
+Current `/users/me` omits the ID, so arrangement reads the server-issued JWT's
+UserID and checks the profile email/role; no API change is introduced.
+
+Pytest registers finalization before arrangement. A host-owned cleanup stage also
+handles a killed test process. PostgreSQL cleanup locks confirmed fixture rows,
+refuses foreign order/review/product links before deleting, and hard-deletes only
+owned rows. It never resets global sequences or Redis. Only confirmed own product
+cache keys are removed. Temporary synthetic tokens are kept in private runtime
+credential files for post-cleanup HTTP 401 verification and then deleted; they
+are excluded from published artifacts. This is test tooling, not an application
+session store. On a foreign-link refusal, retain diagnostics and resolve the
+foreign activity before retrying cleanup; do not change the query to delete it.
+Confirmed cache IDs survive a transient Redis failure, so cleanup can retry after
+PostgreSQL deletion. JWTs are stateless: the HTTP 401 check confirms absence of
+the synthetic account now, not a permanent token blacklist. Exclusive sequence
+restoration can later reuse an ID; raw captures are sensitive even after cleanup.
+Shared isolation protects ownership, not global catalog/analytics counts: manual
+testers may temporarily see synthetic products/orders. Use an exclusive window
+for exact whole-platform aggregates. Never buy a synthetic test product from a
+manual account; if that happens, cleanup refuses foreign links and keeps evidence.
+
+`exclusive`: agree a window with no manual writes. `STAND_ID` locking serializes
+automation but cannot prevent a human from submitting a form. The host controller
+stops the API/expiration worker, snapshots PostgreSQL after migrations and before
+tests, then runs integration packages sequentially (`-p=1`). The API starts for
+E2E. Regardless of success/failure/interruption, it stops writers, restores through
+`pg_restore` with ownership and grants preserved, flushes only this stand's Redis,
+and compares schema ACL/owners and complete dumped data including
+sequences and Goose migration rows with baseline. Recovery is completed only after
+HTTP readiness and synthetic-token checks pass. Recovery failure
+makes the command fail and keeps the stand for diagnosis. Verified recovery returns
+the API to readiness, checks synthetic tokens and preserves user-owned stands.
+
+If the host controller is SIGKILLed, run `test-restore` with its ID. It removes
+only known orphan runner names for that run, restores the saved snapshot and marks
+an unfinished stage `broken` and unstarted stages `skipped`, then regenerates the
+report. Power loss does not guarantee immediate restoration. Complete explicit
+recovery before another full/shared run or resuming manual writes. New automated
+runs refuse a stand with an unfinished recovery record, even after the dead host
+process releases its lock. Repeating `test-restore` after successful recovery is a
+non-mutating no-op: it must not overwrite later manual changes. Resource ownership
+is rechecked after acquiring the stand lock before deciding whether teardown is safe.
+Shared runs also persist recovery intent before fixtures: the same `test-restore`
+removes their orphan runner and retries only their addressed cleanup/401 checks,
+without stopping the common API, resetting PostgreSQL or flushing Redis. Unfinished
+shared cleanup blocks new automation too. Parallel manual work remains allowed;
+automated runs on one stand must finish cleanup before the next run starts.
+Recovery requires
+the stand/runtime storage to remain available; preserve the saved artifacts if
+runtime storage is lost. Do not restore an old snapshot over new manual work.
+
+### Scenarios And Reports
+
+Service integration covers account hashing/authentication, ownership/roles,
+product history/categories and rollback, single/multi-seller checkout, stock
+reservation/cancellation/expiration/shipment/delivery, payment boundaries and
+idempotency, delivered-only reviews, aggregates and competing buyers. Existing
+SQL suites remain; backoffice and real transaction checks complement them.
+Tagged suites missing either package or containing skips fail the runner.
+
+`tests/e2e/test_purchase.py` drives login → cart → checkout → payment link →
+mock-bank callback → ship → deliver → review and reads the saved review through
+HTTP. Allure distinguishes fixture setup errors from assertion failures and
+attaches redacted exchanges. Product-stock assertions stay in service integration
+because the optional HTTP product cache may be stale. Review reading supplies
+`page=1&limit=20`: the unpaginated route's confirmed defect is [BUG-004](known-issues.md).
+Price-changing service fixtures provide `ChangedBy`, as the current HTTP handler
+does; missing metadata is recorded as RISK-001. Seller-statistics windows use UTC
+day boundaries because its PostgreSQL function accepts dates. Payment checks use
+the existing controllable clock; the purchase creates a fresh cart due to BUG-001.
+
+Each run retains Go JSONL/JUnit, native pytest Allure, stage statuses, server logs,
+environment/source hash, fixture manifests, original Lab1 HTML/statement/branch
+coverage and `allure-report/index.html`. Go JUnit parents are removed only when
+leaf results capture their outcome; an independent suite cleanup failure remains
+visible. Allure generates the HTML and trends; `cmd/testreport` is not extended.
+History is serialized and reused per branch, without overwriting run artifacts.
+Pipeline markers live in a separate Infrastructure suite; they are not additional
+product scenarios. Reports remain available after test/recovery failures.
+
+Serve an existing Allure report without installing Java/Allure on the host:
+
+```bash
+python3 -m http.server 8090 --bind 127.0.0.1 --directory artifacts/lab2/<RUN_ID>/allure-report
+```
+
+Open `http://127.0.0.1:8090`; direct `file://` loading can block the report's JSON.
+
+`test-traffic` captures only the synthetic client's HTTP connection inside the
+server's Docker network, repeats purchase with curl and checks endpoints/statuses
+with tshark. Capture contains synthetic credentials/JWTs: confirm account cleanup
+before sharing it. Requests/responses in Allure are redacted. Tcpdump uses native
+timed rotation rather than disabling a host AppArmor profile.
+
+### CI And Bug Handoff
+
+`.github/workflows/testing.yml` calls the same `make test-all`, restores branch
+history using the job's GITHUB_TOKEN and uploads reports/history with `always()`.
+Coverage remains part of the unit stage. No PAT/MCP installation is necessary.
+Cloud execution is **not verified until the agreed changes are committed/pushed**;
+local success is not a GitHub Actions result. Commit/push require separate consent.
+
+See [bug handoff](bug-handoff.md) for minimal reproduction, evidence, retest and
+regression. Never create a remote issue just because a local test failed.
+
+`test-infra-check` creates only dedicated stands and verifies three repeat runs,
+two concurrent independent full runs, unit fail-fast, partial API arrangement,
+guarded cleanup, container termination after committed integration/E2E data,
+controller death with explicit recovery, successful next run, history and PCAP.
+Its deliberate fault controls (`TEST_FAULT`, `TEST_FAULT_GATE`) are test-only and
+unset during normal runs. Simultaneous browser/manual behavior is checked separately
+on independent accounts; GUI automation is not the MVP E2E requirement.
+The Git-checkout bootstrap unit check runs on the host/CI checkout and checks three
+consecutive runner entries. It is skipped only in a local snapshot container,
+which intentionally has no `.git`; PostgreSQL integration skips are never accepted.

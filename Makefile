@@ -25,10 +25,10 @@ test-unit:
 	go test $(UNIT_PACKAGES)
 
 test-unit-shuffle:
-	go test -shuffle=on $(UNIT_PACKAGES)
+	go test -count=1 -shuffle=on $(UNIT_PACKAGES)
 
 test-unit-offline:
-	GOPROXY=off go test -shuffle=on $(UNIT_PACKAGES)
+	GOPROXY=off go test -count=1 -shuffle=on $(UNIT_PACKAGES)
 
 tools:
 	go mod download
@@ -85,6 +85,29 @@ build-release:
 		-o dist/marketplace-api ./cmd/api
 
 lab1: test-artifacts
+
+.PHONY: test-stand-up test-integration test-e2e test-all test-infra-check test-traffic test-restore
+
+test-stand-up:
+	python3 -m scripts.testing.controller stand-up
+
+test-integration:
+	python3 -m scripts.testing.controller integration
+
+test-e2e:
+	python3 -m scripts.testing.controller e2e
+
+test-all:
+	python3 -m scripts.testing.controller all
+
+test-infra-check:
+	python3 -m scripts.testing.acceptance
+
+test-traffic:
+	python3 -m scripts.testing.controller traffic
+
+test-restore:
+	python3 -m scripts.testing.controller restore
 
 clean-test-artifacts:
 	rm -rf artifacts/lab1

@@ -17,15 +17,20 @@ Do not recreate duplicate layer instructions as incidental cleanup.
 
 ## Active Coursework Context
 
-- `TAD-Lab2` is the current Testing and Debugging preparation branch. It contains
+- `TAD-Lab2` is the current Testing and Debugging branch. It contains
   the testing work committed in `84df6ad` and the WebLab#1 project updates merged
-  from `lab1` at `1e503b4`.
+  from `lab1` (`1e503b4`) by synchronization commit `ec1d828`.
 - Testing Lab1 provides component-organized unit tests, tagged PostgreSQL
   integration tests, generated service mocks, and the report/coverage workflow
   in [docs/testing.md](docs/testing.md). Test source files are component-owned;
   `artifacts/lab1/` is an ignored report directory, not an application dependency.
-- Testing Lab2 is not WebLab#2. Its implementation has not started: read its
-  assignment before selecting scenarios or changing the test infrastructure.
+- Testing Lab2 is not WebLab#2. Its assignment is
+  `/home/roman/bmstu/7sem/testing/labs/2.pdf`. The working tree implements real
+  PostgreSQL service integration, API-fixture pytest E2E, a container runner,
+  shared/exclusive cleanup and recovery, Allure 2, and GitHub Actions; see
+  [docs/testing.md](docs/testing.md). Local normal/failure/recovery checks have
+  run; cloud Actions is not yet verified and requires separate commit/push
+  approval. Evidence belongs in ignored `artifacts/lab2/`, not business code.
   Do not create OpenAPI, SPA, or later WebLabs artifacts for a testing task.
 - The WebLabs context and accepted decisions below are retained as product and
   architecture context. Historical acceptance/check records are not new checks
@@ -307,7 +312,9 @@ The service layer does not depend on repository implementations. Service exports
 
 ## Dependency Rules
 
-- `service` must not import `internal/repository`, `pgx`, `pgconn`, SQLSTATE values, constraint names, or repository-specific libraries. Keep dependencies minimal.
+- Production `service` must not import `internal/repository`, `pgx`, `pgconn`, SQLSTATE values, constraint names, or repository-specific libraries. Keep dependencies minimal.
+  Tagged external `service_test` integration tests may wire real repositories
+  and `PgxTxManager`; this exception does not change runtime dependency rules.
 - `handler` and `web` must not import `internal/repository`.
 - Repository interfaces are owned by the consuming service layer.
 - In this project, repo interfaces should live in `internal/service` unless a narrower consumer package already exists.
@@ -347,7 +354,11 @@ var _ service.ProductRepo = (*ProductRepository)(nil)
 - Interface method comments in `internal/service` define semantic contracts: return meaning, error sentinels, idempotency, and forbidden caller assumptions. Implementation comments may mention only the mechanism.
 - For atomic check-then-mutate flows, choose the weakest safe mechanism: plain pre-check if stale rows cannot leak into user-visible incorrect behavior; transaction/locking when money, inventory, or lifecycle correctness depends on it. State the choice in review, not as noisy implementation comments.
 - Public service methods should take `context.Context` as the first argument.
-- Service tests should be unit tests with test doubles, generally in package `service_test`.
+- Service unit tests use test doubles, generally in package `service_test`.
+  Real PostgreSQL integration tests use the same external package, the
+  `integration` tag, component-owned `*_service_integration_test.go` files,
+  and `Test<Component>_<Method>_Integration` names. Run integration packages
+  sequentially (`-p=1`); do not move mock-error matrices into them.
 - Use package `service` only when intentionally testing unexported helpers.
 - Gomock is preferred for service-owned interfaces. Hand-written fakes are acceptable only when the fake is substantially clearer than a generated mock or when mock generation is unavailable.
 - `go:generate mockgen` directives should live near service-defined interfaces or in a dedicated generation file.
