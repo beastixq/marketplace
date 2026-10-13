@@ -2,6 +2,8 @@
 set -euo pipefail
 TEST_WORKSPACE="${TEST_WORKSPACE:-/workspace}"
 if [[ -n "${TEST_REPOSITORY_URL:-}" ]]; then
+    # The host owns the bind mount; rootful CI containers use another UID.
+    git config --global --add safe.directory "$TEST_WORKSPACE"
     git init -q "$TEST_WORKSPACE"
     if git -C "$TEST_WORKSPACE" remote get-url origin >/dev/null 2>&1; then
         git -C "$TEST_WORKSPACE" remote set-url origin "$TEST_REPOSITORY_URL"

@@ -27,7 +27,7 @@ class TrafficTests(unittest.TestCase):
                 verify_capture(path)
 
     @unittest.skipUnless((ROOT / ".git").exists(), "local container uses a source snapshot, not a Git checkout")
-    def test_runner_reuses_exact_commit_checkout_across_stages(self):
+    def test_runner_reuses_exact_commit_checkout_across_stages_with_foreign_owner(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             workspace = target / "workspace"
@@ -37,12 +37,21 @@ class TrafficTests(unittest.TestCase):
             executable.chmod(0o700)
             commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
             env = dict(os.environ, PATH=str(target) + ":" + os.environ["PATH"], TEST_WORKSPACE=str(workspace),
-                       TEST_REPOSITORY_URL=str(ROOT), TEST_COMMIT_SHA=commit)
+                       TEST_REPOSITORY_URL=str(ROOT), TEST_COMMIT_SHA=commit,
+                       GIT_TEST_ASSUME_DIFFERENT_OWNER="1", GIT_CONFIG_GLOBAL=str(target / "gitconfig"))
+            for source in [ROOT, ROOT / ".git"]:
+                subprocess.run(["git", "config", "--global", "--add", "safe.directory", str(source)],
+                               env=env, check=True)
             for stage in ["prepare", "unit", "report"]:
-                subprocess.run(["bash", str(ROOT / "tests/runner.sh"), stage], env=env,
-                               check=True, capture_output=True)
-                actual = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=workspace, text=True).strip()
+                result = subprocess.run(["bash", str(ROOT / "tests/runner.sh"), stage], env=env,
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                actual = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=workspace,
+                                                 env=env, text=True).strip()
                 self.assertEqual(actual, commit)
+            trusted = subprocess.check_output(["git", "config", "--global", "--get-all", "safe.directory"],
+                                              env=env, text=True).splitlines()
+            self.assertEqual(set(trusted), {str(ROOT), str(ROOT / ".git"), str(workspace)})
 
 
 if __name__ == "__main__":
