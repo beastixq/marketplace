@@ -5,12 +5,12 @@ package repository_test
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	m "github.com/beastixq/marketplace/internal/model"
 	repo "github.com/beastixq/marketplace/internal/repository"
+	"github.com/beastixq/marketplace/internal/testsupport"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 )
@@ -29,17 +29,12 @@ func init() {
 }
 
 func setupPostgresIntegrationDatabase() (func(), error) {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		return func() {}, nil
-	}
-	pool, err := pgxpool.New(context.Background(), dbURL)
+	pool, err := testsupport.OpenIntegrationPostgres()
 	if err != nil {
 		return nil, err
 	}
-	if err := pool.Ping(context.Background()); err != nil {
-		pool.Close()
-		return nil, err
+	if pool == nil {
+		return func() {}, nil
 	}
 	testPool = pool
 	return pool.Close, nil

@@ -38,7 +38,7 @@ Prefer the current repository instructions in AGENTS.md and verify claims agains
 
 ## Architecture Rules
 
-- `service` must not import `internal/repository`, pgx/pgconn details, SQLSTATE codes, constraint names, or repository-specific libraries.
+- Production `service` must not import `internal/repository`, pgx/pgconn details, SQLSTATE codes, constraint names, or repository-specific libraries. Tagged external `service_test` integration composition may wire repository adapters and `PgxTxManager`; this does not alter runtime dependencies.
 - `handler` and `web` must not import `internal/repository`.
 - Repository interfaces are owned by the consuming service layer.
 - Repository implementations live in `internal/repository` and satisfy service-defined interfaces.
@@ -96,7 +96,7 @@ var _ service.ProductRepo = (*ProductRepository)(nil)
 
 ## Testing Guidance
 
-- Service behavior should be unit-tested with test doubles, generally in package `service_test`.
+- Service unit behavior uses test doubles, generally in package `service_test`. Tagged component-owned service integration suites wire real PostgreSQL/repositories and run with `-p=1`; follow AGENTS.md and docs/testing.md.
 - Repository SQL, transactions, constraints, triggers, and PostgreSQL roles should be tested against a real database, generally in package `repository_test`.
 - Handler/web tests should focus on transport mapping, validation, redirects, rendering, and service error mapping.
 - If a refactor changes a cross-layer contract, update tests at the layer where the contract is consumed.

@@ -62,14 +62,15 @@
 
 ## Testing Style
 
-- Service tests: business rules with doubles/mocks.
+- Service unit tests: business rules with doubles/mocks. Tagged external
+  `service_test` integration suites use real repositories, transactions and PostgreSQL.
 - Repository unit tests: pgxmock for interaction, mapping and error translation;
   integration tests: real PostgreSQL for SQL, constraints and transactions.
 - Handler tests: transport behavior, DTOs, validation, service error mapping.
 - Web tests: template rendering, redirects, form behavior, view data.
 - Do not edit generated mocks manually.
 - Name method suites `Test<Component>_<Method>` and group scenarios with `t.Run`.
-  Integration repository suites append `_Integration`; filenames distinguish
+  Integration service/repository suites append `_Integration`; filenames distinguish
   unit and integration tests of each component.
 - Create mocks per scenario and keep setup, one tested call, and assertions in
   separate blocks. Add comments for intent, not repetitive AAA labels.

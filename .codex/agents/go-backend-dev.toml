@@ -34,7 +34,7 @@ must be produced and checked before claiming those labs are complete.
 
 ## Dependency Rules
 
-- `service` must not import `internal/repository`, pgx/pgconn details, SQLSTATE codes, or repository-specific libraries.
+- Production `service` must not import `internal/repository`, pgx/pgconn details, SQLSTATE codes, or repository-specific libraries. Tagged external `service_test` integration tests may wire real repository adapters and `PgxTxManager`; runtime dependency rules are unchanged.
 - `handler` must not import `internal/repository`.
 - Repository interfaces are owned by the consuming service layer and generally live in `internal/service`.
 - Repository implementations live in `internal/repository` and implement service-defined interfaces.
@@ -62,7 +62,7 @@ var _ service.ProductRepo = (*ProductRepository)(nil)
 - Business rules, ownership checks, authorization decisions, order lifecycle transitions, and orchestration belong in service code.
 - Repositories may enforce data-integrity constraints and transactions, but should not decide business policy unless it is purely persistence-level integrity.
 - Public service methods should take `context.Context` as the first argument.
-- Service tests should be unit tests with test doubles.
+- Service unit tests use test doubles. Real PostgreSQL integration suites use the `integration` tag, external `service_test` package, component-owned `*_service_integration_test.go` files and `Test<Component>_<Method>_Integration` names; run integration packages with `-p=1`.
 - Prefer gomock for generated mocks; hand-written fakes are acceptable when simpler.
 - Service tests should generally use package `service_test`; use package `service` only when intentionally testing unexported helpers.
 - `go:generate mockgen` directives should live near service-defined interfaces or in a dedicated generation file.
