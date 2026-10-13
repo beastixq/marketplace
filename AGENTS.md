@@ -25,12 +25,14 @@ Do not recreate duplicate layer instructions as incidental cleanup.
   in [docs/testing.md](docs/testing.md). Test source files are component-owned;
   `artifacts/lab1/` is an ignored report directory, not an application dependency.
 - Testing Lab2 is not WebLab#2. Its assignment is
-  `/home/roman/bmstu/7sem/testing/labs/2.pdf`. The working tree implements real
+  `/home/roman/bmstu/7sem/testing/labs/2.pdf`. The branch implements real
   PostgreSQL service integration, API-fixture pytest E2E, a container runner,
   shared/exclusive cleanup and recovery, Allure 2, and GitHub Actions; see
-  [docs/testing.md](docs/testing.md). Local normal/failure/recovery checks have
-  run; cloud Actions is not yet verified and requires separate commit/push
-  approval. Evidence belongs in ignored `artifacts/lab2/`, not business code.
+  [docs/testing.md](docs/testing.md). Local normal/failure/recovery checks and
+  GitHub Actions unit/integration/E2E, recovery and Lab1 reports passed on
+  2026-10-13; see the linked testing documentation for the actual cloud run.
+  Future commit/push still requires approval. Evidence belongs in ignored
+  `artifacts/lab2/`, not business code.
   Do not create OpenAPI, SPA, or later WebLabs artifacts for a testing task.
 - The WebLabs context and accepted decisions below are retained as product and
   architecture context. Historical acceptance/check records are not new checks

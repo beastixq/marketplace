@@ -352,8 +352,14 @@ timed rotation rather than disabling a host AppArmor profile.
 `.github/workflows/testing.yml` calls the same `make test-all`, restores branch
 history using the job's GITHUB_TOKEN and uploads reports/history with `always()`.
 Coverage remains part of the unit stage. No PAT/MCP installation is necessary.
-Cloud execution is **not verified until the agreed changes are committed/pushed**;
-local success is not a GitHub Actions result. Commit/push require separate consent.
+Cloud execution was verified on 2026-10-13 in
+[Actions run 38405404206](https://github.com/beastixq/marketplace/actions/runs/38405404206)
+at `200d5f4`: unit → PostgreSQL integration → pytest E2E passed, recovery completed,
+Allure contains 708 passed and no failed/broken/skipped results, and Lab1 reports
+and coverage were preserved. The initial cloud bootstrap ownership failure was
+fixed with an exact container checkout `safe.directory` and a real-Git regression.
+Local success alone is not a GitHub Actions result. Future commit/push requires
+separate consent.
 
 See [bug handoff](bug-handoff.md) for minimal reproduction, evidence, retest and
 regression. Never create a remote issue just because a local test failed.
@@ -366,5 +372,6 @@ Its deliberate fault controls (`TEST_FAULT`, `TEST_FAULT_GATE`) are test-only an
 unset during normal runs. Simultaneous browser/manual behavior is checked separately
 on independent accounts; GUI automation is not the MVP E2E requirement.
 The Git-checkout bootstrap unit check runs on the host/CI checkout and checks three
-consecutive runner entries. It is skipped only in a local snapshot container,
+consecutive runner entries with a simulated foreign filesystem owner and an
+isolated Git configuration. It is skipped only in a local snapshot container,
 which intentionally has no `.git`; PostgreSQL integration skips are never accepted.
