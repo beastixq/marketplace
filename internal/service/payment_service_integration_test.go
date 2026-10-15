@@ -20,13 +20,13 @@ import (
 func TestPaymentService_ProcessOrderPayment_Integration(t *testing.T) {
 	for _, scenario := range []string{"success and repeat", "wrong amount", "declined", "expired"} {
 		t.Run(scenario, func(t *testing.T) {
-			f := newIntegrationFixture(t)
+			f := newServiceIntegration(t)
 			ctx := context.Background()
-			buyer := f.actor(m.RoleBuyer)
-			seller, sellerID := f.seller()
-			orderID := f.checkout(buyer, f.product(seller, sellerID, 1), f.address(buyer))
+			buyer := f.createActor(m.RoleBuyer)
+			seller, sellerID := f.createSeller()
+			orderID := createPendingOrder(t, f.orderService(), buyer, f.createProduct(seller, sellerID, 1), f.createAddress(buyer))
 			paymentService := s.NewPaymentService(repo.NewOrderRepo(f.pool), payment.NewMockBankGateway("http://mock.test"), time.Minute)
-			order, err := f.orders.GetOrderByID(ctx, buyer, orderID)
+			order, err := repo.NewOrderRepo(f.pool).GetOrderByID(ctx, orderID)
 			mustIntegration(t, err)
 			paymentService.Clock = fakeClock{now: order.CreatedAt.Add(time.Second)}
 			link, _, err := paymentService.GetOrderPaymentURL(ctx, buyer, orderID)
@@ -56,7 +56,7 @@ func TestPaymentService_ProcessOrderPayment_Integration(t *testing.T) {
 				wantStatus = m.StatusPaid
 				mustIntegration(t, paymentService.ProcessOrderPayment(ctx, token))
 			}
-			order, err = f.orders.GetOrderByID(ctx, buyer, orderID)
+			order, err = repo.NewOrderRepo(f.pool).GetOrderByID(ctx, orderID)
 			mustIntegration(t, err)
 			if order.Status != wantStatus {
 				t.Fatalf("persisted status = %s", order.Status)

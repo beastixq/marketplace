@@ -18,6 +18,8 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    outputs:
+      public-report: ${{ steps.report.outputs.available }}
     env:
       RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}
       STAND_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}
@@ -57,6 +59,28 @@ jobs:
             await exec.exec('unzip', ['-q', filename, '-d', process.env.HISTORY_DIRECTORY]);
       - name: Unit, integration, E2E and recovery
         run: make test-all
+      - name: Explain stages and report access
+        id: report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const root = `artifacts/lab2/${process.env.RUN_ID}`;
+            const statuses = fs.existsSync(`${root}/stages.json`)
+              ? JSON.parse(fs.readFileSync(`${root}/stages.json`, 'utf8')) : {};
+            const rows = ['unit', 'integration', 'e2e'].map(name => [name, statuses[name] || 'not started']);
+            const recovery = fs.existsSync(`${root}/recovery.json`)
+              ? JSON.parse(fs.readFileSync(`${root}/recovery.json`, 'utf8')) : null;
+            rows.push(['recovery', recovery ? (recovery.restored ? 'passed' : 'incomplete') : 'not started']);
+            const available = fs.existsSync(`${root}/public-allure-report/index.html`);
+            core.setOutput('available', String(available));
+            await core.summary.addHeading('Marketplace: unit → integration → E2E')
+              .addRaw('One hosted runner keeps the same Docker stand through all stages and recovery.\n\n')
+              .addTable([[{data: 'Stage', header: true}, {data: 'Result', header: true}], ...rows])
+              .addRaw('Full diagnostics and coverage: download the testing artifact below.\n\n')
+              .addLink('Public Allure (updated by the deployment job)', `https://${context.repo.owner}.github.io/${context.repo.repo}/`)
+              .write();
       - name: Preserve reports even after failure
         if: always()
         uses: actions/upload-artifact@v4
@@ -77,3 +101,26 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
           path: ${{ steps.history.outputs.directory }}/
+      - name: Upload sanitized Allure site
+        if: always() && steps.report.outputs.available == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/TAD-Lab2'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: artifacts/lab2/${{ env.RUN_ID }}/public-allure-report/
+
+  publish-report:
+    needs: test
+    if: always() && needs.test.outputs.public-report == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/TAD-Lab2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Publish sanitized Allure
+        id: deployment
+        uses: actions/deploy-pages@v4

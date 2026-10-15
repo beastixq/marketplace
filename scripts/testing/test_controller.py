@@ -11,6 +11,18 @@ from scripts.testing import controller
 
 
 class ControllerTests(unittest.TestCase):
+    def test_different_runner_build_inputs_do_not_share_a_mutable_image_tag(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "tests").mkdir()
+            for name in ["Dockerfile", "requirements.txt", "runner.sh"]:
+                (root / "tests" / name).write_text(name)
+            with patch.object(controller, "ROOT", root):
+                first = controller.runner_image()
+                self.assertEqual(controller.runner_image(), first)
+                (root / "tests/requirements.txt").write_text("different pinned dependencies")
+                self.assertNotEqual(controller.runner_image(), first)
+
     def test_permissions_fingerprint_detects_grant_and_owner_loss_not_check_deparse(self):
         owner = b"ALTER TABLE public.products OWNER TO postgres;"
         grant = b"GRANT SELECT ON TABLE public.products TO marketplace_buyer;"

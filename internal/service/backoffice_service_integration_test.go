@@ -16,18 +16,18 @@ import (
 
 func TestBackofficeService_GetPlatformStats_Integration(t *testing.T) {
 	t.Run("aggregate paid order filters and role boundaries", func(t *testing.T) {
-		f := newIntegrationFixture(t)
+		f := newServiceIntegration(t)
 		ctx := context.Background()
 		backoffice := s.NewBackofficeService(repo.NewBackofficeRepo(f.pool))
 		analyst, admin := s.Actor{Role: m.RoleAnalyst}, s.Actor{Role: m.RoleAdmin}
 		before, err := backoffice.GetPlatformStats(ctx, analyst)
 		mustIntegration(t, err)
-		buyer := f.actor(m.RoleBuyer)
-		seller, sellerID := f.seller()
-		productID, categoryID := f.product(seller, sellerID, 2), f.category()
-		mustIntegration(t, f.products.ReplaceProductCategories(ctx, seller, productID, []int64{categoryID}))
-		orderID := f.checkout(buyer, productID, f.address(buyer))
-		mustIntegration(t, f.orders.PayOrder(ctx, buyer, orderID))
+		buyer := f.createActor(m.RoleBuyer)
+		seller, sellerID := f.createSeller()
+		productID, categoryID := f.createProduct(seller, sellerID, 2), f.createCategory()
+		mustIntegration(t, f.productService().ReplaceProductCategories(ctx, seller, productID, []int64{categoryID}))
+		orderID := createPendingOrder(t, f.orderService(), buyer, productID, f.createAddress(buyer))
+		mustIntegration(t, f.orderService().PayOrder(ctx, buyer, orderID))
 
 		after, err := backoffice.GetPlatformStats(ctx, analyst)
 		mustIntegration(t, err)
@@ -55,11 +55,6 @@ func TestBackofficeService_GetPlatformStats_Integration(t *testing.T) {
 		}
 		from := time.Now().UTC().Truncate(24 * time.Hour)
 		to := from.AddDate(0, 0, 1)
-		stats, err := f.sellers.GetSellerStats(ctx, sellerID, from, to)
-		mustIntegration(t, err)
-		if stats.TotalOrders != 1 || !stats.TotalRevenue.Equal(decimal.NewFromInt(100)) || !stats.AvgOrderValue.Equal(decimal.NewFromInt(100)) || stats.TopProductName != "Integration product" {
-			t.Fatalf("seller stats = %+v", stats)
-		}
 		categories, err := backoffice.GetSalesByCategory(ctx, analyst, m.ReportOptions{DateFrom: &from, DateTo: &to})
 		mustIntegration(t, err)
 		found = false

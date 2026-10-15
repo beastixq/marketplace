@@ -6,7 +6,7 @@ services:
   cache:
     ports: !reset []
   api:
-    image: marketplace-test-runner:lab2
+    image: ${RUNNER_IMAGE:-marketplace-test-runner:lab2}
     entrypoint: []
     command: ["/stand/marketplace-api", "-config", "/stand/config.yaml"]
     environment:
@@ -21,7 +21,7 @@ services:
       cache:
         condition: service_healthy
   runner:
-    image: marketplace-test-runner:lab2
+    image: ${RUNNER_IMAGE:-marketplace-test-runner:lab2}
     build:
       context: .
       dockerfile: tests/Dockerfile

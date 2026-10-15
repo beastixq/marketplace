@@ -130,7 +130,7 @@ class Acceptance:
                     raise AssertionError("baseline drift across repeated integration runs")
                 baseline = record["fingerprint"]
                 from scripts.testing.results import junit_summary
-                current = junit_summary(ARTIFACTS / run_id / "allure-results/integration.xml")
+                current = junit_summary(ARTIFACTS / run_id / "raw/integration.xml")
                 if counts is not None and current != counts:
                     raise AssertionError("integration outcome changed across repeats")
                 counts = current

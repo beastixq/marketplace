@@ -22,6 +22,13 @@ ARTIFACTS = ROOT / "artifacts/lab2"
 RUNTIME = Path(os.getenv("TEST_RUNTIME_ROOT", "/tmp/marketplace-test-runtime"))
 
 
+def runner_image():
+    digest = hashlib.sha256()
+    for name in ["tests/Dockerfile", "tests/requirements.txt", "tests/runner.sh"]:
+        digest.update(name.encode() + b"\0" + (ROOT / name).read_bytes())
+    return "marketplace-test-runner:" + digest.hexdigest()[:20]
+
+
 def resource_id(value):
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,80}", value):
         raise ValueError(f"unsafe resource ID: {value!r}")
@@ -122,9 +129,10 @@ class Stand:
                                                (["volume", "ls"], "{{.Name}}")])
         self.created = not existing
         check_ownership(record, self.id, self.project, existing)
+        self.env["RUNNER_IMAGE"] = record.get("image", "marketplace-test-runner:lab2") if record and existing else runner_image()
         if record is None:
             # Persist ownership before Docker creation, including failures during preparation.
-            save_json(self.metadata, {"stand": self.id, "project": self.project, "port": None})
+            save_json(self.metadata, {"stand": self.id, "project": self.project, "port": None, "image": self.env["RUNNER_IMAGE"]})
 
     def docker(self, *args, **kwargs):
         return subprocess.run(["docker", *args], cwd=ROOT, env=self.env, check=True, **kwargs)
@@ -167,6 +175,7 @@ class Stand:
         self.active = None
 
     def ensure(self):
+        self.env["RUNNER_IMAGE"] = runner_image()
         self.compose("config", "-q")
         self.compose("build", "runner", stdout=(self.run / "build.log").open("wb"), stderr=subprocess.STDOUT)
         self.compose("up", "-d", "--wait", "--wait-timeout", "90", "db", "cache")
@@ -175,7 +184,7 @@ class Stand:
     def start_api(self):
         self.compose("up", "-d", "api")
         port = self.compose("port", "api", "8080", capture_output=True, text=True).stdout.strip().rsplit(":", 1)[1]
-        save_json(self.metadata, {"stand": self.id, "project": self.project, "port": int(port)})
+        save_json(self.metadata, {"stand": self.id, "project": self.project, "port": int(port), "image": self.env["RUNNER_IMAGE"]})
         self.ready()
         print(f"UI: http://127.0.0.1:{port} (STAND_ID={self.id})", flush=True)
 

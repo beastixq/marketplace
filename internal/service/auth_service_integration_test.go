@@ -5,27 +5,26 @@ package service_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
 	m "github.com/beastixq/marketplace/internal/model"
+	repo "github.com/beastixq/marketplace/internal/repository"
 	s "github.com/beastixq/marketplace/internal/service"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func TestAuthService_Register_Integration(t *testing.T) {
 	t.Run("persist hash login token duplicate and deactivation", func(t *testing.T) {
-		f := newIntegrationFixture(t)
+		f := newServiceIntegration(t)
 		ctx := context.Background()
-		auth := s.NewAuthService(f.users, nil, "integration-secret", time.Hour)
-		create := m.UserCreate{Email: fmt.Sprintf("auth-%d@example.test", time.Now().UnixNano()), Password: "Synthetic-password-42", FullName: "Auth account", Role: m.RoleBuyer}
+		auth := s.NewAuthService(f.userService(), nil, "integration-secret", time.Hour)
+		create := f.userCreate(m.RoleBuyer)
 
 		token, err := auth.Register(ctx, create)
 		mustIntegration(t, err)
-		user, err := f.users.GetAuthUserByEmail(ctx, create.Email)
+		user, err := repo.NewUserRepo(f.pool).GetUserByEmail(ctx, create.Email)
 		mustIntegration(t, err)
-		f.userIDs = append(f.userIDs, user.ID)
 		if user.PasswordHash == create.Password {
 			t.Fatal("plaintext password persisted")
 		}
@@ -45,7 +44,7 @@ func TestAuthService_Register_Integration(t *testing.T) {
 		if _, err := auth.Login(ctx, create.Email, "wrong-password"); !errors.Is(err, s.ErrWrongPassword) {
 			t.Fatalf("password = %v", err)
 		}
-		mustIntegration(t, f.users.DeleteUserByID(ctx, s.Actor{UserID: user.ID, Role: m.RoleBuyer}, user.ID))
+		mustIntegration(t, f.userService().DeleteUserByID(ctx, s.Actor{UserID: user.ID, Role: m.RoleBuyer}, user.ID))
 		if _, err := auth.Login(ctx, create.Email, create.Password); !errors.Is(err, s.ErrAccountDeactivated) {
 			t.Fatalf("inactive login = %v", err)
 		}

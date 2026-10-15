@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from scripts.testing.results import leaf_junit, require_integration
+from scripts.testing.results import junit_to_allure, public_results, require_integration
 
 OUTPUT = Path("/run")
 PACKAGES = ["./internal/service", "./internal/repository", "./internal/config",
@@ -58,7 +58,8 @@ def main(stage):
         command(["go", "build", "-o", "/stand/marketplace-api", "./cmd/api"])
         shutil.copyfile("tests/config.yaml", "/stand/config.yaml")
     elif stage == "unit":
-        command(["python3", "-m", "unittest", "discover", "-s", "scripts/testing", "-p", "test_*.py"])
+        (OUTPUT / "raw").mkdir(exist_ok=True)
+        command([sys.executable, "-m", "pytest", "-q", "scripts/testing", "--junitxml", str(OUTPUT / "raw/python-unit.xml")])
         go_tests(stage, ["-count=1", "-shuffle=on", "./..."])
         if os.getenv("TEST_FAULT") == "unit":
             command(["python3", "-c", "import unittest; case = unittest.FunctionTestCase(lambda: unittest.TestCase().fail('injected unit failure')); result = unittest.TextTestRunner().run(unittest.TestSuite([case])); raise SystemExit(not result.wasSuccessful())"])
@@ -116,8 +117,15 @@ def main(stage):
         (results / "environment.properties").write_text("\n".join(f"{key}={value}" for key, value in environment.items()))
         for source in (OUTPUT / "raw").glob("*.xml"):
             if source.stem != "e2e":
-                leaf_junit(source, results / source.name)
+                group = {"unit": "Unit", "integration": "Integration", "python-unit": "Infrastructure"}[source.stem]
+                junit_to_allure(source, results, group)
+                previous = results / source.name
+                if previous.exists():
+                    previous.unlink()  # Original JUnit stays in raw/; importing both formats duplicates cases.
         command(["allure", "generate", str(results), "--clean", "-o", "/run/allure-report"])
+        public = OUTPUT / "public-allure-results"
+        public_results(results, public)
+        command(["allure", "generate", str(public), "--clean", "-o", "/run/public-allure-report"])
     else:
         raise ValueError(f"unknown stage {stage}")
 
