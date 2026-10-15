@@ -19,6 +19,11 @@ submission-specific directory without changing the source organization.
 | Default TestMain inspected `DATABASE_URL`, tying unit initialization to integration configuration. | Select database initialization with build tags; unit tests ignore database configuration. |
 | Reports counted parent suites as independent scenarios and offered no result HTML. | Render leaf cases from JSONL in `test-results.html`, preserve failures including package/parent failures, and retain XML for CI. |
 | `GOPROXY=off` was described as complete network isolation; shuffle was described without distinguishing subtests. | Document module-download restrictions and top-level shuffle semantics precisely. |
+| E2E was a one-line call hiding all actions/assertions and crash waits. | Keep the purchase flow and assertions in the pytest test; curl CLI reuses that same scenario, with fault checkpoints in a separate module. |
+| A common integration fixture mixed all services, builders, assertions and crash waits; cleanup depended on a successful lookup. | Keep pool/ownership/typed composition shared, move helpers to components, register exact emails before creation, and gate only after a verified committed account. |
+| Role checks used empty input, reserves were manufactured directly, and persistence was sometimes checked through another service. | Use valid negative-case input, real pending reservations, repository persistence assertions and stronger rollback/review checks. |
+| Allure merged Go unit/integration by package and omitted infrastructure unit results. | Import original JUnit with explicit hierarchy, stable existing history IDs and Python infrastructure results; preserve raw XML and do not fabricate Go steps. |
+| Report access required downloading HTML without a public entrypoint. | Deploy a separately sanitized static Allure site; retain full diagnostics only in Actions artifacts. |
 
 ## Preserved Boundaries
 

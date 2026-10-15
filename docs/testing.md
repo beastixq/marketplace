@@ -157,6 +157,11 @@ Regenerate mocks after changing a service interface or port interface, then run 
 - Keep tests table-driven when it improves clarity.
 - Do not assert implementation details when a public behavior assertion is enough.
 
+Integration's shared fixture owns the PostgreSQL pool, exact account cleanup and
+typed service composition. Component files own their data builders and persistence
+assertions. Register cleanup ownership before a creating call; a failed subsequent
+lookup must not leak the account. Negative role checks use otherwise valid input.
+
 Test-data techniques are described here rather than encoded in test names:
 
 | Scenario group | Technique and example |
@@ -237,6 +242,17 @@ Shared E2E/traffic require an existing ready stand and never recreate the server
 Local developers using the same Docker daemon choose different IDs, for example
 `STAND_ID=alice` and `STAND_ID=bob`; UI ports are allocated independently. The
 default UI binding is localhost; `UI_PORT` can select a port at first startup.
+`STAND_ID=verification` is only a chosen name, not a special mode. Each stand has
+its own PostgreSQL process/data directory, Redis, API and network; it does not add
+a database to the normal application's PostgreSQL. Runner image tags depend on
+Dockerfile/requirements/bootstrap contents, so different checkouts do not replace
+each other's differently configured runner. Images and Go caches remain reusable.
+
+For a persistent manual/automatic stand, start it with `test-stand-up` first.
+`test-e2e` then creates only temporary runner containers and keeps API/DB/Redis
+running. `test-all` on that stand preserves it afterwards but stops the API for
+snapshot/restore; it is not a zero-downtime operation. A full run that creates its
+own stand removes only that stand's containers after verified recovery.
 
 Local runs archive tracked and non-ignored working-copy files, excluding `.serena`
 and reports. The runner extracts that snapshot. CI fetches the exact commit
@@ -247,6 +263,11 @@ Runtime DB directories and compilation caches use `/tmp/marketplace-test-runtime
 `artifacts/lab2/<RUN_ID>/`. Do not remove runtime directories while a stand is in
 use. Bind-mounted runtime data is retained for diagnosis after container removal;
 there is no global Docker prune or automatic deletion of unrelated resources.
+Directories are execution records, not a list of live stands: `check-*` includes
+deliberate failures/repeats/parallel checks; `ci-*` identifies cloud runs; `history`
+holds report history. Start with the relevant run's `stages.json`, `recovery.json`
+and `allure-report/index.html`. Local retention is manual: do not remove recovery
+snapshots of unfinished runs. Existing diagnostic directories are not auto-deleted.
 
 ### Data Ownership And Recovery
 
@@ -323,12 +344,18 @@ Price-changing service fixtures provide `ChangedBy`, as the current HTTP handler
 does; missing metadata is recorded as RISK-001. Seller-statistics windows use UTC
 day boundaries because its PostgreSQL function accepts dates. Payment checks use
 the existing controllable clock; the purchase creates a fresh cart due to BUG-001.
+The scenario's HTTP actions and business assertions are visible in the test file;
+`purchase.py --curl` invokes the same pytest scenario with another transport,
+including its fixtures/finalizer. Crash-test checkpoints live in `faults.py`.
 
-Each run retains Go JSONL/JUnit, native pytest Allure, stage statuses, server logs,
+Each run retains Go JSONL/JUnit, Python infrastructure JUnit, native pytest Allure, stage statuses, server logs,
 environment/source hash, fixture manifests, original Lab1 HTML/statement/branch
 coverage and `allure-report/index.html`. Go JUnit parents are removed only when
 leaf results capture their outcome; an independent suite cleanup failure remains
-visible. Allure generates the HTML and trends; `cmd/testreport` is not extended.
+visible. A small JUnit importer supplies `Unit`/`Integration`/`Infrastructure`
+hierarchy while preserving Allure's original JUnit history IDs. It does not invent
+Go business steps; detailed steps/HTTP attachments belong to the native pytest E2E.
+Allure generates the HTML and trends; `cmd/testreport` is not extended.
 History is serialized and reused per branch, without overwriting run artifacts.
 Pipeline markers live in a separate Infrastructure suite; they are not additional
 product scenarios. Reports remain available after test/recovery failures.
@@ -341,6 +368,14 @@ python3 -m http.server 8090 --bind 127.0.0.1 --directory artifacts/lab2/<RUN_ID>
 
 Open `http://127.0.0.1:8090`; direct `file://` loading can block the report's JSON.
 
+After successful deployment, open [Allure on GitHub Pages](https://beastixq.github.io/marketplace/).
+`public-allure-report/` is generated from allowlisted result fields: statuses,
+hierarchy, timings and step names, without HTTP attachments, parameters, failure
+traces, fixture containers or environment files. History is sanitized too. The
+full report/logs/coverage remain in the Actions artifact, not in the Pages upload.
+Failed tests still appear as failed on the public site; details require the full
+diagnostic artifact. This is static HTML hosting, not an installed Allure service.
+
 `test-traffic` captures only the synthetic client's HTTP connection inside the
 server's Docker network, repeats purchase with curl and checks endpoints/statuses
 with tshark. Capture contains synthetic credentials/JWTs: confirm account cleanup
@@ -352,12 +387,28 @@ timed rotation rather than disabling a host AppArmor profile.
 `.github/workflows/testing.yml` calls the same `make test-all`, restores branch
 history using the job's GITHUB_TOKEN and uploads reports/history with `always()`.
 Coverage remains part of the unit stage. No PAT/MCP installation is necessary.
-Cloud execution was verified on 2026-10-13 in
-[Actions run 38405404206](https://github.com/beastixq/marketplace/actions/runs/38405404206)
-at `200d5f4`: unit → PostgreSQL integration → pytest E2E passed, recovery completed,
-Allure contains 708 passed and no failed/broken/skipped results, and Lab1 reports
-and coverage were preserved. The initial cloud bootstrap ownership failure was
-fixed with an exact container checkout `safe.directory` and a real-Git regression.
+The `test` job uses a GitHub-hosted `ubuntu-24.04` runner; no self-hosted runner is
+installed. One VM owns the Docker stand through unit → integration → E2E and
+recovery. Three ordinary jobs would get three independent VMs and lose that
+continuous stand. The job summary lists individual stage statuses; `publish-report`
+is a separate dependent job that deploys only sanitized HTML, including reports
+from failed test runs. Pull requests never publish the site.
+
+Pages requires a one-time repository setting: Settings → Pages → Source: GitHub
+Actions; permit TAD-Lab2 in the `github-pages` environment if restricted. Deployment
+then uses only `pages: write`/OIDC and the job token, no PAT. Test artifacts/history
+are uploaded with `always()` independently of publication.
+See the [Lab2 requirement audit](testing-lab2.md) for scope, evidence and limitations.
+The revised test job was verified on 2026-10-15 in
+[Actions run 38775314127](https://github.com/beastixq/marketplace/actions/runs/38775314127)
+at `d28f259`: unit → PostgreSQL integration → pytest E2E and recovery passed;
+full/public Allure contain 744 passed and no failed/broken/skipped results, including
+Python infrastructure tests. Lab1 reports/coverage and previous history were retained.
+The first publication attempt was rejected by the `github-pages` environment's
+branch policy (only main was allowed), before executing deployment steps. Test-job
+success does not imply publication: check the separate `publish-report` job/site.
+The earlier Git bootstrap ownership failure was fixed with an exact container
+checkout `safe.directory` and a real-Git regression.
 Local success alone is not a GitHub Actions result. Future commit/push requires
 separate consent.
 

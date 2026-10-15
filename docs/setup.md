@@ -13,6 +13,10 @@ For the separate testing stand, only Docker/Compose (2.24.4+) and host Python 3
 with `make` are required; Go, pytest, Goose, Allure and traffic tools live inside
 the runner. Use `make test-stand-up`; see [testing stand](testing.md#container-test-stand).
 This does not change the normal application startup documented below.
+For a persistent lab stand use a stable `STAND_ID`, then run shared `test-e2e`
+against it; full `test-all` requires an exclusive window. GitHub uses hosted
+runners, not a runner installed on the student's computer. The public static
+Allure and Actions artifact access are described in [testing](testing.md#ci-and-bug-handoff).
 
 Start PostgreSQL and Redis:
 
