@@ -3,13 +3,13 @@ from urllib.parse import parse_qs, urlsplit
 
 import allure
 
-from tests.e2e.data import PASSWORD
+from tests.e2e.data import PASSWORD, PurchaseData
 from tests.e2e.faults import after_checkout
 
 
 @allure.title("Buyer purchases a product through delivery and review")
 @allure.parent_suite("E2E")
-def test_purchase_until_review(purchase_data):
+def test_purchase_until_review(purchase_data: PurchaseData) -> None:
     data = purchase_data
     api = data.api
     buyer_id = data.manifest["ids"]["buyer_id"]

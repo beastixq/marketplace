@@ -1,5 +1,7 @@
 """API arrangement and fail-closed PostgreSQL cleanup for one synthetic case."""
 
+from __future__ import annotations
+
 import json
 import base64
 import os
@@ -8,39 +10,55 @@ import socket
 import sys
 import uuid
 from pathlib import Path
+from typing import NotRequired, TypedDict
 
 from tests.e2e.client import API
 
 PASSWORD = "Synthetic-password-42"
 
 
-def save_manifest(path, manifest):
+class Manifest(TypedDict):
+    run_id: str
+    marker: str
+    emails: dict[str, str]
+    ids: dict[str, int]
+    cleaned: bool
+    database_cleaned: NotRequired[bool]
+    cache_product_ids: NotRequired[list[int]]
+
+
+def save_manifest(path: str | Path, manifest: Manifest) -> None:
     temporary = Path(path).with_suffix(".tmp")
     temporary.write_text(json.dumps(manifest, indent=2))
     temporary.replace(path)
 
 
 class PurchaseData:
-    def __init__(self, api):
-        self.api = api
-        self.marker = "e2e-" + os.environ["RUN_ID"] + "-" + uuid.uuid4().hex[:8]
-        self.path = Path(os.getenv("TEST_OUTPUT", "/run")) / "fixtures" / (self.marker + ".json")
+    # Created only by prepare(); cleanup relies on the persisted manifest after partial failures.
+    seller_id: int
+    product_id: int
+    address_id: int
+
+    def __init__(self, api: API) -> None:
+        self.api: API = api
+        self.marker: str = "e2e-" + os.environ["RUN_ID"] + "-" + uuid.uuid4().hex[:8]
+        self.path: Path = Path(os.getenv("TEST_OUTPUT", "/run")) / "fixtures" / (self.marker + ".json")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.manifest = {"run_id": os.environ["RUN_ID"], "marker": self.marker, "emails": {
+        self.manifest: Manifest = {"run_id": os.environ["RUN_ID"], "marker": self.marker, "emails": {
             role: f"{self.marker}-{role}@example.test" for role in ["buyer", "seller"]},
             "ids": {}, "cleaned": False}
-        self.tokens = {}
+        self.tokens: dict[str, str] = {}
         self.save()
 
-    def save(self):
+    def save(self) -> None:
         save_manifest(self.path, self.manifest)
 
-    def remember(self, name, value):
+    def remember(self, name: str, value: int) -> int:
         self.manifest["ids"][name] = value
         self.save()
         return value
 
-    def prepare(self):
+    def prepare(self) -> PurchaseData:
         for role in ["buyer", "seller"]:
             result = self.api.call("POST", "/auth/register", body={"email": self.manifest["emails"][role],
                 "password": PASSWORD, "full_name": "Test " + self.marker, "role": role})
@@ -66,12 +84,12 @@ class PurchaseData:
                                             "house": "1", "zip_code": "123456"})["id"])
         return self
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         cleanup_manifest(self.path, self.api)
 
 
-def cleanup_manifest(path, api=None):
-    manifest = json.loads(Path(path).read_text())
+def cleanup_manifest(path: str | Path, api: API | None = None) -> None:
+    manifest: Manifest = json.loads(Path(path).read_text())
     if manifest["cleaned"]:
         verify_deleted_tokens(path, api)
         return
@@ -101,17 +119,18 @@ def cleanup_manifest(path, api=None):
     verify_deleted_tokens(path, api)
 
 
-def verify_deleted_tokens(path, api=None):
+def verify_deleted_tokens(path: str | Path, api: API | None = None) -> None:
     credentials = Path(path).with_suffix(".credentials")
     if credentials.exists():
-        for token in json.loads(credentials.read_text()).values():
+        tokens: dict[str, str] = json.loads(credentials.read_text())
+        for token in tokens.values():
             (api or API()).call("GET", "/users/me", 401, token=token)
         credentials.unlink()
 
 
-def check_cleanup_guards():
+def check_cleanup_guards() -> None:
     own, other = PurchaseData(API()), PurchaseData(API())
-    foreign_item = None
+    foreign_item: int | None = None
     try:
         own.prepare()
         other.prepare()

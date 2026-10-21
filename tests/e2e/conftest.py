@@ -7,7 +7,7 @@ from tests.e2e.data import PurchaseData
 
 
 @pytest.fixture
-def purchase_data(request):
+def purchase_data(request: pytest.FixtureRequest) -> PurchaseData:
     transport = os.getenv("TEST_HTTP_TRANSPORT", "requests")
     if transport not in {"requests", "curl"}:
         raise ValueError("TEST_HTTP_TRANSPORT must be requests or curl")

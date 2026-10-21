@@ -2,10 +2,11 @@
 
 import argparse
 import os
+from collections.abc import Sequence
 from pathlib import Path
 
 
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     import pytest
 
     parser = argparse.ArgumentParser(description=__doc__)

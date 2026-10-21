@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 
-def after_checkout(directory=Path("/run")):
+def after_checkout(directory: Path = Path("/run")) -> None:
     gate = os.getenv("TEST_FAULT_GATE")
     if gate not in {"e2e", "shared"}:
         return

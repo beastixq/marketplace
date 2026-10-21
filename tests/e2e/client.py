@@ -2,21 +2,26 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from typing import Any, TypeAlias
 
 import allure
 import requests
 
 from scripts.testing.results import redact
 
+JSONValue: TypeAlias = dict[str, "JSONValue"] | list["JSONValue"] | str | int | float | bool | None
+
 
 class API:
-    def __init__(self, base_url=None, use_curl=False):
+    def __init__(self, base_url: str | None = None, use_curl: bool = False) -> None:
         self.base_url = (base_url or os.environ["BASE_URL"]).rstrip("/")
         self.use_curl = use_curl
         self.session = requests.Session()
         self.session.trust_env = False
 
-    def call(self, method, path, status=200, token=None, body=None):
+    def call(self, method: str, path: str, status: int = 200, token: str | None = None,
+             body: JSONValue = None) -> Any:
+        # JSON may be an object, list, scalar or null; scenarios check endpoint-specific content.
         url = self.base_url + "/api/v1" + path
         headers = {"Content-Type": "application/json"}
         if token:
@@ -30,8 +35,8 @@ class API:
                 process = subprocess.run(["curl", "--silent", "--show-error", "--max-time", "15",
                                           "--config", "-", "--write-out", "\n%{http_code}"],
                                          input="\n".join(config), text=True, capture_output=True, check=True)
-                raw, code = process.stdout.rsplit("\n", 1)
-                code = int(code)
+                raw, status_text = process.stdout.rsplit("\n", 1)
+                code = int(status_text)
             else:
                 response = self.session.request(method, url, headers=headers, json=body, timeout=15)
                 raw, code = response.text, response.status_code
