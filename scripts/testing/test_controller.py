@@ -40,16 +40,19 @@ class ControllerTests(unittest.TestCase):
             self.assertEqual(events, [("tools",), ("up", "-d", "--wait", "--wait-timeout", "90", "db"), ("migrate",)])
 
     def test_common_stand_attaches_to_compose_without_an_ownership_record(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            with patch.object(controller, "RUNTIME", root), patch.object(controller, "ARTIFACTS", root / "artifacts"), patch.object(controller.Stand, "docker", return_value=SimpleNamespace(stdout="existing")), patch.object(controller.subprocess, "check_output", return_value="r1"):
-                stand = controller.Stand("local", "r1")
-                stand.source()
-            self.assertEqual(stand.project, "marketplace")
-            self.assertFalse(stand.created)
-            self.assertFalse(stand.metadata.exists())
-            self.assertEqual(stand.env.get("TEST_SOURCE_DIR"), str(controller.ROOT))
-            self.assertFalse((stand.run / "source.tar").exists())
+        for repository, mode in (("", "working-tree"), ("https://example.test/p1.git", "git-checkout")):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                with patch.dict(os.environ, TEST_REPOSITORY_URL=repository), patch.object(controller, "RUNTIME", root), patch.object(controller, "ARTIFACTS", root / "artifacts"), patch.object(controller.Stand, "docker", return_value=SimpleNamespace(stdout="existing")), patch.object(controller.subprocess, "check_output", return_value="r1"):
+                    stand = controller.Stand("local", "r1")
+                    stand.source()
+                source = controller.ROOT if mode == "working-tree" else root / "runs/r1/workspace"
+                self.assertEqual(stand.project, "marketplace")
+                self.assertFalse(stand.created)
+                self.assertFalse(stand.metadata.exists())
+                self.assertEqual(stand.env.get("TEST_SOURCE_DIR"), str(source))
+                self.assertEqual(json.loads((stand.run / "environment.json").read_text())["source_mode"], mode)
+                self.assertFalse((stand.run / "source.tar").exists())
 
     def test_runner_streams_output_before_exit_and_preserves_logs_and_failure_code(self):
         for exit_code in (0, 7):
