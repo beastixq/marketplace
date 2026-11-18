@@ -3,7 +3,7 @@
 import os
 import csv
 import re
-import shutil
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -22,7 +22,7 @@ def command(args, **kwargs):
 def go_tests(stage, args):
     raw = OUTPUT / "raw"
     raw.mkdir(exist_ok=True)
-    command(["go", "tool", "gotestsum", "--format", "pkgname-and-test-fails",
+    command(["go", "tool", "gotestsum", "--format", "standard-verbose",
              "--junitfile", str(raw / f"{stage}.xml"), "--jsonfile", str(raw / f"{stage}.jsonl"), "--", *args])
     if stage == "integration":
         require_integration(raw / "integration.jsonl", ["github.com/beastixq/marketplace/internal/repository",
@@ -46,17 +46,12 @@ def verify_capture(path):
 def main(stage):
     if stage == "prepare":
         command(["go", "mod", "download"])
-        command(["goose", "-dir", "migrations", "postgres", os.environ["DATABASE_URL"], "up"])
         import json
         environment = json.loads((OUTPUT / "environment.json").read_text())
         for name, args in {"go": ["go", "version"], "python": ["python3", "--version"],
-                           "allure": ["allure", "--version"],
-                           "postgres": ["psql", os.environ["DATABASE_URL"], "-Atc", "SELECT version()"],
-                           "migration": ["psql", os.environ["DATABASE_URL"], "-Atc", "SELECT max(version_id) FROM goose_db_version WHERE is_applied"]}.items():
+                           "allure": ["allure", "--version"]}.items():
             environment[name] = subprocess.check_output(args, text=True).strip()
         (OUTPUT / "environment.json").write_text(json.dumps(environment, indent=2))
-        command(["go", "build", "-o", "/stand/marketplace-api", "./cmd/api"])
-        shutil.copyfile("tests/config.yaml", "/stand/config.yaml")
     elif stage == "unit":
         (OUTPUT / "raw").mkdir(exist_ok=True)
         command([sys.executable, "-m", "pytest", "-q", "scripts/testing", "--junitxml", str(OUTPUT / "raw/python-unit.xml")])
@@ -65,11 +60,7 @@ def main(stage):
             command(["python3", "-c", "import unittest; case = unittest.FunctionTestCase(lambda: unittest.TestCase().fail('injected unit failure')); result = unittest.TextTestRunner().run(unittest.TestSuite([case])); raise SystemExit(not result.wasSuccessful())"])
         command(["go", "vet", "./..."])
         command(["make", "test-unit-offline"])
-        try:
-            command(["make", "test-artifacts"])
-        finally:
-            if Path("artifacts/lab1").exists():
-                shutil.copytree("artifacts/lab1", OUTPUT / "lab1", dirs_exist_ok=True)
+        command(["make", "test-artifacts", f"ARTIFACT_DIR={OUTPUT / 'lab1'}"])
     elif stage == "integration":
         go_tests(stage, ["-count=1", "-shuffle=on", "-p=1", "-tags=integration", "-run", "_Integration$",
                          "./internal/repository", "./internal/service"])
@@ -82,25 +73,23 @@ def main(stage):
         from tests.e2e.data import check_cleanup_guards
         check_cleanup_guards()
     elif stage == "traffic":
-        capture = subprocess.Popen(["tcpdump", "-Z", "root", "-i", "eth0", "-U", "-G", "10", "-W", "1",
+        capture = subprocess.Popen(["tcpdump", "--immediate-mode", "-U", "-n", "-i", "eth0",
                                     "-w", "/run/purchase.pcap", "tcp port 8080"],
                                    stdout=subprocess.DEVNULL, stderr=(OUTPUT / "capture.log").open("wb"))
         try:
             import time
             time.sleep(0.5)
             if capture.poll() is not None:
-                raise RuntimeError("tcpdump could not start")
+                raise RuntimeError("tcpdump could not start; see capture.log")
             command(["python3", "-m", "tests.e2e.purchase", "--curl"])
         finally:
-            # Host AppArmor may deny signals to tcpdump. Native timed rotation
-            # exits on the next packet; a read-only unauthenticated request supplies it.
-            deadline = time.monotonic() + 20
-            while capture.poll() is None and time.monotonic() < deadline:
-                subprocess.run(["curl", "--silent", "--max-time", "1", "--output", "/dev/null",
-                                "http://api:8080/api/v1/users/me"], check=False)
-                time.sleep(0.2)
             if capture.poll() is None:
-                raise RuntimeError("timed traffic capture did not finish; container cleanup will stop it")
+                try:
+                    capture.send_signal(signal.SIGINT)
+                except PermissionError as error:
+                    raise RuntimeError("cannot stop tcpdump: SIGINT denied; check host AppArmor permissions in docs/testing.md") from error
+            if capture.wait(timeout=20) != 0:
+                raise RuntimeError("traffic capture exited with an error; see capture.log")
         with (OUTPUT / "traffic-summary.tsv").open("wb") as output:
             command(["tshark", "-r", "/run/purchase.pcap", "-d", "tcp.port==8080,http", "-T", "fields",
                      "-e", "frame.number", "-e", "http.request.method", "-e", "http.request.uri",

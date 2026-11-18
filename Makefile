@@ -4,12 +4,14 @@ OUT_DIR  := diagrams/out
 ARTIFACT_DIR := artifacts/lab1
 UNIT_PACKAGES := ./internal/service ./internal/repository ./internal/config ./internal/logging ./internal/middleware ./internal/web
 CORE_PACKAGES := ./internal/service ./internal/repository
+MIGRATIONS_DIR ?= migrations
+GOOSE ?= goose
 
 PUML_FILES := $(wildcard $(SRC_DIR)/*.puml)
 PNG_FILES  := $(patsubst $(SRC_DIR)/%.puml,$(OUT_DIR)/%.png,$(PUML_FILES))
 SVG_FILES  := $(patsubst $(SRC_DIR)/%.puml,$(OUT_DIR)/%.svg,$(PUML_FILES))
 
-.PHONY: fmt vet test test-race lint security check run test-repository test-repository-integration test-service test-web \
+.PHONY: fmt vet migrate test test-race lint security check run test-repository test-repository-integration test-service test-web \
 	test-unit test-unit-shuffle test-unit-offline test-processes test-report test-report-html coverage coverage-branch test-artifacts lab1 tools clean-test-artifacts
 
 fmt:
@@ -17,6 +19,11 @@ fmt:
 
 vet:
 	go vet ./...
+
+migrate:
+	@test -n "$$DATABASE_URL" || (echo "DATABASE_URL is required" >&2; exit 1)
+	@command -v "$(GOOSE)" >/dev/null 2>&1 || (echo "Goose CLI is required; install goose and put it in PATH" >&2; exit 1)
+	"$(GOOSE)" -dir "$(MIGRATIONS_DIR)" postgres "$$DATABASE_URL" up
 
 test:
 	go test ./...
@@ -86,25 +93,60 @@ build-release:
 
 lab1: test-artifacts
 
-.PHONY: test-stand-up test-integration test-e2e test-all test-infra-check test-traffic test-restore
+.PHONY: test-stand-up test-unit-isolated test-integration test-integration-report test-integration-isolated test-integration-isolated-report \
+	test-e2e test-e2e-report test-e2e-isolated test-e2e-isolated-report \
+	test-all test-all-isolated test-infra-check test-traffic test-traffic-report test-traffic-isolated test-traffic-isolated-report test-restore
 
 test-stand-up:
-	python3 -m scripts.testing.controller stand-up
+	docker compose up -d
+
+test-unit-isolated:
+	python3 -m scripts.testing.controller unit-isolated
 
 test-integration:
 	python3 -m scripts.testing.controller integration
 
+test-integration-report:
+	python3 -m scripts.testing.controller integration --report
+
+test-integration-isolated:
+	python3 -m scripts.testing.controller integration-isolated
+
+test-integration-isolated-report:
+	python3 -m scripts.testing.controller integration-isolated --report
+
 test-e2e:
 	python3 -m scripts.testing.controller e2e
 
+test-e2e-report:
+	python3 -m scripts.testing.controller e2e --report
+
+test-e2e-isolated:
+	python3 -m scripts.testing.controller e2e-isolated
+
+test-e2e-isolated-report:
+	python3 -m scripts.testing.controller e2e-isolated --report
+
 test-all:
 	python3 -m scripts.testing.controller all
+
+test-all-isolated:
+	python3 -m scripts.testing.controller all-isolated
 
 test-infra-check:
 	python3 -m scripts.testing.acceptance
 
 test-traffic:
 	python3 -m scripts.testing.controller traffic
+
+test-traffic-report:
+	python3 -m scripts.testing.controller traffic --report
+
+test-traffic-isolated:
+	python3 -m scripts.testing.controller traffic-isolated
+
+test-traffic-isolated-report:
+	python3 -m scripts.testing.controller traffic-isolated --report
 
 test-restore:
 	python3 -m scripts.testing.controller restore

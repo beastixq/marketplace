@@ -12,8 +12,6 @@ if [[ -n "${TEST_REPOSITORY_URL:-}" ]]; then
     fi
     git -C "$TEST_WORKSPACE" fetch --depth=1 origin "$TEST_COMMIT_SHA"
     git -C "$TEST_WORKSPACE" checkout -q --detach FETCH_HEAD
-else
-    tar xf /run/source.tar -C "$TEST_WORKSPACE"
 fi
 cd "$TEST_WORKSPACE"
 exec python3 -m scripts.testing.runner "$@"

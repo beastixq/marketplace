@@ -38,3 +38,61 @@ submission-specific directory without changing the source organization.
 Commands, naming rules, test-data techniques, report formats and process
 configuration are documented in `docs/testing.md`. Current results and
 coverage percentages are generated artifacts rather than fixed claims here.
+
+## Stand Orchestration Responsibilities
+
+The public mode is explicit: commands without `-isolated` attach to the common
+laptop stand; suffixed commands own automatically named disposable resources.
+Only `test-stand-up` explicitly provisions the persistent stand. CI calls the
+single-stage isolated commands in three jobs connected by GitHub `needs`;
+local `test-all-isolated` remains available. Both paths reuse the same tests.
+
+| Owner | Current boundary |
+| --- | --- |
+| Compose/configuration and Dockerfiles | Infrastructure topology, tool images, ports and service configuration; primarily platform/DevOps maintenance. |
+| GitHub workflow / Composite Actions | CI job dependencies, shared stage setup and artifact delivery. |
+| `controller.run` / `pipeline` | Local full-run order or one isolated stage, result publication and recovery attempts. |
+| `Stand` | Concrete Docker processes, resource ownership and PostgreSQL snapshot/recovery; currently in the controller module. |
+| `runner.py` / `results.py` | Tool execution, result conversion/redaction and Allure generation; no purchase business assertions. |
+| Go tests, pytest scenarios and their fixtures | Developer/QA expectations, arrangement, requests/assertions and owned-data cleanup. |
+
+These are code boundaries, not exclusive job titles. DevOps need not edit the
+purchase scenario to change topology, and QA need not implement Docker lifecycle
+to add a business assertion. One shared entrypoint keeps local and CI recovery
+semantics consistent; replacing it with a long Make recipe would not remove that
+responsibility.
+
+The controller is nevertheless partially overloaded. `Stand.source` couples
+execution metadata to source delivery/checkout. Local tests now mount the working
+tree directly; persistent deployment no longer uses this method. `Stand.reports` also owns branch-history storage and
+now imports history before a single generation. Full and sanitized public reports
+are still separate outputs of that one stage.
+Those are independent reasons to change this module, not PostgreSQL lifecycle.
+The recommended later boundary is a thin orchestrator with separate image/source
+delivery and report-history owners; `Stand` should own only the concrete stand
+lifecycle. File size alone is not evidence for a new framework or more services.
+This review records the remaining coupling; responsibility extraction has not
+been presented as implemented. Duplicate history generation is fixed.
+The refactoring scope, deployment handoff and acceptance criteria are tracked
+as TD-003 in [known issues](known-issues.md), including the current inability to
+attach the container command to an arbitrary existing stand by DSN/URL alone.
+Independent temporary stands do not prove that the entire integration suite is
+safe for concurrent developers on one shared database (Lab2 requirement 15).
+
+The approved API-packaging change separates the root server Dockerfile from the
+runner Dockerfile. API builds from the working tree or CI checkout used by tests,
+contains the executable/embedded UI, runs without root and mounts only config.
+Revision/content tags and metadata distinguish API from test tooling. This closes
+the external-binary packaging issue, not the remaining deployment/source/history
+responsibility split above. Explicit stand setup is the operator's upgrade action;
+attached tests keep the running API unchanged.
+
+Migrations now run through the host's Goose CLI and the root `make migrate`
+target, after PostgreSQL readiness. SQL comes from the working tree or CI checkout;
+the CLI connects through the published localhost port. CI installs the same
+verified 3.26.0 release separately. The test image no longer contains Goose,
+and its `prepare` stage does not apply SQL. This removes that deployment task
+from the test container; source/config preparation and API deployment remain
+used only by isolated provisioning. The common stand is now deployed by root
+Compose, with versioned configuration and a named database volume; it has no
+dependency on runner preparation or ownership metadata. Source archives are removed.

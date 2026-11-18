@@ -215,58 +215,157 @@ rather than mocking query builders solely to execute defensive branches.
 
 ## Container Test Stand
 
-Testing Lab2 is separate from WebLab#2. The stand reuses the current PostgreSQL
-16.11/Redis 8.6 services through `docker-compose.test.yml`, adds one API/MPA
-process and a separate test runner. The normal `docker-compose.yml` is unchanged.
-Go 1.25, pytest/requests, Allure 2.34.1, Goose and capture tools run in the image;
-Python packages are pinned in `tests/requirements.txt`. Host prerequisites are
-Linux, Docker/Compose 2.24.4+, Python 3 and make. First use downloads the image
-and dependencies; subsequent runs reuse image/module/build caches.
+Testing Lab2 is separate from WebLab#2. The root `docker-compose.yml` deploys
+API, PostgreSQL 16.11 and Redis 8.6. `docker-compose.test.yml` adds only the test
+runner. Deployment works without the controller, `TEST_RUNTIME_ROOT` or `stand.json`.
+
+The root `Dockerfile` builds the API binary and embedded MPA into its own image.
+It runs as UID/GID `10001:10001`, mounts `config/docker.yaml` read-only at
+`/etc/marketplace/config.yaml` and logs to stdout. The operator edits this config;
+test preparation does not generate application configuration.
+
+For the first deployment:
 
 ```bash
-make test-stand-up                         # default STAND_ID=local; prints UI URL
-STAND_ID=local make test-e2e                # shared stand, only own API fixtures
-STAND_ID=local make test-integration        # exclusive; PostgreSQL repository + service
-STAND_ID=local make test-all                # unit → integration → E2E, with Lab1 coverage
-make test-infra-check                      # isolated acceptance stands, deliberate failures
-STAND_ID=local make test-traffic            # curl purchase + PCAP + tshark verification
-make test-restore RUN_ID=<interrupted-run>  # exclusive recovery, never use during manual writes
+docker compose up -d --wait db cache
+DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/marketplace?sslmode=disable' make migrate
+docker compose up -d
+```
+
+Subsequent starts use `docker compose up -d`; `make test-stand-up` is an alias.
+API builds if its image is missing. Use `docker compose up -d --build api` after
+source changes. The default development tag is `marketplace-api:local`; `API_IMAGE`
+and build arguments can select another tag/revision. API needs no test-tool image.
+PostgreSQL uses `marketplace_postgres-data`, a named Docker volume. The old WebLab
+volume `marketplace_db-data` remains separate. `docker compose down` keeps data;
+`docker compose down -v` deletes this stand's volume.
+
+The runner image contains Go, pytest/requests, Allure and capture tools; Python
+versions are pinned in `tests/requirements.txt`. Test commands additionally need
+host Python 3 and make. Isolated provisioning needs host Goose CLI (verified
+3.26.0; CI installs the official binary with checksum verification). Migrations
+use `make migrate`; neither a migration container nor Goose in the test image is
+needed. First use builds the test image; later commands reuse it and Go caches.
+
+Isolated runs select unique names and automatically assigned ports through Compose
+variables. The controller records the selected DB port/Goose version, prepares
+tests, applies SQL from the working directory or exact CI checkout, builds a
+revision/content-tagged API image and performs snapshot/recovery. It does not
+archive source code. Local tests mount the working repository; CI fetches the
+requested commit in the test container. Application configuration stays in Compose.
+
+```bash
+make test-stand-up                         # explicitly prepare the persistent laptop stand; print UI URL
+make test-integration                      # common stand; tests without Allure HTML
+make test-integration-report               # same tests plus Allure HTML/history
+make test-e2e                              # common stand; API fixtures, no Allure HTML
+make test-e2e-report                       # same E2E plus Allure HTML/history
+make test-integration-isolated             # temporary stand → tests → removal, no Allure HTML
+make test-integration-isolated-report      # isolated integration plus Allure HTML/history
+make test-e2e-isolated                     # temporary stand → E2E → removal, no Allure HTML
+make test-e2e-isolated-report              # isolated E2E plus Allure HTML/history
+make test-all                             # unit → integration → E2E on the common stand
+make test-all-isolated                    # local full run in one temporary environment
+make test-unit-isolated                   # unit/offline/vet/Lab1 coverage in a test container, no services
+make test-traffic                         # common stand: curl purchase + verified PCAP, no HTML
+make test-traffic-report                  # same capture plus Allure HTML/history
+make test-traffic-isolated                # the same capture in a temporary environment
+make test-traffic-isolated-report         # isolated capture plus Allure HTML/history
+make test-infra-check                      # internally owned acceptance stands, deliberate failures
+make test-restore RUN_ID=<interrupted-run>  # retry the recorded run's recovery
 ```
 
 Every command gets a unique `RUN_ID`; an explicit ID must not already exist.
-`STAND_ID` defaults to `local` for all commands. The same pair server/DB serves
-manual and automated work, not two permanent deployments. Without an existing
-stand, a full/integration invocation creates its own and removes its containers
-and network after verified recovery. `test-stand-up` keeps the stand available.
-Shared E2E/traffic require an existing ready stand and never recreate the server.
-Local developers using the same Docker daemon choose different IDs, for example
-`STAND_ID=alice` and `STAND_ID=bob`; UI ports are allocated independently. The
-default UI binding is localhost; `UI_PORT` can select a port at first startup.
-`STAND_ID=verification` is only a chosen name, not a special mode. Each stand has
-its own PostgreSQL process/data directory, Redis, API and network; it does not add
-a database to the normal application's PostgreSQL. Runner image tags depend on
+Commands without `-isolated` use the persistent common laptop stand (internal
+Compose project `marketplace`); they require it to exist. They may build a missing test-tool image, but do not start or restart API/PostgreSQL/Redis, apply migrations, stop
+the API, acquire a stand-wide lock, restore a database snapshot or flush Redis.
+Only temporary test/report containers are launched. `test-stand-up` is the explicit
+setup command and leaves the stand running; it does not generate an empty test report.
+
+Test-container stdout and stderr are streamed to the invoking terminal and saved
+to the stage log (`integration.log`, `e2e.log`, etc.) at the same time. Go uses
+the standard verbose format: test/subtest names, their output, PASS/FAIL/SKIP
+and the final summary are visible during execution. A failing container still
+returns a nonzero status; saving the log does not hide failures.
+
+Integration/E2E/traffic commands generate Allure HTML only with the `-report` suffix.
+Both variants run tests and preserve original results, stage logs/statuses and
+server logs. Cleanup and isolated snapshot/recovery are the same; a report-enabled
+run also renders Allure after test failures and updates branch history. Plain runs
+do not start the report container or update history. Full `test-all`/`test-all-isolated`
+and explicit recovery commands retain report generation;
+CI continues to use the full isolated command with reports.
+
+Commands with `-isolated` create a new private stand with an automatically unique
+internal name. They own PostgreSQL/data, Redis, API and the Docker network, prepare
+migrations, run the requested tests and remove their Docker resources after verified
+recovery. They never select or stop the common stand. Parallel invocations require
+no names or ports from the operator. Reports, recovery evidence and reusable image/
+build caches remain available. A recovery failure keeps resources for diagnosis
+and makes the command unsuccessful rather than pretending cleanup succeeded.
+
+`STAND_ID` and `--stand-id` are no longer public selectors; the controller does not
+read that environment variable. Mode is selected only by the command name. Internal
+IDs remain in diagnostics/recovery records so cleanup knows which resources it owns.
+The common stand uses these container names and localhost bindings:
+
+| Container | Host address |
+| --- | --- |
+| `marketplace-api` | `http://localhost:8080` |
+| `marketplace-db` | `127.0.0.1:5432` |
+| `marketplace-cache` | `127.0.0.1:6379` |
+
+The system Redis service must be stopped before publishing Docker Redis on 6379.
+On this laptop the operator disabled it with
+`sudo systemctl disable --now redis-server.service`. Start/stop an existing API
+container with `docker start marketplace-api` / `docker stop marketplace-api`;
+follow its logs with `docker logs -f marketplace-api`. Creation/update uses ordinary `docker compose up -d` / `docker compose up -d --build api`.
+The common Compose project is `marketplace`.
+
+Isolated container names and host ports are allocated independently; they do not
+reuse the common names or ports. Runner image tags depend on
 Dockerfile/requirements/bootstrap contents, so different checkouts do not replace
 each other's differently configured runner. Images and Go caches remain reusable.
 
-For a persistent manual/automatic stand, start it with `test-stand-up` first.
-`test-e2e` then creates only temporary runner containers and keeps API/DB/Redis
-running. `test-all` on that stand preserves it afterwards but stops the API for
-snapshot/restore; it is not a zero-downtime operation. A full run that creates its
-own stand removes only that stand's containers after verified recovery.
+Shared E2E/traffic runs have no stand-wide lock or recovery gate. Each run gets its
+own ID and fixtures automatically; an explicit `RUN_ID` is optional and must be
+unique. Another run's unfinished cleanup does not block E2E or manual work.
+`test-integration` reaches the Go tests without waiting for HTTP readiness.
+With PostgreSQL stopped, the real Go tests fail on connection setup and the
+command returns nonzero; it does not silently restart the database. Results,
+logs and Allure are retained under the new run's artifact directory.
 
-Local runs archive tracked and non-ignored working-copy files, excluding `.serena`
-and reports. The runner extracts that snapshot. CI fetches the exact commit
-specified by `TEST_COMMIT_SHA` from `TEST_REPOSITORY_URL`. Uncommitted local runs
-are recorded as working-copy snapshots, not claimed to be checks of HEAD alone.
-Runtime DB directories and compilation caches use `/tmp/marketplace-test-runtime`
-(`TEST_RUNTIME_ROOT` can override it); reports/recovery snapshots are copied to
-`artifacts/lab2/<RUN_ID>/`. Do not remove runtime directories while a stand is in
-use. Bind-mounted runtime data is retained for diagnosis after container removal;
-there is no global Docker prune or automatic deletion of unrelated resources.
+This attached mode is not isolated: tests clean their fixtures, but global
+`ExpireOrders` operations can affect other orders, and aggregates can see manual
+writes. Do not treat the full integration suite as safe for concurrent manual
+work. Interrupted tests can leave fixture data; there is no whole-database
+snapshot to restore in this mode. This also applies to integration inside shared
+`test-all`. Use the `-isolated` commands for reproducible checks without those
+risks to manual data.
+
+For the existing stand, the stopped-database diagnostic is:
+
+```bash
+docker stop marketplace-db
+make test-integration                      # expected failure; PostgreSQL stays stopped
+docker start marketplace-db                # explicit operator action after the check
+```
+
+`scripts.testing.acceptance` reuses only its own disposable stands through the
+controller's internal Python entrypoint to check repeated snapshot/recovery and
+interruption. There is no public maintenance flag or stand-selector parameter.
+
+Local runs mount the working repository directly; they create no `source.tar`.
+CI fetches the commit selected by `TEST_COMMIT_SHA` from `TEST_REPOSITORY_URL`.
+Run metadata distinguishes working-tree tests from a CI Git checkout. Temporary
+run/cache files use `/tmp/marketplace-test-runtime` by default; `TEST_RUNTIME_ROOT`
+may relocate only that test infrastructure. It does not locate application config
+or PostgreSQL data. Results are copied to `artifacts/lab2/<RUN_ID>/`, excluding CI
+workspace source and credentials. Preserve snapshots of unfinished isolated runs.
 Directories are execution records, not a list of live stands: `check-*` includes
 deliberate failures/repeats/parallel checks; `ci-*` identifies cloud runs; `history`
 holds report history. Start with the relevant run's `stages.json`, `recovery.json`
-and `allure-report/index.html`. Local retention is manual: do not remove recovery
+and, for a report-enabled run, `allure-report/index.html`. Local retention is manual: do not remove recovery
 snapshots of unfinished runs. Existing diagnostic directories are not auto-deleted.
 
 ### Data Ownership And Recovery
@@ -291,12 +390,13 @@ PostgreSQL deletion. JWTs are stateless: the HTTP 401 check confirms absence of
 the synthetic account now, not a permanent token blacklist. Exclusive sequence
 restoration can later reuse an ID; raw captures are sensitive even after cleanup.
 Shared isolation protects ownership, not global catalog/analytics counts: manual
-testers may temporarily see synthetic products/orders. Use an exclusive window
+testers may temporarily see synthetic products/orders. Use an isolated run
 for exact whole-platform aggregates. Never buy a synthetic test product from a
 manual account; if that happens, cleanup refuses foreign links and keeps evidence.
 
-`exclusive`: agree a window with no manual writes. `STAND_ID` locking serializes
-automation but cannot prevent a human from submitting a form. The host controller
+`isolated` (exclusive ownership): the automatically created environment has no
+manual users. Its internal lock serializes its own maintenance only; it is not a
+lock on the common stand. The host controller
 stops the API/expiration worker, snapshots PostgreSQL after migrations and before
 tests, then runs integration packages sequentially (`-p=1`). The API starts for
 E2E. Regardless of success/failure/interruption, it stops writers, restores through
@@ -305,22 +405,26 @@ and compares schema ACL/owners and complete dumped data including
 sequences and Goose migration rows with baseline. Recovery is completed only after
 HTTP readiness and synthetic-token checks pass. Recovery failure
 makes the command fail and keeps the stand for diagnosis. Verified recovery returns
-the API to readiness, checks synthetic tokens and preserves user-owned stands.
+the API to readiness and checks synthetic tokens before removing the temporary
+Docker resources. The common stand remains untouched.
 
 If the host controller is SIGKILLed, run `test-restore` with its ID. It removes
 only known orphan runner names for that run, restores the saved snapshot and marks
 an unfinished stage `broken` and unstarted stages `skipped`, then regenerates the
-report. Power loss does not guarantee immediate restoration. Complete explicit
-recovery before another full/shared run or resuming manual writes. New automated
-runs refuse a stand with an unfinished recovery record, even after the dead host
-process releases its lock. Repeating `test-restore` after successful recovery is a
+report. Power loss does not guarantee immediate restoration. After an isolated
+failure, recover only its recorded temporary environment, not the common stand.
+Legacy recovery records from earlier exclusive runs on the common stand still
+require a no-manual-writes window; restoring those snapshots would undo later work.
+Exclusive commands refuse a stand with an unfinished recovery record, even after
+the dead host process releases its lock. Repeating `test-restore` after successful recovery is a
 non-mutating no-op: it must not overwrite later manual changes. Resource ownership
 is rechecked after acquiring the stand lock before deciding whether teardown is safe.
 Shared runs also persist recovery intent before fixtures: the same `test-restore`
 removes their orphan runner and retries only their addressed cleanup/401 checks,
-without stopping the common API, resetting PostgreSQL or flushing Redis. Unfinished
-shared cleanup blocks new automation too. Parallel manual work remains allowed;
-automated runs on one stand must finish cleanup before the next run starts.
+without stopping the common API, resetting PostgreSQL or flushing Redis. Shared
+E2E/traffic and addressed shared recovery do not acquire a stand-wide lock or wait
+for another run's cleanup. Parallel manual work remains allowed. An unsuccessful
+cleanup still makes its own run fail and must be retried with its `RUN_ID`.
 Recovery requires
 the stand/runtime storage to remain available; preserve the saved artifacts if
 runtime storage is lost. Do not restore an old snapshot over new manual work.
@@ -348,9 +452,10 @@ The scenario's HTTP actions and business assertions are visible in the test file
 `purchase.py --curl` invokes the same pytest scenario with another transport,
 including its fixtures/finalizer. Crash-test checkpoints live in `faults.py`.
 
-Each run retains Go JSONL/JUnit, Python infrastructure JUnit, native pytest Allure, stage statuses, server logs,
-environment/source hash, fixture manifests, original Lab1 HTML/statement/branch
-coverage and `allure-report/index.html`. Go JUnit parents are removed only when
+Runs retain their stages' Go JSONL/JUnit, Python infrastructure JUnit, native pytest
+Allure results, stage statuses, server logs, revision metadata and fixture manifests.
+Full runs also retain original Lab1 HTML/statement/branch coverage. Report-enabled
+runs add `allure-report/index.html` and its sanitized public version. Go JUnit parents are removed only when
 leaf results capture their outcome; an independent suite cleanup failure remains
 visible. A small JUnit importer supplies `Unit`/`Integration`/`Infrastructure`
 hierarchy while preserving Allure's original JUnit history IDs. It does not invent
@@ -379,25 +484,83 @@ diagnostic artifact. This is static HTML hosting, not an installed Allure servic
 `test-traffic` captures only the synthetic client's HTTP connection inside the
 server's Docker network, repeats purchase with curl and checks endpoints/statuses
 with tshark. Capture contains synthetic credentials/JWTs: confirm account cleanup
-before sharing it. Requests/responses in Allure are redacted. Tcpdump uses native
-timed rotation rather than disabling a host AppArmor profile.
+before sharing it. Requests/responses in Allure are redacted. Tcpdump uses
+`--immediate-mode` and packet-buffered file output (`-U`), then stops through
+SIGINT after the purchase. Capture shutdown sends no HTTP probes and does not
+disable the host AppArmor profile. The ordinary authenticated profile reads
+and two post-cleanup token rejection checks remain.
+
+After a successful `make test-traffic`, the terminal prints `PCAP:` followed by the
+absolute path to `purchase.pcap`. Open that file in Wireshark; the paired HTTP
+requests/responses have already been checked by tshark. If the command fails,
+inspect the stage log and capture log in the printed artifacts directory; a
+partial PCAP alone does not prove the scenario passed. `make test-traffic-report`
+also generates full and sanitized public HTML reports. Branch history is imported
+before generation, so there is only one report stage.
+
+On Ubuntu with Rootless Docker, a host AppArmor rule may block this stop operation.
+The confirmed kernel diagnostic is `profile="tcpdump"`, `operation="signal"`,
+`signal=int`, `peer="rootlesskit"`. After operator approval, add only
+`signal (receive) set=(int) peer=rootlesskit,` to
+`/etc/apparmor.d/local/usr.bin.tcpdump` and reload the tcpdump profile with
+`sudo apparmor_parser -r /etc/apparmor.d/usr.bin.tcpdump`. This requires host
+administration once; the test command does not edit host policy or disable it.
+A capture that cannot stop is a failed run, not a successful purchase proof.
 
 ### CI And Bug Handoff
 
-`.github/workflows/testing.yml` calls the same `make test-all`, restores branch
-history using the job's GITHUB_TOKEN and uploads reports/history with `always()`.
-Coverage remains part of the unit stage. No PAT/MCP installation is necessary.
-The `test` job uses a GitHub-hosted `ubuntu-24.04` runner; no self-hosted runner is
-installed. One VM owns the Docker stand through unit → integration → E2E and
-recovery. Three ordinary jobs would get three independent VMs and lose that
-continuous stand. The job summary lists individual stage statuses; `publish-report`
-is a separate dependent job that deploys only sanitized HTML, including reports
-from failed test runs. Pull requests never publish the site.
+For manual request attribution, use separate application accounts, not `RUN_ID`.
+Authenticated API requests and UI actions publish `user_id` and `role` into the
+API container's JSON request logs, alongside method, path, status, timestamp and
+remote address. For example, with optional host `jq`:
 
-Pages requires a one-time repository setting: Settings → Pages → Source: GitHub
-Actions; permit TAD-Lab2 in the `github-pages` environment if restricted. Deployment
-then uses only `pages: write`/OIDC and the job token, no PAT. Test artifacts/history
-are uploaded with `always()` independently of publication.
+```bash
+docker logs --since 10m marketplace-api 2>&1 \
+  | jq -Rc 'fromjson? | select(.user_id == 122)'
+```
+
+Map that ID to the developer's known account; `user_id` itself is not a person's
+name. Login/public/invalid-token requests may have no actor. Shared credentials
+and a common NAT address cannot distinguish people reliably. Automatic fixture
+manifests retain synthetic emails/IDs after addressed cleanup, so those logs can
+still be traced to a run without logging passwords or JWTs. Service/repository
+integration calls Go code and PostgreSQL directly, not HTTP: its test execution
+belongs in `integration.log` and Go results, not HTTP request logs.
+
+`.github/workflows/testing.yml` uses separate GitHub-hosted jobs on `ubuntu-24.04`:
+`unit → integration → e2e`. Native `needs` dependencies skip downstream test jobs
+when their predecessor fails. The `report` job has `needs: [unit, integration, e2e]`
+and `if: always()`; it assembles available results and marks jobs that did not run
+as skipped. No self-hosted runner, registry publication or PAT is needed.
+
+Each job owns its VM. Unit starts only the test container; integration prepares
+only PostgreSQL; E2E prepares API/PostgreSQL/Redis. Both storage-backed jobs migrate,
+snapshot, test and restore their own database before removing it. Setup in a
+separate job would not preserve Docker containers for the next job. Local
+`make test-all-isolated` still runs the full sequence on one owned environment;
+its Python loop does not schedule the GitHub jobs.
+
+`.github/actions/run-tests` contains shared stage setup, cached tool-image build,
+Goose installation where needed, the single-stage Make command and artifact upload.
+`.github/actions/allure-report` downloads stage results/history and renders full
+and sanitized reports once. `results.collect_ci_results` combines data; it does
+not start tests. Skipped jobs cannot contribute stale results from an earlier
+attempt. A failed recovery is an infrastructure failure even if tests passed.
+Coverage remains part of the unit stage. Artifacts `testing-unit`,
+`testing-integration`, `testing-e2e` contain stage logs/recovery; `allure-report`
+contains combined results, HTML and Lab1 coverage. Artifacts are retained for
+14 days, history for 30. Docker tool-image layers use the GitHub Actions cache.
+
+Pushes to any branch, pull requests and manual workflow runs trigger tests.
+Only non-PR runs publish sanitized HTML to Pages, including a report after test
+failures. Pages is one site: the last deployment replaces the displayed report;
+branch histories and per-run Actions artifacts remain separate. The publish job
+serializes deployments through the `pages-reports` concurrency group.
+Pages requires Settings → Pages → Source: GitHub Actions and an environment policy
+that permits the branch being deployed. Previously allowed `TAD-*` branches need
+no workflow change; other branches may need an operator to extend that policy.
+Deployment uses only `pages: write`/OIDC and the job token. Reports/history are
+uploaded with `always()` independently of publication.
 See the [Lab2 requirement audit](testing-lab2.md) for scope, evidence and limitations.
 The revised test job was verified on 2026-10-15 in
 [Actions run 38775314127](https://github.com/beastixq/marketplace/actions/runs/38775314127)
@@ -424,5 +587,5 @@ unset during normal runs. Simultaneous browser/manual behavior is checked separa
 on independent accounts; GUI automation is not the MVP E2E requirement.
 The Git-checkout bootstrap unit check runs on the host/CI checkout and checks three
 consecutive runner entries with a simulated foreign filesystem owner and an
-isolated Git configuration. It is skipped only in a local snapshot container,
-which intentionally has no `.git`; PostgreSQL integration skips are never accepted.
+isolated Git configuration. Local containers now mount the working tree, including `.git`; the bootstrap check
+also runs there. PostgreSQL integration skips are never accepted.

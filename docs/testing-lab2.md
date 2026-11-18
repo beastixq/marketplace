@@ -2,6 +2,9 @@
 
 Задание: `/home/roman/bmstu/7sem/testing/labs/2.pdf`. Это не WebLab#2.
 Команды и эксплуатационные ограничения: [testing.md](testing.md#container-test-stand).
+Последовательный ручной обход требований и дополнительные вопросы защиты:
+[проверочный сценарий ЛР2](testing-lab2-checklist.md). Статусы исторических запусков
+ниже не заменяют результаты нового ручного прохождения.
 Публичный очищенный отчёт после deployment:
 [Allure](https://beastixq.github.io/marketplace/).
 
@@ -9,27 +12,27 @@
 
 | Пункт PDF | Реализация / команда | Проверка |
 | --- | --- | --- |
-| З1. Тестовый стенд | `docker-compose.test.yml`, `make test-stand-up` | Отдельные API/MPA, PostgreSQL и Redis; UI готов. |
+| З1. Тестовый стенд | `Dockerfile`, `docker-compose.yml`, `config/docker.yaml`, `make test-stand-up` | Отдельный API-образ с бинарником/MPA внутри; PostgreSQL и Redis. Применение новой упаковки к общему стенду — явная команда оператора. |
 | З2. Integration доступа к данным и бизнес-логики | Компонентные `internal/repository/*_integration_test.go`, `internal/service/*_integration_test.go` | Настоящие repositories, `PgxTxManager` и PostgreSQL; не моки БД. |
 | З3. Демонстрационный E2E | `tests/e2e/test_purchase.py`, `make test-e2e` | API-fixtures; login → cart → checkout → mock payment → ship → deliver → read review. |
-| З4. ЛР1 и ЛР2 в CI | `.github/workflows/testing.yml`, `make test-all` | Unit, offline/vet, покрытие/отчёты ЛР1, integration и E2E. |
+| З4. ЛР1 и ЛР2 в CI | `.github/workflows/testing.yml`, `.github/actions/`, отдельные stage-команды | Unit, offline/vet, покрытие/отчёты ЛР1, integration и E2E. |
 | З5. Запросы и трафик | `purchase.py --curl`, `make test-traffic` | Реальные curl-вызовы того же сценария; PCAP и проверка пар HTTP request/response через tshark. |
-| Т1. Отдельный Docker test container | `tests/Dockerfile`, `tests/runner.sh`, `scripts/testing/runner.py` | CI получает точный commit; инструменты и закреплённые Python зависимости в image. Локально — снимок working tree. |
+| Т1. Отдельный Docker test container | `tests/Dockerfile`, `tests/runner.sh`, `scripts/testing/runner.py` | CI получает точный commit; инструменты и закреплённые Python зависимости в image. Локально — прямое подключение рабочей копии, без архива исходников. |
 | Т2. Настоящее хранилище | `internal/testsupport/postgres.go`, реальные SQL-наборы | Оба integration-пакета обязательны; пропуски отвергаются. |
-| Т3. Отдельный инстанс | Compose project по `STAND_ID` | Другой PostgreSQL-контейнер и data directory, не основная БД приложения. |
-| Т4. Подготовка и восстановление | Existing Goose migrations, fixtures, `controller.snapshot/restore` | Data/sequence/Goose fingerprint; отдельная проверка ownership/ACL. |
-| Т5. Порядок | `controller.pipeline` | Последовательно unit → integration → E2E на одном stand. |
+| Т3. Отдельный инстанс | Автоматически названный Compose project в `-isolated` | Собственные PostgreSQL/data; диагностический запуск на общей БД не создаёт отдельный инстанс. |
+| Т4. Подготовка и восстановление | `make migrate` через Goose CLI хоста, fixtures, `controller.snapshot/restore` | Data/sequence/Goose fingerprint; отдельная проверка ownership/ACL. |
+| Т5. Порядок | GitHub jobs с `needs` | Последовательно unit → integration → E2E; каждая job использует своё окружение. |
 | Т6. Окружение этой ЛР | Compose runner связывается с `db`/`api` своего project | E2E вызывает реальный Go server, integration — его PostgreSQL. |
 | Т7. Мобильное устройство | Неприменимо | Проект — web/API. |
-| Т8. Fail-fast и отчёт | Pipeline markers, original results, workflow `always()` | После сбоя последующие этапы skipped; сбой инфраструктуры не превращается в успешный продуктовый тест. |
+| Т8. Fail-fast и отчёт | GitHub `needs`, `report` с `always()`, `results.collect_ci_results` | После сбоя последующие этапы skipped; сбой инфраструктуры не превращается в успешный продуктовый тест. |
 | Т9. Тренды | Allure history, branch artifact + job token | Стабильные идентификаторы; public history очищена. |
-| Т10. Откат при падении | Host controller, `make test-restore RUN_ID=…` | Full exclusive восстанавливает snapshot, включая sequences; shared E2E удаляет только свои данные, не ручные изменения. |
+| Т10. Откат при падении | Host controller, `make test-restore RUN_ID=…` | Изолированный прогон восстанавливает snapshot; shared E2E чистит свои данные. Общий integration не делает полного восстановления. |
 | Т11. Вычитывание брокера | Неприменимо | Брокера/очередей в приложении нет. |
 | Т12. Завершение сессий | Серверного session storage нет; cleanup проверяет HTTP 401 | Неприменима очистка хранилища сессий. JWT stateless: это не blacklist и не обещание вечного отзыва токена при повторном использовании ID. |
 | Т13. GUI необязателен | REST E2E | Browser automation в покупку не добавлена. |
 | Т14. Повторяемость | `make test-infra-check` | Три integration-прогона: одинаковые результаты и исходные fingerprints. |
-| Т15. Параллельность | Два независимых STAND_ID в `acceptance.py` | Одновременные full runs, отдельные данные/сети/порты/RUN_ID; разные runner inputs имеют разные image tags. |
-| Т16. Успешные тесты | `make test-all` | Фактические результаты ниже; не подменять GitHub запуск локальным. |
+| Т15. Параллельность | Независимые окружения в `acceptance.py`; shared E2E на своих данных | Это не доказательство безопасной параллельной integration-suite на общей БД: ExpireOrders и агрегаты остаются ограничением TD-003. |
+| Т16. Успешные тесты | `make test-all` / `make test-all-isolated` | Фактические результаты ниже; не подменять GitHub запуск локальным и различать режимы. |
 | Т17. Организация | Component files, `_Integration`, pytest fixture и видимые Act/Assert | Применена рекомендация многошагового сценария; Go-файлы организованы по компонентам, а не лабораторным. |
 
 ## Фактические проверки исправлений 2026-10-15
@@ -60,8 +63,10 @@
 
 ## Ограничения
 
-Full/integration требуют окна без ручных изменений; сервер на время snapshot/
-restore останавливается. Shared E2E сохраняет работающий API и ручные записи, но
+Изолированный прогон останавливает только собственный API на время snapshot/
+restore. Общие `test-integration`/`test-all` сервер не останавливают и снимок БД
+не восстанавливают; ExpireOrders и агрегаты делают их небезопасными для
+одновременных ручных изменений. Shared E2E сохраняет работающий API и ручные записи, но
 синтетические товары могут временно появляться в каталоге. При чужих связях cleanup
 останавливается, а не удаляет их. После SIGKILL controller нужен explicit restore;
 при выключенной машине немедленное восстановление не гарантируется.

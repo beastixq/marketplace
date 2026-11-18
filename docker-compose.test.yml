@@ -1,25 +1,4 @@
 services:
-  db:
-    ports: !reset []
-    volumes:
-      - ${STAND_PATH:?STAND_PATH required}/postgres:/var/lib/postgresql/data
-  cache:
-    ports: !reset []
-  api:
-    image: ${RUNNER_IMAGE:-marketplace-test-runner:lab2}
-    entrypoint: []
-    command: ["/stand/marketplace-api", "-config", "/stand/config.yaml"]
-    environment:
-      DATABASE_URL: postgres://postgres:postgres@db:5432/marketplace?sslmode=disable
-    volumes:
-      - ${STAND_PATH:?STAND_PATH required}:/stand:ro
-    ports:
-      - "127.0.0.1:${UI_PORT:-0}:8080"
-    depends_on:
-      db:
-        condition: service_healthy
-      cache:
-        condition: service_healthy
   runner:
     image: ${RUNNER_IMAGE:-marketplace-test-runner:lab2}
     build:
@@ -36,8 +15,7 @@ services:
       CI: ${CI:-}
     volumes:
       - ${RUN_PATH:?RUN_PATH required}:/run
-      - ${RUN_PATH:?RUN_PATH required}/workspace:/workspace
-      - ${STAND_PATH:?STAND_PATH required}:/stand
+      - ${TEST_SOURCE_DIR:-.}:/workspace
       - ${CACHE_PATH:?CACHE_PATH required}/mod:/go/pkg/mod
       - ${CACHE_PATH:?CACHE_PATH required}/build:/root/.cache/go-build
     tmpfs:

@@ -12,7 +12,6 @@ ARG ALLURE_VERSION=2.34.1
 RUN curl --fail --location --retry 3 \
     "https://github.com/allure-framework/allure2/releases/download/${ALLURE_VERSION}/allure-${ALLURE_VERSION}.tgz" \
     | tar xz -C /opt && mv /opt/allure-${ALLURE_VERSION} /opt/allure
-RUN go install github.com/pressly/goose/v3/cmd/goose@v3.26.0
 COPY tests/runner.sh /opt/runner.sh
 WORKDIR /workspace
 ENTRYPOINT ["bash", "/opt/runner.sh"]

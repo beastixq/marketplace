@@ -1,0 +1,118 @@
+name: Collect Allure report
+description: Assemble test-job artifacts, restore history and generate sanitized reports
+inputs:
+  jobs:
+    description: JSON results of the unit, integration and e2e jobs
+    required: true
+outputs:
+  available:
+    description: Whether the sanitized report was generated
+    value: ${{ steps.summary.outputs.available }}
+runs:
+  using: composite
+  steps:
+    - name: Prepare report paths
+      id: paths
+      shell: bash
+      run: |
+        echo "RUN_PATH=$GITHUB_WORKSPACE/artifacts/lab2/$RUN_ID" >> "$GITHUB_ENV"
+        echo "CACHE_PATH=$RUNNER_TEMP/marketplace-report-cache" >> "$GITHUB_ENV"
+        echo "RUNNER_IMAGE=$(python3 -c 'from scripts.testing.controller import runner_image; print(runner_image())')" >> "$GITHUB_ENV"
+        echo "key=$(printf '%s' "$TEST_BRANCH" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+    - name: Download test-stage artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: testing-*
+        path: artifacts/ci-jobs
+    - name: Collect results and skipped stages
+      shell: bash
+      env:
+        CI_JOB_RESULTS: ${{ inputs.jobs }}
+      run: python3 -m scripts.testing.results --inputs artifacts/ci-jobs --output "$RUN_PATH"
+    - name: Download previous branch history
+      if: always()
+      uses: actions/github-script@v7
+      env:
+        HISTORY_KEY: ${{ steps.paths.outputs.key }}
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          const name = `lab2-history-${process.env.HISTORY_KEY}`;
+          const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo,
+            {owner: context.repo.owner, repo: context.repo.repo, name, per_page: 100});
+          const previous = artifacts.filter(a => !a.expired && a.workflow_run?.id !== context.runId)
+            .sort((a,b) => b.created_at.localeCompare(a.created_at))[0];
+          if (!previous) { core.info('First run: no previous history'); return; }
+          const archive = await github.rest.actions.downloadArtifact({owner: context.repo.owner,
+            repo: context.repo.repo, artifact_id: previous.id, archive_format: 'zip'});
+          const filename = path.join(process.env.RUNNER_TEMP, 'allure-history.zip');
+          const directory = path.join(process.env.RUNNER_TEMP, 'previous-allure-history');
+          fs.mkdirSync(directory, {recursive: true});
+          fs.writeFileSync(filename, Buffer.from(archive.data));
+          await exec.exec('unzip', ['-q', filename, '-d', directory]);
+          const history = fs.existsSync(path.join(directory, 'history'))
+            ? path.join(directory, 'history') : directory;
+          if (fs.existsSync(path.join(history, 'history.json'))) {
+            fs.cpSync(history, path.join(process.env.RUN_PATH, 'allure-results', 'history'), {recursive: true});
+          }
+    - uses: docker/setup-buildx-action@v3
+      if: always()
+    - name: Build cached report tools
+      if: always()
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: tests/Dockerfile
+        tags: ${{ env.RUNNER_IMAGE }}
+        load: true
+        cache-from: type=gha,scope=marketplace-test-tools
+        cache-to: type=gha,scope=marketplace-test-tools,mode=max
+    - name: Generate Allure
+      if: always()
+      shell: bash
+      env:
+        TEST_REPOSITORY_URL: ''
+      run: |
+        docker compose -p marketplace-report -f docker-compose.yml -f docker-compose.test.yml \
+          run --rm --no-deps runner report
+    - name: Explain job results and report access
+      id: summary
+      if: always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const root = process.env.RUN_PATH;
+          const statuses = fs.existsSync(`${root}/stages.json`)
+            ? JSON.parse(fs.readFileSync(`${root}/stages.json`, 'utf8')) : {};
+          const rows = ['unit', 'integration', 'e2e'].map(stage => [stage, statuses[stage] || 'not started']);
+          core.setOutput('available', String(fs.existsSync(`${root}/public-allure-report/index.html`)));
+          await core.summary.addHeading('Marketplace: unit → integration → E2E')
+            .addTable([[{data: 'Stage', header: true}, {data: 'Result', header: true}], ...rows])
+            .addRaw('GitHub needs controls the order. Each storage-backed job owns and recovers its environment.\n\n')
+            .addRaw('Stage logs/recovery: testing-unit, testing-integration, testing-e2e artifacts. Combined report/coverage: allure-report.\n\n')
+            .addLink('Public Allure', `https://${context.repo.owner}.github.io/${context.repo.repo}/`)
+            .write();
+    - name: Preserve combined report and coverage
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: allure-report
+        overwrite: true
+        retention-days: 14
+        if-no-files-found: error
+        path: ${{ env.RUN_PATH }}/
+    - name: Preserve branch history
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: lab2-history-${{ steps.paths.outputs.key }}
+        overwrite: true
+        retention-days: 30
+        if-no-files-found: warn
+        path: ${{ env.RUN_PATH }}/allure-report/history/
+    - name: Remove report containers and network
+      if: always()
+      shell: bash
+      run: docker compose -p marketplace-report -f docker-compose.yml -f docker-compose.test.yml down --remove-orphans

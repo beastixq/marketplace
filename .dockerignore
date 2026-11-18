@@ -1,4 +1,13 @@
 **
+!Dockerfile
+!.dockerignore
+!go.mod
+!go.sum
+!cmd/
+!cmd/api/
+!cmd/api/**
+!internal/
+!internal/**
 !tests/
 !tests/Dockerfile
 !tests/requirements.txt

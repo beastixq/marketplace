@@ -7,6 +7,59 @@ from scripts.testing import results
 
 
 class ResultTests(unittest.TestCase):
+    def test_ci_report_keeps_failed_unit_and_skipped_downstream_jobs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "inputs/testing-unit"
+            (source / "raw").mkdir(parents=True)
+            (source / "raw/unit.xml").write_text('<testsuites><testsuite><testcase name="p1"><failure/></testcase></testsuite></testsuites>')
+            (source / "stages.json").write_text(json.dumps({"unit": "failed"}))
+            stale = root / "inputs/testing-integration/allure-results"
+            stale.mkdir(parents=True)
+            (stale / "old-result.json").write_text(json.dumps({"name": "old", "status": "passed"}))
+            output = root / "report"
+            jobs = {"unit": {"result": "failure"}, "integration": {"result": "skipped"}, "e2e": {"result": "skipped"}}
+            actual = results.collect_ci_results(root / "inputs", output, jobs, {"run": "r1"})
+            self.assertEqual(actual, {"unit": "failed", "integration": "skipped", "e2e": "skipped"})
+            self.assertTrue((output / "raw/unit.xml").exists())
+            markers = [json.loads(path.read_text()) for path in (output / "allure-results").glob("*-result.json")]
+            self.assertEqual({case["name"]: case["status"] for case in markers}, {
+                "Test pipeline / unit": "failed", "Test pipeline / integration": "skipped", "Test pipeline / e2e": "skipped"})
+
+    def test_ci_report_does_not_hide_recovery_failure_behind_passing_tests(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "inputs/testing-integration"
+            source.mkdir(parents=True)
+            (source / "stages.json").write_text(json.dumps({"integration": "passed"}))
+            (source / "recovery.json").write_text(json.dumps({"restored": False}))
+            jobs = {"unit": {"result": "skipped"}, "integration": {"result": "failure"}, "e2e": {"result": "skipped"}}
+            actual = results.collect_ci_results(root / "inputs", root / "report", jobs, {"run": "r1"})
+            self.assertEqual(actual["integration"], "broken")
+            self.assertEqual(actual["e2e"], "skipped")
+
+    def test_ci_report_rejects_success_without_stage_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            jobs = {"unit": {"result": "success"}, "integration": {"result": "skipped"}, "e2e": {"result": "skipped"}}
+            actual = results.collect_ci_results(root / "inputs", root / "report", jobs, {"run": "r1"})
+            self.assertEqual(actual["unit"], "broken")
+
+    def test_ci_report_preserves_interruption_and_original_e2e_steps(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "inputs/testing-e2e"
+            (source / "allure-results").mkdir(parents=True)
+            case = {"uuid": "r1", "name": "p1", "fullName": "p1", "status": "broken",
+                    "steps": [{"name": "checkout", "status": "passed"}]}
+            (source / "allure-results/r1-result.json").write_text(json.dumps(case))
+            (source / "stages.json").write_text(json.dumps({"e2e": "broken"}))
+            jobs = {"unit": {"result": "skipped"}, "integration": {"result": "skipped"}, "e2e": {"result": "failure"}}
+            output = root / "report"
+            actual = results.collect_ci_results(root / "inputs", output, jobs, {"run": "r1"})
+            self.assertEqual(actual["e2e"], "broken")
+            self.assertEqual(json.loads((output / "allure-results/r1-result.json").read_text()), case)
+
     def test_go_parent_suites_are_not_counted_twice(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "input.xml"

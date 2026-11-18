@@ -27,11 +27,16 @@ class Acceptance:
 
     def start(self, mode, suffix, stand_id=None, fault=None, gate=None):
         run_id = self.id + "-" + suffix
-        env = dict(os.environ, RUN_ID=run_id, STAND_ID=stand_id or self.id,
+        env = dict(os.environ, RUN_ID=run_id,
                    TEST_FAULT=fault or "", TEST_FAULT_GATE=gate or "")
         log_suffix = suffix + (".restore" if mode == "restore" else "")
         output = (self.output / (log_suffix + ".log")).open("wb")
-        process = subprocess.Popen([sys.executable, "-m", "scripts.testing.controller", mode],
+        # The private Python entrypoint reuses only acceptance-owned stands; no public stand selector.
+        command = [sys.executable, "-c",
+                   "import sys; from scripts.testing.controller import main; "
+                   "main(owned_stand=sys.argv.pop(1), exclusive=sys.argv.pop(1) == 'exclusive')",
+                   stand_id or self.id, "exclusive" if mode in ["all", "integration"] else "shared", mode]
+        process = subprocess.Popen(command,
                                    cwd=ROOT, env=env, stdout=output, stderr=subprocess.STDOUT)
         return process, run_id, output
 

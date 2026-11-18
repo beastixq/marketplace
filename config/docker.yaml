@@ -1,3 +1,4 @@
+# Local Docker stand; use environment-specific secrets for other deployments.
 server:
   addr: ":8080"
 database:

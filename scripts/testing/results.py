@@ -1,8 +1,11 @@
 """Test-result boundaries; Allure remains the report renderer and history owner."""
 
+import argparse
 import hashlib
 import json
+import os
 import re
+import shutil
 import time
 import uuid
 import xml.etree.ElementTree as ET
@@ -12,6 +15,45 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 SECRET_KEYS = {"password", "password_hash", "token", "access_token", "authorization", "jwt_secret"}
+
+
+def collect_ci_results(inputs: Path, output: Path, jobs: dict, environment: dict) -> dict[str, str]:
+    """Assemble reports from completed jobs; GitHub Actions owns their scheduling."""
+    output.mkdir(parents=True, exist_ok=True)
+    results = output / "allure-results"
+    results.mkdir(exist_ok=True)
+    statuses = {}
+    for stage in ("unit", "integration", "e2e"):
+        outcome = jobs[stage]["result"]
+        if outcome in ("skipped", "cancelled"):
+            statuses[stage] = "skipped" if outcome == "skipped" else "broken"
+            stage_result(results, stage, statuses[stage], f"GitHub job: {outcome}")
+            continue
+        source = inputs / f"testing-{stage}"
+        for directory in ("raw", "allure-results", "lab1"):
+            if (source / directory).is_dir():
+                shutil.copytree(source / directory, output / directory, dirs_exist_ok=True)
+        # Replace per-container markers with the final job outcome, including recovery.
+        for path in results.glob("*-result.json"):
+            if json.loads(path.read_text()).get("fullName") == f"Test pipeline / {stage}":
+                path.unlink()
+        saved = source / "stages.json"
+        test_status = json.loads(saved.read_text()).get(stage) if saved.exists() else None
+        status = {"success": "passed", "failure": "failed", "cancelled": "broken", "skipped": "skipped"}[outcome]
+        if outcome == "success":
+            if test_status != "passed" or not (source / "raw" / f"{stage}.xml").is_file():
+                status = "broken"
+            elif stage != "unit":
+                recovery = source / "recovery.json"
+                if not recovery.exists() or not json.loads(recovery.read_text()).get("restored"):
+                    status = "broken"
+        elif outcome == "failure":
+            status = test_status if test_status in ("failed", "broken") else "broken"
+        statuses[stage] = status
+        stage_result(results, stage, status, f"GitHub job: {outcome}; test stage: {test_status or 'not started'}")
+    (output / "stages.json").write_text(json.dumps(statuses, indent=2))
+    (output / "environment.json").write_text(json.dumps(environment, indent=2))
+    return statuses
 
 
 def redact(value):
@@ -165,3 +207,23 @@ def stage_result(directory, stage, status, message=""):
               "labels": [{"name": "parentSuite", "value": "Infrastructure"}]}
     (directory / f'{result["uuid"]}-result.json').write_text(json.dumps(result))
     return result
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Collect test-job artifacts for the CI Allure report")
+    parser.add_argument("--inputs", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    jobs = json.loads(os.environ["CI_JOB_RESULTS"])
+    environment = {
+        "run": os.environ["RUN_ID"], "commit": os.environ["TEST_COMMIT_SHA"],
+        "branch": os.environ["TEST_BRANCH"], "stand": "github-actions-jobs", "source_mode": "git-checkout",
+    }
+    statuses = collect_ci_results(args.inputs, args.output, jobs, environment)
+    print(json.dumps(statuses, indent=2))
+    if any(job["result"] == "success" and statuses[stage] != "passed" for stage, job in jobs.items()):
+        raise SystemExit("A successful job has missing or incomplete test/recovery evidence")
+
+
+if __name__ == "__main__":
+    main()

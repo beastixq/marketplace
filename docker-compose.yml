@@ -1,10 +1,13 @@
+name: marketplace
+
 services:
   db:
+    container_name: ${DB_CONTAINER_NAME:-marketplace-db}
     image: postgres:16.11-alpine
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -16,9 +19,10 @@ services:
       retries: 5
       start_period: 20s
   cache:
+    container_name: ${CACHE_CONTAINER_NAME:-marketplace-cache}
     image: redis:8.6-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${CACHE_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -26,5 +30,27 @@ services:
       retries: 5
       start_period: 10s
 
+  api:
+    container_name: ${API_CONTAINER_NAME:-marketplace-api}
+    image: ${API_IMAGE:-marketplace-api:local}
+    build:
+      context: ${API_SOURCE_DIR:-.}
+      dockerfile: Dockerfile
+      args:
+        TEST_COMMIT_SHA: ${TEST_COMMIT_SHA:-unknown}
+        API_SOURCE_SHA256: ${API_SOURCE_SHA256:-unknown}
+        API_DIRTY: ${API_DIRTY:-unknown}
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/marketplace?sslmode=disable
+    volumes:
+      - ./config/docker.yaml:/etc/marketplace/config.yaml:ro
+    ports:
+      - "127.0.0.1:${UI_PORT:-8080}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+
 volumes:
-  db-data:
+  postgres-data:
